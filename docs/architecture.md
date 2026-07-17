@@ -1,8 +1,9 @@
-# 阶段二架构
+# 阶段三分类子系统架构
 
 ## 范围
 
-当前架构覆盖 SPEC.md 的阶段一基础设施和阶段二基础采集器。分类器、更新流水线、信息源发现、Web、导出、定时任务、浏览器获取和 AI 模块尚未创建。
+当前架构覆盖 SPEC.md 的阶段一基础设施、阶段二基础采集器，以及阶段三的纯逻辑分类子系统。
+更新流水线、分类持久化、信息源发现、Web、导出、定时任务、浏览器获取和真实 AI 模块尚未创建。
 
 ## 依赖方向
 
@@ -15,6 +16,10 @@ CollectorRegistry → Collector → CollectedItem
                         ↓
                    HttpFetcher
           ↓
+ RuleBasedClassifier → ClassificationResult
+          ↓
+ FinalCategoryResolver（可选人工覆盖）
+          ↓
 RepositoryUnitOfWork / 专用 Repository
           ↓
 SQLAlchemy 2.x 映射与 SQLite
@@ -23,6 +28,23 @@ Alembic 版本化迁移
 ```
 
 Collector 通过 `CollectContext` 接收来源入口和配置，只返回 `CollectedItem`，不持有 Repository 或 SQLAlchemy Session。未来 Application Service 负责连接纯采集结果与持久化。调用方通过 `RepositoryUnitOfWork` 获取 `sources`、`items`、`crawl_runs` 和 `revisions` 仓储；上下文正常退出时提交，发生异常时回滚。
+
+分类子系统与 Repository 没有依赖关系。`RuleBasedClassifier` 接收 `CollectedItem` 和来源默认分类，
+返回不可变 `ClassificationResult`；`FinalCategoryResolver` 再应用可选人工分类。未来 Application
+Service 负责组合采集、分类和持久化，本阶段没有这条运行流水线。
+
+## 分类接口与实现
+
+`app/domain/classification.py` 定义 `ClassificationResult` 和异步 `Classifier` Protocol。
+`app/classifiers/` 包含：
+
+- `RuleBasedClassifier`：从 YAML 载入规则并进行可解释评分；
+- `ManualClassifier` / `FinalCategoryResolver`：解析人工分类并执行最高优先级覆盖；
+- `LLMClassifier` / `HybridClassifier`：无 SDK、无外部调用的未来扩展空实现。
+
+规则文件加载时严格验证分类集合、字段和分值。文本规范化及打分全部是确定性纯逻辑，分类器
+不修改原始 `CollectedItem`。完整算法、规则格式和误判修正方式见
+[`classification.md`](classification.md)。
 
 ## 采集接口
 
@@ -75,7 +97,7 @@ Fetcher 只访问 HTTP(S) 公开资源，不执行脚本、不处理登录或验
 
 ### IntelligenceItem
 
-保存标题、原始/规范 URL、简介、时间、分类、指纹和扩展 JSON。`canonical_url` 全局唯一，同时 `(source_id, fingerprint)` 具有复合唯一约束，为后续增量去重提供数据库最后防线。URL 规范化已在阶段二实现；数据库增量写入、fingerprint 生成和业务去重编排属于阶段三，本阶段不实现。
+保存标题、原始/规范 URL、简介、时间、分类、指纹和扩展 JSON。`canonical_url` 全局唯一，同时 `(source_id, fingerprint)` 具有复合唯一约束，为后续增量去重提供数据库最后防线。URL 规范化已在阶段二实现；数据库增量写入、fingerprint 生成和业务去重编排仍未实现。当前分类结果也不写入该模型。
 
 ### CrawlRun
 
@@ -109,4 +131,6 @@ SQLite 连接会启用 `PRAGMA foreign_keys=ON`。Repository 默认 `expire_on_c
 
 ## 后续扩展边界
 
-后续 Application Service 应消费统一 `CollectedItem` 并调用 Repository；Fetcher/Collector 不得直接持有 Session。分类器不得操作数据库，Web/API 层不得包含采集逻辑。SourceDiscoverer 与正式 Collector 必须保持分离。新增字段或约束必须随 Alembic migration 一起提交。
+后续 Application Service 应消费统一 `CollectedItem`、调用 `Classifier`，再通过 Repository 持久化；
+Fetcher/Collector 不得直接持有 Session。分类器不得操作数据库，Web/API 层不得包含采集逻辑。
+SourceDiscoverer 与正式 Collector 必须保持分离。新增字段或约束必须随 Alembic migration 一起提交。
