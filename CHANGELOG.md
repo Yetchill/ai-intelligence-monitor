@@ -6,6 +6,13 @@
 
 ### Added
 
+- 增加 `ClassificationResult` 与异步 `Classifier` 领域接口；
+- 增加从 YAML 加载的纯逻辑规则分类器及严格配置校验；
+- 增加标题/简介、词组/关键词、排除词、来源默认分类、阈值、分差和优先级综合评分；
+- 增加人工分类解析和最终分类优先级合成服务；
+- 增加保留模型版本号的文本规范化；
+- 增加 71 条固定人工标注分类样本、总体/分类别准确率和混淆统计测试；
+- 增加 `LLMClassifier` 与 `HybridClassifier` 空实现和分类扩展文档；
 - 增加统一采集领域对象及 Collector/Fetcher Protocol；
 - 增加基于 httpx AsyncClient 的 HttpFetcher、同域请求间隔和指数退避重试；
 - 增加明确的 403、404、429/rate-limit、5xx、超时与网络错误类型；
@@ -18,6 +25,8 @@
 
 ### Changed
 
+- 项目进度进入阶段三分类系统子范围，阶段二 Collector 接口和行为保持不变；
+- 增加 PyYAML 运行依赖和类型存根开发依赖；
 - 增加阶段二运行依赖和 pytest-asyncio 开发依赖；
 - 默认 pytest 套件跳过带 `network` 标记的实时公网测试；
 - GitHub API 配额耗尽时使用公开 Releases Atom Feed 降级采集。
@@ -27,7 +36,7 @@
 
 ### Not Included
 
-- 分类器、更新流水线、网页 UI、信息源添加向导、导出、定时任务、浏览器采集和 AI 功能。
+- 更新流水线、分类持久化、网页 UI、信息源添加向导、导出、定时任务、浏览器采集和真实 AI 调用。
 
 ## [0.1.0] - 2026-07-17
 

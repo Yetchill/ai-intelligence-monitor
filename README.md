@@ -1,6 +1,7 @@
 # AI 行业动态与成果申报情报工具
 
-这是一个面向公司内部使用的本地信息聚合工具。当前开发进度已完成 **阶段二：基础采集器**。
+这是一个面向公司内部使用的本地信息聚合工具。当前已完成 **阶段二：基础采集器**，并完成
+**阶段三的分类系统子范围**。阶段三更新流水线尚未实现。
 
 ## 当前已实现
 
@@ -18,18 +19,25 @@
 - HTML selector/link-filter 模式、域名与包含/排除规则、有限列表分页及分页 URL 去重；
 - 可扩展的 Collector 注册/工厂机制；
 - 固定 HTML/RSS/Atom/JSON 样本、离线单元测试和可选真实网络测试；
+- `ClassificationResult`、异步 `Classifier` Protocol 与纯逻辑分类边界；
+- 从严格校验 YAML 加载的规则分类器，支持词组、关键词、排除词、字段权重、阈值和歧义分差；
+- 来源默认分类回退、人工分类最高优先级和可读分类原因；
+- 保守的中英文文本规范化，以及 71 条固定人工标注分类样本；
+- 不接 SDK、API Key 或外部服务的 `LLMClassifier` / `HybridClassifier` 扩展空实现；
 - Ruff 与 Pyright 静态检查配置。
 
 ## 尚未实现
 
-分类器、更新流水线、信息源自动发现/添加向导、FastAPI 和网页 UI、Excel/Word 导出、定时任务、一键启动、浏览器采集和 AI 功能尚未实现。阶段二 Collector 只返回纯采集结果，不写入正式数据库；数据库增量写入和去重编排属于阶段三。
+更新流水线、分类结果持久化、信息源自动发现/添加向导、FastAPI 和网页 UI、Excel/Word
+导出、定时任务、一键启动、浏览器采集和真实 AI 功能尚未实现。阶段二 Collector 仍只返回纯
+采集结果，不写入正式数据库；分类器也不访问数据库或修改 `CollectedItem`。
 
 ## 开发环境
 
 需要 Python 3.12 和 [uv](https://docs.astral.sh/uv/)。首次准备环境：
 
 ```bash
-uv sync --dev
+uv sync --locked --dev
 ```
 
 uv 会在项目目录使用 `.venv`。应用默认读取项目根目录的 `.env`，可从示例开始：
@@ -69,4 +77,6 @@ uv run pytest -m network -s
 
 网络测试只在内存中保留采集结果，不写入 `data/intelligence.db`。GitHub Releases 优先使用公开 API；未认证 API 配额耗尽时降级到公开 Releases Atom Feed。
 
-项目架构和关键约束见 [`docs/architecture.md`](docs/architecture.md)，新增或配置采集器见 [`docs/source-development.md`](docs/source-development.md)。完整产品规格见 [`SPEC.md`](SPEC.md)。
+项目架构和关键约束见 [`docs/architecture.md`](docs/architecture.md)，新增或配置采集器见
+[`docs/source-development.md`](docs/source-development.md)，分类规则和扩展方式见
+[`docs/classification.md`](docs/classification.md)。完整产品规格见 [`SPEC.md`](SPEC.md)。
