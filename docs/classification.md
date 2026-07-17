@@ -2,9 +2,9 @@
 
 ## 当前范围
 
-阶段三当前只实现纯逻辑分类子系统。它消费阶段二不可变的 `CollectedItem`，返回
-`ClassificationResult`，不访问数据库、不修改采集结果，也不调用外部 API 或大模型。
-更新流水线、网页人工改分类和分类结果持久化尚未实现。
+分类器保持纯逻辑：消费不可变 `CollectedItem`，返回 `ClassificationResult`，不访问数据库、
+不修改采集结果，也不调用外部 API 或大模型。阶段四由 `ClassificationService` 调用规则分类器，
+再由 `ItemPersistenceService` 保存自动分类字段；网页人工改分类仍未实现。
 
 一级分类严格限定为：
 
@@ -34,6 +34,11 @@ manual_category
 人工分类只要非空且属于上述分类，就直接返回 `provider=manual`，包括人工明确选择
 `unclassified` 的情况。无效人工值会产生清晰异常，不会悄悄回退。当前没有 AI 分类结果，
 因此 AI 优先级尚未进入运行路径。
+
+新增条目保存 `category`、`classification_score`、`classification_reason` 和
+`automatic_category_provider`，`manual_category` 为空。已有条目重新出现时可以刷新自动分类字段，
+但绝不修改 `manual_category`；展示层必须使用 `manual_category or category`。分类变化不创建内容
+Revision。基础 `reclassify_item` / `reclassify_all` 服务已提供，但没有 UI 或自动批量触发。
 
 `ClassificationResult` 包含：
 

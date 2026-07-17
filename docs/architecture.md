@@ -1,37 +1,40 @@
-# 阶段三分类子系统架构
+# 阶段四更新流水线架构
 
 ## 范围
 
-当前架构覆盖 SPEC.md 的阶段一基础设施、阶段二基础采集器，以及阶段三的纯逻辑分类子系统。
-更新流水线、分类持久化、信息源发现、Web、导出、定时任务、浏览器获取和真实 AI 模块尚未创建。
+当前架构覆盖基础设施、基础采集器、纯逻辑分类子系统，以及更新流水线、分类持久化与运行
+记录。信息源发现、Web、导出、定时任务、一键启动、浏览器获取和真实 AI 模块尚未创建。
 
 ## 依赖方向
 
 ```text
-未来 Application Service
+UI / 最小 CLI / 未来任务入口
           ↓
-CollectorRegistry → Collector → CollectedItem
-          ↓             ↓
-      Source 配置    Fetcher Protocol
-                        ↓
-                   HttpFetcher
+                  UpdatePipeline
+          ↓             ↓                 ↓
+   CrawlService   ClassificationService   CrawlRunService
+          ↓             ↓                 ↓
+CollectorRegistry  RuleBasedClassifier  CrawlRun Repository
           ↓
- RuleBasedClassifier → ClassificationResult
+Collector → Fetcher → 外部站点
           ↓
- FinalCategoryResolver（可选人工覆盖）
+标准化 → ItemPersistenceService
           ↓
-RepositoryUnitOfWork / 专用 Repository
+RepositoryUnitOfWork / Repository
           ↓
 SQLAlchemy 2.x 映射与 SQLite
           ↓
 Alembic 版本化迁移
 ```
 
-Collector 通过 `CollectContext` 接收来源入口和配置，只返回 `CollectedItem`，不持有 Repository 或 SQLAlchemy Session。未来 Application Service 负责连接纯采集结果与持久化。调用方通过 `RepositoryUnitOfWork` 获取 `sources`、`items`、`crawl_runs` 和 `revisions` 仓储；上下文正常退出时提交，发生异常时回滚。
+Collector 通过 `CollectContext` 接收来源入口和配置，只返回 `CollectedItem`，不持有 Repository
+或 SQLAlchemy Session。`UpdatePipeline` 连接采集、标准化、分类和持久化。调用方只持有应用服务，
+不接触 Session。
 
-分类子系统与 Repository 没有依赖关系。`RuleBasedClassifier` 接收 `CollectedItem` 和来源默认分类，
-返回不可变 `ClassificationResult`；`FinalCategoryResolver` 再应用可选人工分类。未来 Application
-Service 负责组合采集、分类和持久化，本阶段没有这条运行流水线。
+分类器本身仍与 Repository 无依赖。`ClassificationService` 负责运行时组合和独立重分类入口；
+`ItemPersistenceService` 保存自动分类字段并保留 `manual_category`。最终展示仍按人工分类优先。
+
+完整流水线、事务和故障语义见 [`update-pipeline.md`](update-pipeline.md)。
 
 ## 分类接口与实现
 
@@ -97,15 +100,25 @@ Fetcher 只访问 HTTP(S) 公开资源，不执行脚本、不处理登录或验
 
 ### IntelligenceItem
 
-保存标题、原始/规范 URL、简介、时间、分类、指纹和扩展 JSON。`canonical_url` 全局唯一，同时 `(source_id, fingerprint)` 具有复合唯一约束，为后续增量去重提供数据库最后防线。URL 规范化已在阶段二实现；数据库增量写入、fingerprint 生成和业务去重编排仍未实现。当前分类结果也不写入该模型。
+保存标题、原始/规范 URL、简介、时间、分类、指纹和扩展 JSON。`canonical_url` 全局唯一，同时
+`(source_id, fingerprint)` 具有复合唯一约束。流水线先查 canonical URL，再查同来源 fingerprint；
+插入仍使用保存点捕获唯一约束竞争。
+
+跨来源相同 canonical URL 不创建第二条记录，保留最早记录的 `source_id`、内容、收藏和分类，
+只更新 `last_seen_at` 并在 `extra._source_discoveries` 记录额外来源。该字段是阶段四的最小发现
+元数据。未来若需要按来源分别记录状态、排序或审计，应新增 `ItemSource` 关联表并用 Alembic
+迁移，而不是继续扩展 JSON 或改变全局唯一约束的语义。
 
 ### CrawlRun
 
-保存一次更新任务的状态、开始/结束时间、来源统计和条目统计。当前只提供模型和 Repository，不运行更新任务。
+保存一次更新任务的状态、开始/结束时间、来源统计和条目统计。状态为 `running`、`success`、
+`partial_success` 或 `failed`；流水线开始即提交 running 记录，正常或异常路径都会尽力完成它。
 
 ### ItemRevision
 
-用 JSON `old_data` / `new_data` 保存条目变化快照。修订必须关联 `IntelligenceItem`；`crawl_run_id` 可空，用于关联产生修订的更新任务，也允许未来记录非采集任务产生的修订。条目删除时修订级联删除；任务记录删除时修订保留并将任务外键置空。
+用 JSON `old_data` / `new_data` 只保存变化的 `title`、`summary`、`published_at` 或业务 `extra`。
+`last_seen_at` 和自动分类变化不属于内容修订。修订必须关联条目，流水线修订同时关联本次
+`CrawlRun`；自动分类审计未来如有需要应使用独立机制，不与内容 Revision 混合。
 
 ## 数据库生命周期
 
@@ -129,8 +142,15 @@ SQLite 连接会启用 `PRAGMA foreign_keys=ON`。Repository 默认 `expire_on_c
 
 文件按大小滚动，默认单文件最多 10 MB、保留 5 份。过滤器会遮盖常见 `api_key`、`token`、`password`、`secret` 赋值，但调用方仍不得主动记录凭据或完整敏感配置。
 
+## 事务边界
+
+来源查询和 CrawlRun 创建分别使用短 UoW，随后关闭事务再执行网络采集。采集结束后，每个来源
+由 `ItemPersistenceService` 使用独立短事务写入。单条插入使用嵌套保存点；唯一约束竞争只回滚
+该保存点并重新查询已有记录。一个来源写入失败不会回滚已成功来源，失败状态再用独立短 UoW
+写入。Repository 和服务均不公开 Session。
+
 ## 后续扩展边界
 
-后续 Application Service 应消费统一 `CollectedItem`、调用 `Classifier`，再通过 Repository 持久化；
-Fetcher/Collector 不得直接持有 Session。分类器不得操作数据库，Web/API 层不得包含采集逻辑。
+未来 Web/API、CLI 和任务入口都应调用现有 `UpdatePipeline`；Fetcher/Collector 不得直接持有
+Session。分类器不得操作数据库，Web/API 层不得包含采集逻辑。
 SourceDiscoverer 与正式 Collector 必须保持分离。新增字段或约束必须随 Alembic migration 一起提交。

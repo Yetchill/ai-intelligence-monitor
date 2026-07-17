@@ -4,7 +4,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from app.domain.enums import Category
@@ -34,6 +34,37 @@ def test_alembic_initializes_database(tmp_path: Path) -> None:
         }
     finally:
         database.dispose()
+
+
+def test_status_migration_preserves_existing_crawl_runs(tmp_path: Path) -> None:
+    database_path = tmp_path / "status-migration.db"
+    config = Config(PROJECT_ROOT / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+    command.upgrade(config, "db0caa03a995")
+    database = Database(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with database.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO crawl_runs "
+                    "(started_at, status, source_total, source_success, source_failed, "
+                    "discovered_count, new_count, updated_count, skipped_count, "
+                    "unclassified_count) VALUES "
+                    "('2026-07-17 00:00:00', 'succeeded', 1, 1, 0, 1, 1, 0, 0, 0), "
+                    "('2026-07-17 01:00:00', 'partial', 2, 1, 1, 1, 1, 0, 0, 0)"
+                )
+            )
+    finally:
+        database.dispose()
+
+    command.upgrade(config, "head")
+    migrated = Database(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with migrated.engine.connect() as connection:
+            statuses = list(connection.scalars(text("SELECT status FROM crawl_runs ORDER BY id")))
+        assert statuses == ["success", "partial_success"]
+    finally:
+        migrated.dispose()
 
 
 def test_canonical_url_is_unique(database: Database, source: Source) -> None:

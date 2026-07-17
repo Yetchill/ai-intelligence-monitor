@@ -6,6 +6,17 @@
 
 ### Added
 
+- 增加共享 `UpdatePipeline`、`CrawlService`、`ClassificationService`、
+  `ItemPersistenceService` 和 `CrawlRunService`；
+- 增加 `UpdateResult`、`SourceUpdateResult` 与 incremental/history 更新模式；
+- 增加采集后标题、URL、简介、时区和 JSON `extra` 的统一标准化与单条隔离；
+- 增加稳定 source-scoped fingerprint、canonical URL 优先去重和唯一约束保存点恢复；
+- 增加规则分类持久化、人工分类保护及单条/全量基础重分类服务；
+- 增加只记录有效内容字段变化并可关联 CrawlRun 的 `ItemRevision`；
+- 增加来源级故障隔离、错误净化、来源状态更新和完整 CrawlRun 统计；
+- 增加跨来源同 URL 的额外发现来源元数据和未来 `ItemSource` 扩展说明；
+- 增加 `update` / `runs` 最小开发 CLI、阶段四离线测试和临时数据库真实网络烟雾测试；
+- 增加 CrawlRun 状态值兼容迁移。
 - 增加 `ClassificationResult` 与异步 `Classifier` 领域接口；
 - 增加从 YAML 加载的纯逻辑规则分类器及严格配置校验；
 - 增加标题/简介、词组/关键词、排除词、来源默认分类、阈值、分差和优先级综合评分；
@@ -25,6 +36,8 @@
 
 ### Changed
 
+- CrawlRun 完成状态统一为 `success`、`partial_success` 和 `failed`；
+- 项目进度进入阶段四更新流水线、分类持久化与运行记录；
 - 项目进度进入阶段三分类系统子范围，阶段二 Collector 接口和行为保持不变；
 - 增加 PyYAML 运行依赖和类型存根开发依赖；
 - 增加阶段二运行依赖和 pytest-asyncio 开发依赖；
@@ -36,7 +49,7 @@
 
 ### Not Included
 
-- 更新流水线、分类持久化、网页 UI、信息源添加向导、导出、定时任务、浏览器采集和真实 AI 调用。
+- 网页 UI、信息源添加向导、导出、定时任务、一键启动、浏览器采集和真实 AI 调用。
 
 ## [0.1.0] - 2026-07-17
 

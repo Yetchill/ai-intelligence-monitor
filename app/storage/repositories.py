@@ -5,6 +5,7 @@ from types import TracebackType
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.domain.models import Base, CrawlRun, IntelligenceItem, ItemRevision, Source
@@ -85,9 +86,48 @@ class IntelligenceItemRepository(BaseRepository[IntelligenceItem]):
         )
         return list(self._session.scalars(statement))
 
+    def get_by_source_fingerprint(
+        self,
+        source_id: int,
+        fingerprint: str,
+    ) -> IntelligenceItem | None:
+        return self._session.scalar(
+            select(IntelligenceItem).where(
+                IntelligenceItem.source_id == source_id,
+                IntelligenceItem.fingerprint == fingerprint,
+            )
+        )
+
+    def add_or_get_existing(
+        self,
+        entity: IntelligenceItem,
+    ) -> tuple[IntelligenceItem, bool]:
+        """Insert under a savepoint and recover a concurrently inserted duplicate."""
+
+        try:
+            with self._session.begin_nested():
+                self._session.add(entity)
+                self._session.flush()
+            return entity, True
+        except IntegrityError:
+            existing = self.get_by_canonical_url(entity.canonical_url)
+            if existing is None:
+                existing = self.get_by_source_fingerprint(entity.source_id, entity.fingerprint)
+            if existing is None:
+                raise
+            return existing, False
+
 
 class CrawlRunRepository(BaseRepository[CrawlRun]):
     model = CrawlRun
+
+    def list_recent(self, limit: int = 5) -> list[CrawlRun]:
+        statement = (
+            select(CrawlRun)
+            .order_by(CrawlRun.started_at.desc(), CrawlRun.id.desc())
+            .limit(max(1, min(limit, 100)))
+        )
+        return list(self._session.scalars(statement))
 
 
 class ItemRevisionRepository(BaseRepository[ItemRevision]):
