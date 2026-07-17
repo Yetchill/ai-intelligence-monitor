@@ -1,6 +1,7 @@
 """Explainable YAML-driven rule classifier."""
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,26 +50,29 @@ class RuleBasedClassifier:
         for category, category_rules in self.rules.categories.items():
             score = 0.0
             matches: list[str] = []
-            for rule_type, terms, multiplier in (
-                ("phrase", category_rules.phrases, self.rules.phrase_weight),
-                ("keyword", category_rules.keywords, 1.0),
-                ("negative", category_rules.negative_phrases, 1.0),
+            for field_name, text, weight in (
+                ("title", title, self.rules.title_weight),
+                ("summary", summary, self.rules.summary_weight),
             ):
-                for term, points in terms.items():
-                    normalized_term = normalize_text(term)
-                    for field_name, text, weight in (
-                        ("title", title, self.rules.title_weight),
-                        ("summary", summary, self.rules.summary_weight),
-                    ):
-                        if text and _contains(text, normalized_term):
-                            contribution = points * weight * multiplier
-                            score += contribution
-                            matches.append(f"{field_name}.{rule_type}:{term} ({contribution:+.2f})")
-            if default is category:
-                score += self.rules.source_default_weight
-                matches.append(
-                    f"source_default:{category.value} ({self.rules.source_default_weight:+.2f})"
+                positive_matches = _positive_matches(
+                    text,
+                    category_rules.phrases,
+                    category_rules.keywords,
+                    weight=weight,
+                    phrase_weight=self.rules.phrase_weight,
                 )
+                negative_matches = _term_matches(
+                    text,
+                    {**self.rules.global_negative_phrases, **category_rules.negative_phrases},
+                    weight=weight,
+                    multiplier=1.0,
+                    rule_type="negative",
+                )
+                for rule_type, term, contribution in positive_matches + negative_matches:
+                    score += contribution
+                    matches.append(
+                        f"{category.value}.{field_name}.{rule_type}:{term} ({contribution:+.2f})"
+                    )
             ranked.append(_RankedCategory(category, score, category_rules.priority, tuple(matches)))
 
         ranked.sort(key=lambda candidate: (candidate.score, candidate.priority), reverse=True)
@@ -151,6 +155,50 @@ def _contains(text: str, term: str) -> bool:
     if _ASCII_TERM.fullmatch(term):
         return re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", text) is not None
     return term in text
+
+
+def _positive_matches(
+    text: str,
+    phrases: Mapping[str, float],
+    keywords: Mapping[str, float],
+    *,
+    weight: float,
+    phrase_weight: float,
+) -> tuple[tuple[str, str, float], ...]:
+    candidates: list[tuple[str, str, str, float]] = []
+    for rule_type, terms, multiplier in (
+        ("phrase", phrases, phrase_weight),
+        ("keyword", keywords, 1.0),
+    ):
+        for term, points in terms.items():
+            normalized_term = normalize_text(term)
+            if text and _contains(text, normalized_term):
+                candidates.append((rule_type, term, normalized_term, points * weight * multiplier))
+
+    # One textual span is one piece of evidence. Prefer the longest matching rule,
+    # and prefer a phrase over an identical keyword, instead of stacking both.
+    candidates.sort(key=lambda match: (len(match[2]), match[0] == "phrase"), reverse=True)
+    selected: list[tuple[str, str, str, float]] = []
+    for candidate in candidates:
+        if any(candidate[2] in existing[2] for existing in selected):
+            continue
+        selected.append(candidate)
+    return tuple((rule_type, term, contribution) for rule_type, term, _, contribution in selected)
+
+
+def _term_matches(
+    text: str,
+    terms: Mapping[str, float],
+    *,
+    weight: float,
+    multiplier: float,
+    rule_type: str,
+) -> tuple[tuple[str, str, float], ...]:
+    return tuple(
+        (rule_type, term, points * weight * multiplier)
+        for term, points in terms.items()
+        if text and _contains(text, normalize_text(term))
+    )
 
 
 def _describe(matches: tuple[str, ...]) -> str:

@@ -7,20 +7,22 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
+from yaml.constructor import ConstructorError
+from yaml.nodes import MappingNode
 
 from app.domain.enums import Category
+from app.utils.text import normalize_text
 
 CLASSIFIABLE_CATEGORIES = tuple(
     category for category in Category if category is not Category.UNCLASSIFIED
 )
-_ROOT_KEYS = {"settings", "categories"}
+_ROOT_KEYS = {"settings", "global_negative_phrases", "categories"}
 _SETTING_KEYS = {
     "minimum_score",
     "minimum_margin",
     "title_weight",
     "summary_weight",
     "phrase_weight",
-    "source_default_weight",
 }
 _CATEGORY_KEYS = {"priority", "phrases", "keywords", "negative_phrases"}
 
@@ -44,8 +46,43 @@ class ClassificationRules:
     title_weight: float
     summary_weight: float
     phrase_weight: float
-    source_default_weight: float
+    global_negative_phrases: Mapping[str, float]
     categories: Mapping[Category, CategoryRules]
+
+
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """Safe YAML loader that refuses silently overwritten mapping keys."""
+
+
+def _construct_unique_mapping(
+    loader: _UniqueKeyLoader, node: MappingNode, *, deep: bool = False
+) -> dict[object, object]:
+    mapping: dict[object, object] = {}
+    for key_node, value_node in node.value:
+        key = cast(
+            object,
+            loader.construct_object(key_node, deep=deep),  # pyright: ignore[reportUnknownMemberType]
+        )
+        if key in mapping:
+            raise ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                f"found duplicate key {key!r}",
+                key_node.start_mark,
+            )
+        mapping[key] = cast(
+            object,
+            loader.construct_object(  # pyright: ignore[reportUnknownMemberType]
+                value_node,
+                deep=deep,
+            ),
+        )
+    return mapping
+
+
+_UniqueKeyLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping
+)
 
 
 def load_classification_rules(path: Path) -> ClassificationRules:
@@ -53,7 +90,7 @@ def load_classification_rules(path: Path) -> ClassificationRules:
 
     try:
         with path.open(encoding="utf-8") as rule_file:
-            raw = yaml.safe_load(rule_file)
+            raw = yaml.load(rule_file, Loader=_UniqueKeyLoader)
     except OSError as exc:
         raise RuleConfigError(f"无法读取分类规则 {path}: {exc}") from exc
     except yaml.YAMLError as exc:
@@ -74,11 +111,14 @@ def load_classification_rules(path: Path) -> ClassificationRules:
         settings["summary_weight"], "settings.summary_weight", exclusive_minimum=0
     )
     phrase_weight = _number(settings["phrase_weight"], "settings.phrase_weight", minimum=1)
-    source_default_weight = _number(
-        settings["source_default_weight"], "settings.source_default_weight", minimum=0
-    )
     if title_weight <= summary_weight:
         raise RuleConfigError("settings.title_weight 必须大于 settings.summary_weight")
+
+    if "global_negative_phrases" not in root:
+        raise RuleConfigError("根节点缺少字段: global_negative_phrases")
+    global_negative_phrases = _terms(
+        root.get("global_negative_phrases"), "global_negative_phrases", negative=True
+    )
 
     raw_categories = _mapping(root.get("categories"), "categories")
     allowed_names = {category.value for category in CLASSIFIABLE_CATEGORIES}
@@ -115,7 +155,7 @@ def load_classification_rules(path: Path) -> ClassificationRules:
         title_weight=title_weight,
         summary_weight=summary_weight,
         phrase_weight=phrase_weight,
-        source_default_weight=source_default_weight,
+        global_negative_phrases=global_negative_phrases,
         categories=categories,
     )
 
@@ -157,13 +197,21 @@ def _number(
 def _terms(value: object, location: str, *, negative: bool) -> Mapping[str, float]:
     raw_terms = _mapping(value, location)
     terms: dict[str, float] = {}
+    normalized_terms: dict[str, str] = {}
     for term, raw_score in raw_terms.items():
         if not term.strip():
             raise RuleConfigError(f"{location} 不允许空规则")
+        normalized_term = normalize_text(term)
+        if not normalized_term:
+            raise RuleConfigError(f"{location}.{term} 规范化后不能为空")
+        previous = normalized_terms.get(normalized_term)
+        if previous is not None:
+            raise RuleConfigError(f"{location}.{term} 与 {location}.{previous} 规范化后重复")
         score = _number(raw_score, f"{location}.{term}")
         if negative and score >= 0:
             raise RuleConfigError(f"{location}.{term} 必须是负数")
         if not negative and score <= 0:
             raise RuleConfigError(f"{location}.{term} 必须是正数")
         terms[term] = score
+        normalized_terms[normalized_term] = term
     return terms

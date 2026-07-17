@@ -1,10 +1,13 @@
 settings:
-  minimum_score: 10
-  minimum_margin: 3
+  minimum_score: 8
+  minimum_margin: 4
   title_weight: 2
   summary_weight: 1
   phrase_weight: 1.5
-  source_default_weight: 2
+
+global_negative_phrases:
+  不涉及: -20
+  没有任何: -20
 
 categories:
   model_technology:
@@ -26,6 +29,9 @@ categories:
       开源模型: 7
       参数规模: 5
       上下文窗口: 5
+      视觉语言模型: 7
+      检索增强: 6
+      context window: 6
     keywords:
       模型: 4
       算法: 4
@@ -36,11 +42,15 @@ categories:
       论文: 3
       benchmark: 3
       llm: 4
+      rag: 4
     negative_phrases:
       助力企业: -6
       模型应用案例: -7
       模型案例征集: -10
       模型获奖名单: -10
+      模型用于: -8
+      拟发布: -10
+      场景实现落地: -8
 
   agent_product:
     priority: 55
@@ -61,6 +71,12 @@ categories:
       智能助手: 5
       copilot: 5
       sdk发布: 6
+      智能体大模型: 8
+      大模型智能体: 8
+      一体化平台: 6
+      智能客服产品: 8
+      workflow platform: 7
+      product update: 6
     keywords:
       智能体: 5
       agent: 5
@@ -74,6 +90,10 @@ categories:
       智能体案例征集: -10
       智能体优秀案例: -9
       平台企业案例: -7
+      代理商: -10
+      获奖: -10
+      入选: -8
+      联合发布: -8
 
   enterprise_case:
     priority: 50
@@ -94,6 +114,10 @@ categories:
       正式投产: 6
       示范应用: 6
       解决方案落地: 7
+      投入使用: 7
+      落地验收: 7
+      customer service: 6
+      deploys: 5
     keywords:
       落地: 4
       应用: 3
@@ -104,6 +128,8 @@ categories:
       企业: 2
       场景: 3
       投产: 3
+      用于: 4
+      效率: 3
     negative_phrases:
       案例征集: -10
       优秀案例名单: -10
@@ -131,6 +157,14 @@ categories:
       入选示范: 8
       上榜: 7
       表彰名单: 9
+      征集结果: 10
+      结果公示: 9
+      入围名单: 9
+      入围结果: 9
+      榜单揭晓: 9
+      winners announced: 9
+      入围终审: 9
+      项目公示: 8
     keywords:
       入选: 5
       获奖: 5
@@ -140,6 +174,7 @@ categories:
       荣获: 4
       上榜: 4
       结果: 3
+      入围: 5
     negative_phrases:
       征集启动: -9
       征集通知: -9
@@ -147,6 +182,9 @@ categories:
       开始申报: -8
       参评通知: -9
       参编单位征集: -10
+      尚未公布: -20
+      并未确认: -20
+      未正式确认: -20
 
   solicitation:
     priority: 100
@@ -171,6 +209,14 @@ categories:
       推荐申报: 8
       截止日期: 6
       报名启动: 8
+      接受申报: 8
+      提交截止: 7
+      公开招募: 7
+      开放报名: 8
+      参与评选: 7
+      submissions opens: 9
+      registration is now open: 9
+      在线填报: 6
     keywords:
       征集: 5
       申报: 4
@@ -194,6 +240,19 @@ categories:
       成功入选: -12
       获奖名单: -12
       征求意见: -8
+      征集结果: -14
+      意见采纳: -12
+      已经提交: -12
+      申报系统: -12
+      回顾: -8
+      招聘: -12
+      暂不启动: -20
+      计划申报: -15
+      不再接受: -15
+      征集意见: -12
+      旧衣物: -12
+      捐赠: -12
+      场地征集: -12
 
   policy_industry:
     priority: 70
@@ -218,6 +277,9 @@ categories:
       标准实施: 8
       监管规定: 8
       技术规范: 6
+      artificial intelligence safety standard: 9
+      产业发展年度报告: 8
+      意见采纳: 8
     keywords:
       政策: 4
       标准: 5
@@ -236,3 +298,6 @@ categories:
       标准案例征集: -10
       政策案例征集: -10
       标准获奖名单: -10
+      财务报告: -10
+      标准化管理: -10
+      管理培训: -8

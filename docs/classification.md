@@ -50,12 +50,14 @@ manual_category
 
 ```yaml
 settings:
-  minimum_score: 10
-  minimum_margin: 3
+  minimum_score: 8
+  minimum_margin: 4
   title_weight: 2
   summary_weight: 1
   phrase_weight: 1.5
-  source_default_weight: 2
+
+global_negative_phrases:
+  不涉及: -20
 
 categories:
   solicitation:
@@ -70,14 +72,18 @@ categories:
 
 所有六个业务分类都必须存在；`unclassified` 不是打分候选，不配置业务关键词。加载时会校验
 根节点、字段、分类名称、优先级、数值是否有限、正向规则是否为正分、排除规则是否为负分，
-并要求 `title_weight > summary_weight`。未知分类、未知字段、缺失字段和错误 YAML 都会抛出
-`RuleConfigError`，错误消息包含具体配置位置。
+并要求 `title_weight > summary_weight`。重复 YAML 键以及 NFKC、大小写折叠后重复或为空的
+规则也会在加载时被拒绝。未知分类、未知字段、缺失字段和错误 YAML 都会抛出
+`RuleConfigError`，错误消息包含具体配置位置；YAML 语法和重复键错误还会带行列号。
 
 ## 计分与判定
 
 文本先进行 Unicode NFKC 宽度统一、英文大小写折叠、中文基础标点转换和空白压缩。
-该过程保留 `V2.1` 等版本号，不做分词、词干化或会丢失中文语义的清洗。每条配置规则在
-标题和简介中各最多计分一次，避免重复出现同一个词造成无限累加。
+该过程保留 `V2.1`、`Agent 2.0`、`AI+`、`RAG` 和 GitHub Release 名称，不做分词、
+词干化或会丢失中文语义的清洗。每条配置规则在标题和简介中各最多计分一次，避免重复出现
+同一个词造成无限累加。同一文本跨度同时命中长词组和其内部短关键词时只采用最长规则；
+同长度优先采用词组，避免把同一语义证据重复放大。ASCII 关键词使用字母数字边界，
+不会把 `agent` 命中到 `reagent` 中。
 
 计分公式为：
 
@@ -87,13 +93,15 @@ categories:
 标题关键词 = 规则分 × title_weight
 简介关键词 = 规则分 × summary_weight
 排除词 = 负分 × 对应字段权重
-来源默认分类 = 对应候选额外加 source_default_weight
+全局排除词 = 对所有候选分别扣分
 ```
 
-因此标题证据强于简介，完整词组强于同分关键词。来源默认分类只提供较弱先验，不能单独越过
-当前阈值。候选先按总分降序排列，同分时按 `priority` 降序排列，然后：
+因此标题证据强于简介，完整词组强于同分关键词。`negative_phrases` 只扣所属类别；
+`global_negative_phrases` 用于“不涉及”等否定整个分类证据的通用表达。来源默认分类完全不参与
+自动候选计分和排序。候选先按总分降序排列，同分时按 `priority` 降序排列，然后：
 
-1. 第一名低于 `minimum_score`：使用非空来源默认分类；没有默认分类则 `unclassified`；
+1. 第一名低于 `minimum_score`：此时且仅此时使用非空来源默认分类；没有默认分类则
+   `unclassified`；
 2. 第一名达到阈值，但与第二名分差小于 `minimum_margin`：返回 `unclassified`，并设置
    `is_ambiguous=true`；
 3. 其余情况采用第一名，并在 `reason` 和 `matched_rules` 中说明证据；
@@ -114,8 +122,11 @@ categories:
 4. 运行固定样本、全套测试和静态检查，检查总体准确率与 `solicitation`、`award_case` 指标；
 5. 对确实同时指向两类的内容保留待确认，不要用过大的分值掩盖歧义。
 
-固定标注集位于 `tests/fixtures/classification_cases.yaml`。测试会计算总体准确率、各类别正确数
-和混淆项；新增规则时应先补充具有代表性的人工标注样本。
+固定标注集位于 `tests/fixtures/classification_cases.yaml`。独立对抗标注集位于
+`tests/fixtures/classification_adversarial_cases.yaml`，与固定集做标题去重检查，包含 100 条
+否定、阶段冲突、中英文、来源默认、标题简介冲突和异常输入样本。测试会计算总体准确率、
+各类别正确数、`unclassified` 召回和带得分及规则命中的完整混淆项；新增规则时应先补充具有
+代表性的人工标注样本并固定期望，再运行分类器。
 
 ## AI 未来接入点
 
