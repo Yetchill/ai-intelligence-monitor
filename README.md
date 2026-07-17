@@ -11,11 +11,11 @@
 - 隐藏 SQLAlchemy Session 的 Repository + Unit of Work 层；
 - application、crawler、error 三类滚动日志；
 - `CollectedItem`、`CollectContext`、`Collector`、`FetchResult`、`Fetcher` 统一接口；
-- 基于 httpx 的异步 HTTP 获取、同域请求间隔和 tenacity 指数退避重试；
+- 基于 httpx 的异步 HTTP 获取、全局/同域并发边界、同域请求间隔和 tenacity 指数退避重试；
 - 403、404、429/GitHub rate limit、5xx、超时和网络错误分类；
 - HTTP(S) URL 解析、跟踪参数清理、查询参数保留配置和 canonicalization；
-- RSS/Atom、HTML 列表和 GitHub Releases 三类 Collector；
-- HTML selector/link-filter 模式、域名与包含/排除规则、有限列表分页；
+- RSS/Atom、HTML 列表和 GitHub Releases 三类 Collector，并对返回结果数量设置可配置硬边界；
+- HTML selector/link-filter 模式、域名与包含/排除规则、有限列表分页及分页 URL 去重；
 - 可扩展的 Collector 注册/工厂机制；
 - 固定 HTML/RSS/Atom/JSON 样本、离线单元测试和可选真实网络测试；
 - Ruff 与 Pyright 静态检查配置。

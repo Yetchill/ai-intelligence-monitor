@@ -16,8 +16,12 @@ TRACKING_QUERY_KEYS = {
 def is_http_url(url: str) -> bool:
     """Return whether a URL is an absolute HTTP(S) URL."""
 
-    parts = urlsplit(url.strip())
-    return parts.scheme.lower() in {"http", "https"} and bool(parts.hostname)
+    try:
+        parts = urlsplit(url.strip())
+        _ = parts.port
+        return parts.scheme.lower() in {"http", "https"} and bool(parts.hostname)
+    except ValueError:
+        return False
 
 
 def canonicalize_url(
@@ -29,23 +33,28 @@ def canonicalize_url(
     """Resolve and normalize a web URL, returning ``None`` for unsafe schemes.
 
     When ``keep_query_params`` is omitted, non-tracking parameters are retained. When it is
-    supplied, only the named non-tracking parameters are retained.
+    supplied, only the named parameters are retained, including explicitly named tracking-like
+    parameters that are required by a source.
     """
 
-    candidate = urljoin(base_url, url) if base_url else url
-    candidate = candidate.strip()
-    parts = urlsplit(candidate)
+    try:
+        candidate = urljoin(base_url, url) if base_url else url
+        candidate = candidate.strip()
+        parts = urlsplit(candidate)
+        hostname_value = parts.hostname
+        port = parts.port
+    except ValueError:
+        return None
     scheme = parts.scheme.lower()
-    if scheme not in {"http", "https"} or not parts.hostname:
+    if scheme not in {"http", "https"} or not hostname_value:
         return None
 
-    hostname = parts.hostname.lower().rstrip(".")
+    hostname = hostname_value.lower().rstrip(".")
     try:
         hostname = hostname.encode("idna").decode("ascii")
     except UnicodeError:
         return None
 
-    port = parts.port
     default_port = (scheme == "http" and port == 80) or (scheme == "https" and port == 443)
     netloc = hostname if port is None or default_port else f"{hostname}:{port}"
 
@@ -57,9 +66,10 @@ def canonicalize_url(
     query_items: list[tuple[str, str]] = []
     for key, value in parse_qsl(parts.query, keep_blank_values=True):
         normalized_key = key.lower()
-        if normalized_key.startswith("utm_") or normalized_key in TRACKING_QUERY_KEYS:
-            continue
-        if allowed is not None and key not in allowed:
+        if allowed is None:
+            if normalized_key.startswith("utm_") or normalized_key in TRACKING_QUERY_KEYS:
+                continue
+        elif key not in allowed:
             continue
         query_items.append((key, value))
     query_items.sort()

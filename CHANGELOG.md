@@ -21,6 +21,9 @@
 - 增加阶段二运行依赖和 pytest-asyncio 开发依赖；
 - 默认 pytest 套件跳过带 `network` 标记的实时公网测试；
 - GitHub API 配额耗尽时使用公开 Releases Atom Feed 降级采集。
+- 为 RSS/HTML 返回结果、HTML 分页队列增加硬边界与去重；
+- 允许来源显式保留名称类似跟踪参数的业务查询参数。
+- 为并发请求增加同域 2、全局 5 的实际并发边界，并细化 GitHub 403 限流识别。
 
 ### Not Included
 

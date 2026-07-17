@@ -37,21 +37,21 @@ Collector 通过 `CollectContext` 接收来源入口和配置，只返回 `Colle
 
 ## HTTP 获取
 
-`HttpFetcher` 使用 httpx `AsyncClient`，默认 15 秒超时、同域 1.5 秒请求间隔和最多 2 次重试。重试由 tenacity 指数退避实现，只覆盖超时、网络错误、429/rate limit 和 5xx。403、404 及其他不可恢复 HTTP 状态使用独立异常，不伪装成功。
+`HttpFetcher` 使用 httpx `AsyncClient`，默认 15 秒超时、同域并发 2、全局并发 5、同域 1.5 秒请求间隔和最多 2 次重试。同域间隔锁与并发信号量在并发调用下共同生效。重试由 tenacity 指数退避实现，只覆盖超时、网络错误、429/rate limit 和 5xx。普通 403、404 及其他不可恢复 HTTP 状态使用独立异常，不伪装成功；GitHub 403 只有带明确限流信号时才按 rate limit 处理。
 
 Fetcher 只访问 HTTP(S) 公开资源，不执行脚本、不处理登录或验证码，也不尝试绕过访问控制。阶段二不包含 Playwright 或 BrowserFetcher。
 
 ## Collector 实现
 
-- `RSSCollector`：解析 RSS/Atom 的标题、链接、日期和 Feed 摘要；单条损坏不影响其余条目；
-- `HTMLListCollector`：selector 或 link-filter 模式，只分析列表页；允许显式分页选择器，但最大 100 页、深度 3，默认最多 20 页/深度 1；
+- `RSSCollector`：解析 RSS/Atom 的标题、链接、日期和 Feed 摘要；单条损坏不影响其余条目；默认最多返回 1000 条，硬上限 10000 条；
+- `HTMLListCollector`：selector 或 link-filter 模式，只分析列表页；允许显式分页选择器，但最大 100 页、深度 3，默认最多 20 页/深度 1；分页 URL 在入队前去重，默认最多返回 1000 条、硬上限 10000 条；
 - `GitHubReleaseCollector`：优先访问公开 GitHub Releases API，过滤 draft 和默认过滤 prerelease，不读取 assets；API rate limit 耗尽时使用公开 Atom Feed。
 
 所有 Collector 均不进入详情页。HTML selector 模式可以按可配置字段，把服务端可见标题与页面脚本中内嵌的公开链接元数据关联；该能力只读取已下载 HTML，不执行 JavaScript。
 
 ## URL 边界
 
-`app/utils/url.py` 负责相对地址解析、HTTP(S) 协议检查、fragment 和常见跟踪参数删除、默认端口与尾部斜杠统一、查询参数排序。`keep_query_params` 可将查询串收窄到来源必需参数。HTML Collector 在规范化后再次检查允许域名和静态资源/排除规则。
+`app/utils/url.py` 负责相对地址解析、HTTP(S) 协议检查、fragment 和常见跟踪参数删除、默认端口与尾部斜杠统一、查询参数排序。`keep_query_params` 可将查询串收窄到来源必需参数；显式列入的参数即使名称类似跟踪参数也会保留。HTML Collector 在规范化后再次检查允许域名和静态资源/排除规则。
 
 ## 配置
 

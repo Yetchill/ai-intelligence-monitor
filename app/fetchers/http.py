@@ -35,6 +35,8 @@ class HttpFetcher:
         timeout_seconds: float = 15.0,
         request_interval_seconds: float = 1.5,
         max_retries: int = 2,
+        per_domain_concurrency: int = 2,
+        global_concurrency: int = 5,
         user_agent: str = DEFAULT_USER_AGENT,
         client: httpx.AsyncClient | None = None,
     ) -> None:
@@ -44,10 +46,15 @@ class HttpFetcher:
             raise ValueError("request_interval_seconds cannot be negative")
         if max_retries < 0:
             raise ValueError("max_retries cannot be negative")
+        if per_domain_concurrency <= 0:
+            raise ValueError("per_domain_concurrency must be positive")
+        if global_concurrency <= 0:
+            raise ValueError("global_concurrency must be positive")
 
         self._timeout = httpx.Timeout(timeout_seconds)
         self._request_interval = request_interval_seconds
         self._max_retries = max_retries
+        self._per_domain_concurrency = per_domain_concurrency
         self._user_agent = user_agent
         self._client = client or httpx.AsyncClient(
             timeout=self._timeout,
@@ -56,6 +63,8 @@ class HttpFetcher:
         )
         self._owns_client = client is None
         self._domain_locks: dict[str, asyncio.Lock] = {}
+        self._domain_semaphores: dict[str, asyncio.Semaphore] = {}
+        self._global_semaphore = asyncio.Semaphore(global_concurrency)
         self._last_request_at: dict[str, float] = {}
 
     async def __aenter__(self) -> "HttpFetcher":
@@ -87,8 +96,11 @@ class HttpFetcher:
         )
         async for attempt in retrying:
             with attempt:
-                await self._wait_for_domain(url)
-                return await self._fetch_once(url, headers=headers)
+                domain_semaphore = self._domain_semaphore(url)
+                async with domain_semaphore:
+                    await self._wait_for_domain(url)
+                    async with self._global_semaphore:
+                        return await self._fetch_once(url, headers=headers)
         raise AssertionError("tenacity retry loop ended without a result")
 
     @staticmethod
@@ -107,6 +119,13 @@ class HttpFetcher:
                 if delay > 0:
                     await asyncio.sleep(delay)
             self._last_request_at[hostname] = monotonic()
+
+    def _domain_semaphore(self, url: str) -> asyncio.Semaphore:
+        hostname = (urlsplit(url).hostname or "").lower()
+        return self._domain_semaphores.setdefault(
+            hostname,
+            asyncio.Semaphore(self._per_domain_concurrency),
+        )
 
     async def _fetch_once(
         self,
@@ -132,7 +151,7 @@ class HttpFetcher:
         status = response.status_code
         response_url = str(response.url)
         if status == 403:
-            if response.headers.get("x-ratelimit-remaining") == "0":
+            if _is_rate_limit_response(response):
                 raise RateLimitFetchError(
                     response_url,
                     f"Rate limit exhausted while fetching {response_url}",
@@ -161,6 +180,20 @@ class HttpFetcher:
             content=response.content,
             encoding=response.encoding or "utf-8",
         )
+
+
+def _is_rate_limit_response(response: httpx.Response) -> bool:
+    """Distinguish retryable HTTP 403 rate limits from ordinary access denials."""
+
+    if response.headers.get("x-ratelimit-remaining") == "0":
+        return True
+    if response.headers.get("retry-after") is not None:
+        return True
+    hostname = (response.url.host or "").lower()
+    if hostname != "api.github.com":
+        return False
+    message = response.text[:2000].casefold()
+    return "rate limit" in message or "secondary rate" in message
 
 
 __all__ = [

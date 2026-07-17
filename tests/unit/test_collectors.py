@@ -12,7 +12,7 @@ from app.collectors.rss import RSSCollector
 from app.domain.collection import CollectContext, FetchResult
 from app.domain.enums import SourceOrigin, SourceType
 from app.domain.models import Source
-from app.fetchers.errors import RateLimitFetchError
+from app.fetchers.errors import ForbiddenFetchError, RateLimitFetchError
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -51,6 +51,17 @@ class RateLimitedGitHubFetcher(FixtureFetcher):
         return await super().fetch(url, headers=headers)
 
 
+class ForbiddenGitHubFetcher(FixtureFetcher):
+    async def fetch(
+        self,
+        url: str,
+        *,
+        headers: Mapping[str, str] | None = None,
+    ) -> FetchResult:
+        self.requests.append((url, headers))
+        raise ForbiddenFetchError(url, "permission denied")
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("fixture_name", "expected_title"),
@@ -73,6 +84,18 @@ async def test_rss_collector_supports_rss_and_atom(
     if fixture_name == "sample_rss.xml":
         assert len(items) == 2
         assert items[0].canonical_url == "https://example.com/news/model-v1"
+
+
+@pytest.mark.asyncio
+async def test_rss_collector_enforces_configured_result_limit() -> None:
+    url = "https://example.com/feed.xml"
+    fetcher = FixtureFetcher({url: (FIXTURES / "sample_rss.xml").read_bytes()})
+
+    items = await RSSCollector(fetcher).collect(
+        CollectContext(source_url=url, config={"max_items": 1})
+    )
+
+    assert len(items) == 1
 
 
 @pytest.mark.asyncio
@@ -175,6 +198,96 @@ async def test_html_link_filter_rejects_navigation_assets_and_external_domains()
 
 
 @pytest.mark.asyncio
+async def test_html_collector_bounds_results_and_isolates_malformed_links() -> None:
+    url = "https://example.com/"
+    html = b"""
+        <a href="https://[malformed">Malformed link should be skipped</a>
+        <a href="/article/1">First valid article title</a>
+        <a href="/article/2">Second valid article title</a>
+        <a href="/article/3">Third valid article title</a>
+    """
+    fetcher = FixtureFetcher({url: html})
+
+    items = await HTMLListCollector(fetcher).collect(
+        CollectContext(
+            source_url=url,
+            config={
+                "allowed_domains": ["example.com"],
+                "discovery": {"mode": "link_filter", "max_items": 2},
+            },
+        )
+    )
+
+    assert [item.title for item in items] == [
+        "First valid article title",
+        "Second valid article title",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_html_allowed_domains_accept_root_and_subdomain_but_not_forged_suffix() -> None:
+    url = "https://aiiaorg.cn/"
+    html = b"""
+        <a href="https://aiiaorg.cn/article/1">Root domain article title</a>
+        <a href="https://news.aiiaorg.cn/article/2">Subdomain article title</a>
+        <a href="https://evil-aiiaorg.cn/article/3">Forged suffix article title</a>
+    """
+    fetcher = FixtureFetcher({url: html})
+
+    items = await HTMLListCollector(fetcher).collect(
+        CollectContext(
+            source_url=url,
+            config={
+                "allowed_domains": ["aiiaorg.cn"],
+                "allow_subdomains": True,
+                "discovery": {"mode": "link_filter"},
+            },
+        )
+    )
+
+    assert [item.canonical_url for item in items] == [
+        "https://aiiaorg.cn/article/1",
+        "https://news.aiiaorg.cn/article/2",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_html_pagination_deduplicates_cycles_before_queueing() -> None:
+    first_url = "https://example.com/news"
+    second_url = "https://example.com/news?page=2"
+    first_page = b"""
+        <div class="item"><a href="/article/1">First page article</a></div>
+        <a class="next" href="/news">Current page</a>
+        <a class="next" href="/news?page=2">Next page</a>
+        <a class="next" href="/news?page=2">Duplicate next page</a>
+    """
+    second_page = b"""
+        <div class="item"><a href="/article/2">Second page article</a></div>
+        <a class="next" href="/news">Back to first page</a>
+    """
+    fetcher = FixtureFetcher({first_url: first_page, second_url: second_page})
+
+    items = await HTMLListCollector(fetcher).collect(
+        CollectContext(
+            source_url=first_url,
+            config={
+                "allowed_domains": ["example.com"],
+                "discovery": {
+                    "mode": "selectors",
+                    "max_pages": 10,
+                    "max_depth": 3,
+                    "pagination_selector": "a.next",
+                },
+                "extraction": {"item_selector": ".item", "link_selector": "a"},
+            },
+        )
+    )
+
+    assert [item.title for item in items] == ["First page article", "Second page article"]
+    assert [request[0] for request in fetcher.requests] == [first_url, second_url]
+
+
+@pytest.mark.asyncio
 async def test_github_collector_uses_public_api_and_ignores_assets_and_prereleases() -> None:
     api_url = "https://api.github.com/repos/QwenLM/Qwen-Agent/releases?per_page=30"
     fetcher = FixtureFetcher({api_url: (FIXTURES / "github_releases.json").read_bytes()})
@@ -210,6 +323,20 @@ async def test_github_collector_falls_back_to_public_atom_when_api_is_rate_limit
     assert [request[0] for request in fetcher.requests] == [
         "https://api.github.com/repos/QwenLM/Qwen-Agent/releases?per_page=30",
         feed_url,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_github_collector_does_not_fallback_for_ordinary_forbidden_response() -> None:
+    fetcher = ForbiddenGitHubFetcher({})
+
+    with pytest.raises(ForbiddenFetchError):
+        await GitHubReleaseCollector(fetcher).collect(
+            CollectContext(source_url="https://github.com/QwenLM/Qwen-Agent/releases")
+        )
+
+    assert [request[0] for request in fetcher.requests] == [
+        "https://api.github.com/repos/QwenLM/Qwen-Agent/releases?per_page=30"
     ]
 
 

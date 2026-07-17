@@ -102,7 +102,9 @@ class GitHubReleaseCollector:
         """Use GitHub's public Atom feed only when the preferred API quota is exhausted."""
 
         feed_url = f"https://github.com/{quote(owner)}/{quote(repository)}/releases.atom"
-        feed_items = await RSSCollector(self._fetcher).collect(CollectContext(source_url=feed_url))
+        feed_items = await RSSCollector(self._fetcher).collect(
+            CollectContext(source_url=feed_url, config={"max_items": max_releases})
+        )
         items: list[CollectedItem] = []
         for item in feed_items:
             prerelease = _looks_like_prerelease(item.title)

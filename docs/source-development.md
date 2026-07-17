@@ -35,10 +35,12 @@ collector = registry.create(source, fetcher)
 
 ## RSS / Atom
 
-配置通常可以为空：
+配置通常可以为空；`max_items` 默认 1000，且不会超过硬上限 10000：
 
 ```json
-{}
+{
+  "max_items": 1000
+}
 ```
 
 `RSSCollector` 只读取 Feed 自带标题、链接、发布时间和摘要，不访问 entry 详情页。Feed 中单条缺少标题或链接时会跳过该条。
@@ -78,6 +80,7 @@ Collector 优先调用不需要 Token 的公开 GitHub API。API 配额耗尽时
     "mode": "selectors",
     "max_pages": 2,
     "max_depth": 1,
+    "max_items": 1000,
     "pagination_selector": "a.next"
   },
   "extraction": {
@@ -90,7 +93,7 @@ Collector 优先调用不需要 Token 的公开 GitHub API。API 配额耗尽时
 }
 ```
 
-只有 `pagination_selector` 明确选出的列表翻页链接会继续请求；候选文章详情链接不会请求。未配置分页选择器时仍只取入口页；默认上限为 20 页/深度 1，硬上限为 100 页/深度 3。
+只有 `pagination_selector` 明确选出的列表翻页链接会继续请求；候选文章详情链接不会请求。分页 URL 在入队前规范化并去重。未配置分页选择器时仍只取入口页；默认上限为 20 页/深度 1/1000 条结果，硬上限为 100 页/深度 3/10000 条结果。
 
 部分服务端渲染页面把标题/日期放在 DOM 中，但把点击 URL 放在页面内嵌 JSON 数据。此时可配置标题关联键：
 
@@ -128,6 +131,8 @@ Collector 优先调用不需要 Token 的公开 GitHub API。API 配额耗尽时
 ```
 
 当任一 include 规则存在时，标题或 URL 至少命中一项才保留；exclude 规则优先。非允许域名、非 HTTP(S)、静态资源、纯数字和过短标题会被排除。link-filter 不会自动递归文章链接。
+
+未配置 `keep_query_params` 时会保留普通查询参数并删除常见跟踪参数；配置后只保留列出的参数。若来源确实把类似 `utm_source` 的参数作为业务路由的一部分，可显式列入，Collector 不会再次删除。
 
 ## 测试
 

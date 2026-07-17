@@ -3,7 +3,7 @@
 import json
 import re
 from collections import deque
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import cast
 from urllib.parse import urlsplit
@@ -55,6 +55,7 @@ class _HTMLConfig:
     mode: str
     max_pages: int
     max_depth: int
+    max_items: int
     allowed_domains: tuple[str, ...]
     allow_subdomains: bool
     include_text: tuple[str, ...]
@@ -84,9 +85,17 @@ class HTMLListCollector:
         config = _read_config(context)
         pending: deque[tuple[str, int]] = deque([(context.source_url, 0)])
         visited: set[str] = set()
+        scheduled: set[str] = set()
         collected: dict[str, CollectedItem] = {}
 
-        while pending and len(visited) < config.max_pages:
+        start_page = canonicalize_url(
+            context.source_url,
+            keep_query_params=config.keep_query_params,
+        )
+        if start_page is not None:
+            scheduled.add(start_page)
+
+        while pending and len(visited) < config.max_pages and len(collected) < config.max_items:
             page_url, depth = pending.popleft()
             canonical_page = canonicalize_url(
                 page_url,
@@ -105,21 +114,36 @@ class HTMLListCollector:
                     soup,
                     response.url,
                     config,
-                    _embedded_link_map(response.text, config),
+                    _embedded_link_map(response.text, config, config.max_items),
+                    config.max_items - len(collected),
                 )
             else:
-                page_items = _filtered_link_items(soup, response.url, config)
+                page_items = _filtered_link_items(
+                    soup,
+                    response.url,
+                    config,
+                    config.max_items - len(collected),
+                )
             for item in page_items:
                 collected.setdefault(item.canonical_url, item)
 
-            if depth < config.max_depth and config.pagination_selector:
+            if (
+                len(collected) < config.max_items
+                and depth < config.max_depth
+                and config.pagination_selector
+            ):
                 for pagination_url in _pagination_urls(
                     soup,
                     response.url,
                     config.pagination_selector,
                     config,
+                    excluded=visited | scheduled,
+                    limit=config.max_pages - len(scheduled),
                 ):
-                    if pagination_url not in visited:
+                    if pagination_url not in visited and pagination_url not in scheduled:
+                        if len(scheduled) >= config.max_pages:
+                            break
+                        scheduled.add(pagination_url)
                         pending.append((pagination_url, depth + 1))
 
         return list(collected.values())
@@ -142,6 +166,13 @@ def _read_config(context: CollectContext) -> _HTMLConfig:
         mode=mode,
         max_pages=max(1, min(_integer(discovery.get("max_pages"), 20), 100)),
         max_depth=max(0, min(_integer(discovery.get("max_depth"), 1), 3)),
+        max_items=max(
+            1,
+            min(
+                _integer(discovery.get("max_items"), _integer(root.get("max_items"), 1000)),
+                10_000,
+            ),
+        ),
         allowed_domains=tuple(domain.lower().lstrip(".") for domain in allowed_domains if domain),
         allow_subdomains=_boolean(root.get("allow_subdomains"), False),
         include_text=_strings(discovery.get("include_text")),
@@ -165,11 +196,14 @@ def _selector_items(
     page_url: str,
     config: _HTMLConfig,
     embedded_links: Mapping[str, str],
+    limit: int,
 ) -> list[CollectedItem]:
     if not config.item_selector:
         raise ValueError("selectors mode requires extraction.item_selector")
     items: list[CollectedItem] = []
     for node in soup.select(config.item_selector):
+        if len(items) >= limit:
+            break
         try:
             title_node = node.select_one(config.title_selector) if config.title_selector else None
             link_node = node.select_one(config.link_selector) if config.link_selector else None
@@ -211,7 +245,7 @@ def _selector_items(
     return items
 
 
-def _embedded_link_map(html: str, config: _HTMLConfig) -> Mapping[str, str]:
+def _embedded_link_map(html: str, config: _HTMLConfig, limit: int) -> Mapping[str, str]:
     """Read configured title/link pairs from JSON-like data embedded in HTML scripts."""
 
     if not config.embedded_title_key or not config.embedded_link_key:
@@ -226,6 +260,8 @@ def _embedded_link_map(html: str, config: _HTMLConfig) -> Mapping[str, str]:
     )
     links: dict[str, str] = {}
     for match in pattern.finditer(unescaped):
+        if len(links) >= limit:
+            break
         title = _decode_json_string(match.group("title"))
         link = _decode_json_string(match.group("link"))
         if title and link:
@@ -245,27 +281,33 @@ def _filtered_link_items(
     soup: BeautifulSoup,
     page_url: str,
     config: _HTMLConfig,
+    limit: int,
 ) -> list[CollectedItem]:
     items: list[CollectedItem] = []
     for anchor in soup.select("a[href]"):
-        href = anchor.get("href")
-        if not isinstance(href, str):
-            continue
-        url = resolve_url(page_url, href, keep_query_params=config.keep_query_params)
-        if url is None or not _is_allowed_domain(url, config) or _url_is_excluded(url, config):
-            continue
-        title = _node_text(anchor)
-        if not _valid_title(title, url, config, apply_include_rules=True):
-            continue
-        items.append(
-            CollectedItem(
-                title=title,
-                original_url=url,
-                canonical_url=url,
-                published_at=parse_datetime(_nearby_date(anchor)),
-                summary=_nearby_summary(anchor, title),
+        if len(items) >= limit:
+            break
+        try:
+            href = anchor.get("href")
+            if not isinstance(href, str):
+                continue
+            url = resolve_url(page_url, href, keep_query_params=config.keep_query_params)
+            if url is None or not _is_allowed_domain(url, config) or _url_is_excluded(url, config):
+                continue
+            title = _node_text(anchor)
+            if not _valid_title(title, url, config, apply_include_rules=True):
+                continue
+            items.append(
+                CollectedItem(
+                    title=title,
+                    original_url=url,
+                    canonical_url=url,
+                    published_at=parse_datetime(_nearby_date(anchor)),
+                    summary=_nearby_summary(anchor, title),
+                )
             )
-        )
+        except (AttributeError, TypeError, ValueError):
+            continue
     return items
 
 
@@ -274,18 +316,33 @@ def _pagination_urls(
     page_url: str,
     selector: str,
     config: _HTMLConfig,
+    *,
+    excluded: Collection[str],
+    limit: int,
 ) -> list[str]:
     urls: list[str] = []
+    seen: set[str] = set()
     for node in soup.select(selector):
-        target = node if node.name == "a" else node.select_one("a[href]")
-        if target is None:
+        if len(urls) >= limit:
+            break
+        try:
+            target = node if node.name == "a" else node.select_one("a[href]")
+            if target is None:
+                continue
+            href = target.get("href")
+            if not isinstance(href, str):
+                continue
+            resolved = resolve_url(page_url, href, keep_query_params=config.keep_query_params)
+            if (
+                resolved
+                and resolved not in excluded
+                and resolved not in seen
+                and _is_allowed_domain(resolved, config)
+            ):
+                seen.add(resolved)
+                urls.append(resolved)
+        except (AttributeError, TypeError, ValueError):
             continue
-        href = target.get("href")
-        if not isinstance(href, str):
-            continue
-        resolved = resolve_url(page_url, href, keep_query_params=config.keep_query_params)
-        if resolved and _is_allowed_domain(resolved, config):
-            urls.append(resolved)
     return urls
 
 

@@ -38,9 +38,26 @@ def test_configured_query_parameter_allowlist() -> None:
     )
 
 
+def test_explicit_allowlist_can_preserve_required_tracking_like_parameter() -> None:
+    assert (
+        canonicalize_url(
+            "https://example.com/redirect?utm_source=required&unused=drop",
+            keep_query_params={"utm_source"},
+        )
+        == "https://example.com/redirect?utm_source=required"
+    )
+
+
 @pytest.mark.parametrize(
     "raw",
-    ["javascript:alert(1)", "mailto:user@example.com", "ftp://example.com/file", "/relative"],
+    [
+        "javascript:alert(1)",
+        "mailto:user@example.com",
+        "ftp://example.com/file",
+        "/relative",
+        "https://[malformed",
+        "https://example.com:invalid/path",
+    ],
 )
 def test_non_http_urls_are_rejected(raw: str) -> None:
     assert canonicalize_url(raw) is None

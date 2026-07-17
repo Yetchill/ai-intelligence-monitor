@@ -27,8 +27,11 @@ class RSSCollector:
             return []
 
         items: list[CollectedItem] = []
+        max_items = max(1, min(_integer(context.config.get("max_items"), 1000), 10_000))
         entries = cast(Sequence[object], entries_value)
         for raw_entry in entries:
+            if len(items) >= max_items:
+                break
             try:
                 if not isinstance(raw_entry, Mapping):
                     continue
@@ -36,6 +39,9 @@ class RSSCollector:
                 title = _string(entry.get("title"))
                 link = _string(entry.get("link"))
                 if not title or not link:
+                    continue
+                plain_title = _plain_text(title)
+                if not plain_title:
                     continue
                 canonical_url = canonicalize_url(link, base_url=response.url)
                 if canonical_url is None:
@@ -49,7 +55,7 @@ class RSSCollector:
                 )
                 items.append(
                     CollectedItem(
-                        title=_plain_text(title) or title.strip(),
+                        title=plain_title,
                         original_url=canonical_url,
                         canonical_url=canonical_url,
                         published_at=parse_datetime(published),
@@ -78,3 +84,7 @@ def _plain_text(value: str | None) -> str | None:
         return None
     text = BeautifulSoup(value, "lxml").get_text(" ", strip=True)
     return " ".join(text.split()) or None
+
+
+def _integer(value: object, default: int) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else default
