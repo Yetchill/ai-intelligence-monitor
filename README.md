@@ -1,6 +1,6 @@
 # AI 行业动态与成果申报情报工具
 
-这是一个面向公司内部使用的本地信息聚合工具。当前版本为 **0.1.0，且只完成了阶段一：项目骨架和数据库**。
+这是一个面向公司内部使用的本地信息聚合工具。当前开发进度已完成 **阶段二：基础采集器**。
 
 ## 当前已实现
 
@@ -10,12 +10,19 @@
 - `Source`、`IntelligenceItem`、`CrawlRun`、`ItemRevision` 数据模型；
 - 隐藏 SQLAlchemy Session 的 Repository + Unit of Work 层；
 - application、crawler、error 三类滚动日志；
-- 阶段一数据库和 Repository 单元测试；
+- `CollectedItem`、`CollectContext`、`Collector`、`FetchResult`、`Fetcher` 统一接口；
+- 基于 httpx 的异步 HTTP 获取、同域请求间隔和 tenacity 指数退避重试；
+- 403、404、429/GitHub rate limit、5xx、超时和网络错误分类；
+- HTTP(S) URL 解析、跟踪参数清理、查询参数保留配置和 canonicalization；
+- RSS/Atom、HTML 列表和 GitHub Releases 三类 Collector；
+- HTML selector/link-filter 模式、域名与包含/排除规则、有限列表分页；
+- 可扩展的 Collector 注册/工厂机制；
+- 固定 HTML/RSS/Atom/JSON 样本、离线单元测试和可选真实网络测试；
 - Ruff 与 Pyright 静态检查配置。
 
 ## 尚未实现
 
-采集器、信息源自动发现、URL 规范化、分类与 AI、更新流水线、FastAPI 和网页 UI、Excel/Word 导出、一键启动均不在阶段一范围内，目前不可用。
+分类器、更新流水线、信息源自动发现/添加向导、FastAPI 和网页 UI、Excel/Word 导出、定时任务、一键启动、浏览器采集和 AI 功能尚未实现。阶段二 Collector 只返回纯采集结果，不写入正式数据库；数据库增量写入和去重编排属于阶段三。
 
 ## 开发环境
 
@@ -51,6 +58,15 @@ uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run pyright
+uv run alembic check
 ```
 
-项目架构和关键约束见 [`docs/architecture.md`](docs/architecture.md)。完整产品规格见 [`SPEC.md`](SPEC.md)。
+默认 `pytest` 跳过真实网络测试。手动验证公开来源：
+
+```bash
+uv run pytest -m network -s
+```
+
+网络测试只在内存中保留采集结果，不写入 `data/intelligence.db`。GitHub Releases 优先使用公开 API；未认证 API 配额耗尽时降级到公开 Releases Atom Feed。
+
+项目架构和关键约束见 [`docs/architecture.md`](docs/architecture.md)，新增或配置采集器见 [`docs/source-development.md`](docs/source-development.md)。完整产品规格见 [`SPEC.md`](SPEC.md)。
