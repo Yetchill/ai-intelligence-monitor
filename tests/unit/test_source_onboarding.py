@@ -2,13 +2,17 @@
 # pyright: reportUnknownVariableType=false
 """Stage-five-B source discovery, SSRF, preview, token, and management tests."""
 
-from collections.abc import AsyncGenerator, Mapping, Sequence
+import gzip
+import ssl
+from collections.abc import AsyncGenerator, Iterable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from time import sleep
 
+import httpcore
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -17,9 +21,11 @@ from app.classifiers.rule_based import RuleBasedClassifier
 from app.collectors.registry import default_collector_registry
 from app.domain.collection import FetchResult
 from app.domain.enums import Category, CrawlStatus, DiscoveryStatus, SourceOrigin, SourceType
+from app.domain.models import Source
 from app.domain.onboarding import DiscoveryResult, DiscoverySession, PreviewItem, PreviewResult
 from app.domain.update import UpdateResult
 from app.fetchers.errors import FetchError, FetchTimeoutError
+from app.services.crawl_service import CrawlService
 from app.services.source_discovery import (
     DiscoveryTokenError,
     DiscoveryTokenStore,
@@ -30,8 +36,10 @@ from app.services.source_management import (
     SourceAlreadyExistsError,
     SourceManagementError,
     SourceManagementService,
+    SourceOnboardingService,
 )
 from app.services.source_url_security import (
+    PublicAddressNetworkBackend,
     ResponseTooLargeFetchError,
     SafeHttpFetcher,
     SourceUrlGuard,
@@ -66,6 +74,56 @@ class FakeFetcher:
         return result
 
 
+class DummyNetworkStream(httpcore.AsyncNetworkStream):
+    async def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
+        del max_bytes, timeout
+        return b""
+
+    async def write(self, buffer: bytes, timeout: float | None = None) -> None:
+        del buffer, timeout
+
+    async def aclose(self) -> None:
+        return None
+
+    async def start_tls(
+        self,
+        ssl_context: ssl.SSLContext,
+        server_hostname: str | None = None,
+        timeout: float | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        del ssl_context, server_hostname, timeout
+        return self
+
+
+class RecordingNetworkBackend(httpcore.AsyncNetworkBackend):
+    def __init__(self) -> None:
+        self.hosts: list[str] = []
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: Iterable[httpcore.SOCKET_OPTION] | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        del port, timeout, local_address, socket_options
+        self.hosts.append(host)
+        return DummyNetworkStream()
+
+    async def connect_unix_socket(
+        self,
+        path: str,
+        timeout: float | None = None,
+        socket_options: Iterable[httpcore.SOCKET_OPTION] | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        del path, timeout, socket_options
+        raise AssertionError("Unix socket must not be used")
+
+    async def sleep(self, seconds: float) -> None:
+        del seconds
+
+
 def response(url: str, content: bytes, content_type: str) -> FetchResult:
     return FetchResult(
         requested_url=url,
@@ -98,6 +156,23 @@ async def test_discovers_direct_rss_url() -> None:
 
 
 @pytest.mark.asyncio
+async def test_feed_with_mostly_invalid_entries_is_not_reported_ready() -> None:
+    url = "https://example.com/feed.xml"
+    invalid = "".join(f"<item><title>无链接 {index}</title></item>" for index in range(9))
+    content = (
+        f"<rss version='2.0'><channel><title>Feed</title>{invalid}"
+        "<item><title>唯一有效</title><link>https://example.com/valid</link></item>"
+        "</channel></rss>"
+    ).encode()
+
+    result = await discovery_service({url: response(url, content, "application/rss+xml")}).discover(
+        url
+    )
+
+    assert result.requires_custom_collector is True
+
+
+@pytest.mark.asyncio
 async def test_discovers_html_alternate_feed() -> None:
     page = "https://example.com/"
     feed = "https://example.com/news.atom"
@@ -114,6 +189,84 @@ async def test_discovers_html_alternate_feed() -> None:
 
     assert result.source_type is SourceType.RSS
     assert result.normalized_url == feed
+
+
+@pytest.mark.asyncio
+async def test_private_alternate_feed_is_never_fetched() -> None:
+    page = "https://example.com/"
+    private_feed = "https://private.example/feed.xml"
+    html = (
+        b'<html><head><link rel="alternate" type="application/rss+xml" '
+        b'href="https://private.example/feed.xml"></head></html>'
+    )
+
+    async def resolver(hostname: str) -> Sequence[str]:
+        return ("10.0.0.8",) if hostname == "private.example" else (PUBLIC_IP,)
+
+    fetcher = FakeFetcher({page: response(page, html, "text/html")})
+    result = await SourceDiscoveryService(fetcher, SourceUrlGuard(resolver)).discover(page)
+
+    assert result.requires_custom_collector is True
+    assert private_feed not in fetcher.calls
+
+
+@pytest.mark.asyncio
+async def test_common_feed_paths_are_revalidated_after_dns_change() -> None:
+    page = "https://example.com/"
+    calls = 0
+
+    async def resolver(_hostname: str) -> Sequence[str]:
+        nonlocal calls
+        calls += 1
+        return (PUBLIC_IP,) if calls == 1 else ("10.0.0.8",)
+
+    fetcher = FakeFetcher({page: response(page, b"<html></html>", "text/html")})
+    result = await SourceDiscoveryService(fetcher, SourceUrlGuard(resolver)).discover(page)
+
+    assert result.requires_custom_collector is True
+    assert fetcher.calls == [page]
+
+
+@pytest.mark.asyncio
+async def test_one_onboarding_attempt_has_fixed_overall_request_bound() -> None:
+    page = "https://example.com/"
+    alternate_urls = [f"https://feeds.example/{index}.xml" for index in range(4)]
+    common_urls = [
+        "https://example.com/feed",
+        "https://example.com/rss",
+        "https://example.com/atom.xml",
+        "https://example.com/feed.xml",
+    ]
+    links = "".join(
+        f'<link rel="alternate" type="application/rss+xml" href="{url}">' for url in alternate_urls
+    )
+    items = "".join(
+        f"<li><a href='/news/{index}'>有效新闻标题 {index}</a></li>" for index in range(4)
+    )
+    html = (
+        f"<html><head>{links}</head><body><ul class='news-list'>{items}</ul></body></html>".encode()
+    )
+    not_feed = b"<html><body>not a feed</body></html>"
+    fetcher = FakeFetcher(
+        {
+            page: response(page, html, "text/html"),
+            **{url: response(url, not_feed, "text/html") for url in alternate_urls + common_urls},
+        }
+    )
+    guard = SourceUrlGuard(public_resolver)
+    store = DiscoveryTokenStore()
+    service = SourceOnboardingService(
+        SourceDiscoveryService(fetcher, guard),
+        SourcePreviewService(
+            default_collector_registry(), fetcher, RuleBasedClassifier.from_yaml()
+        ),
+        store,
+    )
+
+    token = await service.start(page)
+
+    assert store.get(token).preview.items
+    assert len(fetcher.calls) == 10
 
 
 @pytest.mark.asyncio
@@ -141,6 +294,29 @@ async def test_rejects_non_repository_github_page() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/example",
+        "https://github.com/orgs/example",
+        "https://github.com/example/project/issues",
+        "https://github.com/example/project/pulls",
+        "https://github.com/example/project/releases/latest",
+        "https://github.com/example/project/releases?tab=readme",
+        "https://github.com/example%2Fproject/releases",
+        "https://github.com/example//project",
+        "https://github.com/-invalid/project",
+        "https://github.com/example/.git",
+    ],
+)
+async def test_rejects_github_pages_outside_strict_repository_shapes(url: str) -> None:
+    result = await discovery_service({}).discover(url)
+
+    assert result.requires_custom_collector is True
+    assert result.collector_name == "custom"
+
+
+@pytest.mark.asyncio
 async def test_discovers_common_html_list_with_auditable_fixed_selector() -> None:
     url = "https://example.com/news"
     result = await discovery_service(
@@ -160,6 +336,25 @@ async def test_unreliable_html_requires_custom_collector() -> None:
 
     assert result.requires_custom_collector is True
     assert result.collector_name == "custom"
+
+
+@pytest.mark.asyncio
+async def test_navigation_and_footer_links_do_not_become_html_source() -> None:
+    url = "https://example.com/"
+    html = b"""
+    <html><body>
+      <nav><h3><a href='/news/login'>Login account</a></h3></nav>
+      <footer>
+        <h3><a href='/news/privacy'>Privacy policy</a></h3>
+        <h3><a href='/news/contact'>Contact information</a></h3>
+        <h3><a href='/news/links'>Friendly links</a></h3>
+      </footer>
+    </body></html>
+    """
+
+    result = await discovery_service({url: response(url, html, "text/html")}).discover(url)
+
+    assert result.requires_custom_collector is True
 
 
 @pytest.mark.asyncio
@@ -199,6 +394,67 @@ async def test_url_guard_rejects_dns_resolving_to_non_public_addresses() -> None
         await SourceUrlGuard(private_resolver).validate("https://example.com/")
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://2130706433/",
+        "http://0x7f000001/",
+        "http://127.1/",
+        "http://0177.0.0.1/",
+        "http://[::ffff:127.0.0.1]/",
+        "http://[fc00::1]/",
+        "http://[2001:db8::1]/",
+        "http://255.255.255.255/",
+    ],
+)
+async def test_url_guard_rejects_mapped_reserved_and_ambiguous_ip_forms(url: str) -> None:
+    with pytest.raises(SourceUrlSecurityError):
+        await SourceUrlGuard(public_resolver).validate(url)
+
+
+@pytest.mark.asyncio
+async def test_url_guard_normalizes_idn_case_trailing_dot_and_ipv6_brackets() -> None:
+    guard = SourceUrlGuard(public_resolver)
+
+    assert await guard.validate("HTTPS://BÜCHER.Example.:443/feed/#part") == (
+        "https://xn--bcher-kva.example/feed"
+    )
+    assert await guard.validate("https://[2606:4700:4700::1111]:443/feed/") == (
+        "https://[2606:4700:4700::1111]/feed"
+    )
+
+
+@pytest.mark.asyncio
+async def test_connect_backend_dials_validated_ip_literal_not_original_hostname() -> None:
+    recording = RecordingNetworkBackend()
+    backend = PublicAddressNetworkBackend(SourceUrlGuard(public_resolver), recording)
+
+    await backend.connect_tcp("example.com", 443, timeout=1)
+
+    assert recording.hosts == [PUBLIC_IP]
+
+
+@pytest.mark.asyncio
+async def test_safe_fetcher_rechecks_dns_at_connect_and_blocks_rebinding() -> None:
+    calls = 0
+
+    async def rebinding_resolver(_hostname: str) -> Sequence[str]:
+        nonlocal calls
+        calls += 1
+        return (PUBLIC_IP,) if calls == 1 else ("127.0.0.1",)
+
+    recording = RecordingNetworkBackend()
+    async with SafeHttpFetcher(
+        SourceUrlGuard(rebinding_resolver), network_backend=recording
+    ) as fetcher:
+        with pytest.raises(SourceUrlSecurityError):
+            await fetcher.fetch("https://example.com/")
+
+    assert calls == 2
+    assert recording.hosts == []
+
+
 def test_url_guard_rejects_overlong_url() -> None:
     with pytest.raises(SourceUrlSecurityError):
         SourceUrlGuard(public_resolver).normalize("https://example.com/" + "x" * 2048)
@@ -211,10 +467,118 @@ async def test_safe_fetcher_revalidates_redirect_and_rejects_private_target() ->
             302, headers={"location": "http://127.0.0.1/private"}, request=request
         )
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        fetcher = SafeHttpFetcher(SourceUrlGuard(public_resolver), client=client)
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver), transport=httpx.MockTransport(handler)
+    ) as fetcher:
         with pytest.raises(SourceUrlSecurityError):
             await fetcher.fetch("https://example.com/start")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "location",
+    [
+        "http://127.0.0.1/private",
+        "https://example.com:8443/private",
+        "https://user%40name:password@example.com/private",
+    ],
+)
+async def test_safe_fetcher_rejects_unsafe_redirect_forms(location: str) -> None:
+    requests = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(302, headers={"location": location}, request=request)
+
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver), transport=httpx.MockTransport(handler)
+    ) as fetcher:
+        with pytest.raises(SourceUrlSecurityError):
+            await fetcher.fetch("https://example.com/start")
+
+    assert requests == 1
+
+
+@pytest.mark.asyncio
+async def test_safe_fetcher_blocks_https_downgrade_and_redirect_loops() -> None:
+    def downgrade(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            302, headers={"location": "http://example.com/plain"}, request=request
+        )
+
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver), transport=httpx.MockTransport(downgrade)
+    ) as fetcher:
+        with pytest.raises(SourceUrlSecurityError, match="降级"):
+            await fetcher.fetch("https://example.com/start")
+
+    def loop(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(302, headers={"location": "/again"}, request=request)
+
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver),
+        transport=httpx.MockTransport(loop),
+        max_redirects=2,
+    ) as fetcher:
+        with pytest.raises(FetchError, match="重定向"):
+            await fetcher.fetch("https://example.com/start")
+
+
+@pytest.mark.asyncio
+async def test_safe_fetcher_drops_sensitive_headers_and_cookies_across_hosts() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if len(seen) == 1:
+            return httpx.Response(
+                302,
+                headers={
+                    "location": "https://other.example/final",
+                    "set-cookie": "session=remote-secret",
+                },
+                request=request,
+            )
+        return httpx.Response(200, content=b"ok", request=request)
+
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver), transport=httpx.MockTransport(handler)
+    ) as fetcher:
+        await fetcher.fetch(
+            "https://example.com/start",
+            headers={
+                "Authorization": "Bearer secret",
+                "Cookie": "local=secret",
+                "Host": "internal.example",
+                "Accept": "application/xml",
+            },
+        )
+
+    assert len(seen) == 2
+    assert all("authorization" not in request.headers for request in seen)
+    assert all("cookie" not in request.headers for request in seen)
+    assert [request.headers["host"] for request in seen] == ["example.com", "other.example"]
+    assert all(request.headers["accept"] == "application/xml" for request in seen)
+
+
+@pytest.mark.asyncio
+async def test_safe_fetcher_ignores_proxy_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(200, content=b"direct", request=request)
+
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver), transport=httpx.MockTransport(handler)
+    ) as fetcher:
+        result = await fetcher.fetch("https://example.com/direct")
+
+    assert result.content == b"direct"
+    assert seen == ["https://example.com/direct"]
 
 
 @pytest.mark.asyncio
@@ -224,8 +588,9 @@ async def test_safe_fetcher_preserves_safe_redirect_path_spelling() -> None:
             return httpx.Response(308, headers={"location": "/feed/"}, request=request)
         return httpx.Response(200, content=b"feed", request=request)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        fetcher = SafeHttpFetcher(SourceUrlGuard(public_resolver), client=client)
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver), transport=httpx.MockTransport(handler)
+    ) as fetcher:
         result = await fetcher.fetch("https://example.com/feed/")
 
     assert result.content == b"feed"
@@ -237,12 +602,50 @@ async def test_safe_fetcher_enforces_response_size_limit() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=b"x" * 2000, request=request)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        fetcher = SafeHttpFetcher(
-            SourceUrlGuard(public_resolver), client=client, max_response_bytes=1024
-        )
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver),
+        transport=httpx.MockTransport(handler),
+        max_response_bytes=1024,
+    ) as fetcher:
         with pytest.raises(ResponseTooLargeFetchError):
             await fetcher.fetch("https://example.com/large")
+
+
+@pytest.mark.asyncio
+async def test_safe_fetcher_limits_chunked_and_decompressed_response_bytes() -> None:
+    class ChunkedStream(httpx.AsyncByteStream):
+        async def __aiter__(self):  # type: ignore[no-untyped-def]
+            yield b"x" * 700
+            yield b"x" * 700
+
+    def chunked(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, stream=ChunkedStream(), request=request)
+
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver),
+        transport=httpx.MockTransport(chunked),
+        max_response_bytes=1024,
+    ) as fetcher:
+        with pytest.raises(ResponseTooLargeFetchError):
+            await fetcher.fetch("https://example.com/chunked")
+
+    compressed = gzip.compress(b"z" * 5000)
+
+    def gzip_bomb(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-encoding": "gzip"},
+            content=compressed,
+            request=request,
+        )
+
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver),
+        transport=httpx.MockTransport(gzip_bomb),
+        max_response_bytes=1024,
+    ) as fetcher:
+        with pytest.raises(ResponseTooLargeFetchError):
+            await fetcher.fetch("https://example.com/compressed")
 
 
 @pytest.mark.asyncio
@@ -250,8 +653,9 @@ async def test_safe_fetcher_reports_timeout_without_response_content() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("internal path /private/project", request=request)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        fetcher = SafeHttpFetcher(SourceUrlGuard(public_resolver), client=client)
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver), transport=httpx.MockTransport(handler)
+    ) as fetcher:
         with pytest.raises(FetchTimeoutError, match="网页响应超时"):
             await fetcher.fetch("https://example.com/slow")
 
@@ -279,6 +683,55 @@ async def test_preview_reuses_registry_and_classifier_caps_at_ten_without_databa
         assert uow.crawl_runs.list() == []
 
 
+@pytest.mark.asyncio
+async def test_formal_user_added_source_uses_safe_fetcher_route() -> None:
+    url = "https://example.com/feed.xml"
+    trusted_fetcher = FakeFetcher({})
+    user_fetcher = FakeFetcher(
+        {url: response(url, fixture("sample_rss.xml"), "application/rss+xml")}
+    )
+    source = Source(
+        name="用户来源",
+        source_type=SourceType.RSS,
+        start_url=url,
+        enabled=True,
+        collector_name="rss",
+        collector_config={"max_items": 10},
+        origin=SourceOrigin.USER_ADDED,
+    )
+
+    items = await CrawlService(
+        default_collector_registry(),
+        trusted_fetcher,
+        user_source_fetcher=user_fetcher,
+    ).collect(source)
+
+    assert items
+    assert trusted_fetcher.calls == []
+    assert user_fetcher.calls == [url]
+
+
+@pytest.mark.asyncio
+async def test_low_quality_duplicate_preview_cannot_enable_and_state_is_bounded() -> None:
+    url = "https://example.com/feed.xml"
+    entries = "".join(
+        f"<item><title>{'重复标题' + '很长' * 600}</title>"
+        f"<link>https://example.com/{index}</link><description>{'摘要' * 1500}</description></item>"
+        for index in range(10)
+    )
+    rss = f"<rss version='2.0'><channel><title>Feed</title>{entries}</channel></rss>".encode()
+    preview = SourcePreviewService(
+        default_collector_registry(),
+        FakeFetcher({url: response(url, rss, "application/rss+xml")}),
+        RuleBasedClassifier.from_yaml(),
+    )
+
+    result = await preview.preview(_discovery(url))
+
+    assert result.can_enable is False
+    assert any("重复或无效记录过多" in error for error in result.errors)
+
+
 def test_token_store_rejects_forgery_expiry_and_evicts_oldest() -> None:
     session = DiscoverySession(_discovery("https://example.com/feed"), PreviewResult(()))
     store = DiscoveryTokenStore(ttl_seconds=0.01, max_entries=2)
@@ -295,6 +748,36 @@ def test_token_store_rejects_forgery_expiry_and_evicts_oldest() -> None:
     sleep(0.02)
     with pytest.raises(DiscoveryTokenError):
         store.get(second)
+
+
+def test_token_store_claim_is_exclusive_and_concurrent_capacity_is_bounded() -> None:
+    session = DiscoverySession(_discovery("https://example.com/feed"), PreviewResult(()))
+    store = DiscoveryTokenStore(max_entries=32)
+    token = store.put(session)
+
+    def claim() -> DiscoverySession | None:
+        try:
+            return store.claim(token)
+        except DiscoveryTokenError:
+            return None
+
+    def claim_once(_index: int) -> DiscoverySession | None:
+        return claim()
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        claimed = list(executor.map(claim_once, range(8)))
+
+    assert sum(result is session for result in claimed) == 1
+    store.discard(token)
+
+    def fill(worker: int) -> tuple[str, ...]:
+        return tuple(store.put(session) for _index in range(worker, worker + 80))
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        tokens = [token for group in executor.map(fill, range(8)) for token in group]
+
+    assert len(tokens) == len(set(tokens))
+    assert len(store) == 32
 
 
 def test_save_source_uses_server_state_rejects_duplicate_and_does_not_create_business_data(
@@ -319,6 +802,14 @@ def test_save_source_uses_server_state_rejects_duplicate_and_does_not_create_bus
 
     assert saved.enabled is True
     assert saved.origin is SourceOrigin.USER_ADDED
+    with pytest.raises(DiscoveryTokenError):
+        service.create_from_token(
+            token,
+            name="重复使用 token",
+            default_category=None,
+            enabled=False,
+            description=None,
+        )
     with RepositoryUnitOfWork(database) as uow:
         source = uow.sources.get(saved.id)
         assert source is not None
@@ -376,6 +867,38 @@ def test_unrecognized_or_empty_preview_source_cannot_be_saved_enabled(database: 
     assert saved.requires_custom_collector is True
 
 
+def test_concurrent_equivalent_url_save_returns_existing_source(database: Database) -> None:
+    store = DiscoveryTokenStore()
+    service = SourceManagementService(lambda: RepositoryUnitOfWork(database), store)
+    preview = PreviewResult(
+        (PreviewItem("标题", "https://example.com/item", None, None, Category.UNCLASSIFIED),)
+    )
+    normalized = "https://example.com/feed?a=1&b=2"
+    tokens = [
+        store.put(DiscoverySession(_discovery(normalized), preview)),
+        store.put(DiscoverySession(_discovery(normalized), preview)),
+    ]
+
+    def save(index: int) -> int:
+        try:
+            return service.create_from_token(
+                tokens[index],
+                name=f"并发来源 {index}",
+                default_category=None,
+                enabled=True,
+                description=None,
+            ).id
+        except SourceAlreadyExistsError as exc:
+            return exc.source_id
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        source_ids = list(executor.map(save, range(2)))
+
+    assert source_ids[0] == source_ids[1]
+    with RepositoryUnitOfWork(database) as uow:
+        assert len(uow.sources.list()) == 1
+
+
 def test_edit_only_changes_allowed_fields_and_confirmed_rediscovery_is_atomic(
     database: Database,
 ) -> None:
@@ -430,6 +953,71 @@ def test_edit_only_changes_allowed_fields_and_confirmed_rediscovery_is_atomic(
         assert after.start_url == "https://example.com/new"
         assert after.name == "新名称"
         assert uow.items.list() == []
+
+
+def test_rediscovery_token_is_source_bound_and_failure_preserves_old_config(
+    database: Database,
+) -> None:
+    store = DiscoveryTokenStore()
+    service = SourceManagementService(lambda: RepositoryUnitOfWork(database), store)
+    preview = PreviewResult(
+        (PreviewItem("标题", "https://example.com/1", None, None, Category.UNCLASSIFIED),)
+    )
+    first = service.create_from_token(
+        store.put(DiscoverySession(_discovery("https://example.com/first"), preview)),
+        name="第一来源",
+        default_category=None,
+        enabled=True,
+        description=None,
+    )
+    second = service.create_from_token(
+        store.put(DiscoverySession(_discovery("https://example.com/second"), preview)),
+        name="第二来源",
+        default_category=None,
+        enabled=True,
+        description=None,
+    )
+    failed = DiscoverySession(
+        replace(
+            _discovery("https://example.com/replacement"),
+            collector_name="custom",
+            source_type=SourceType.CUSTOM,
+            discovery_status=DiscoveryStatus.NEEDS_CUSTOM_COLLECTOR,
+            discovery_confidence=0,
+            requires_custom_collector=True,
+            collector_config={},
+        ),
+        PreviewResult(()),
+        rediscover_source_id=first.id,
+    )
+    token = store.put(failed)
+
+    with pytest.raises(SourceManagementError, match="不匹配"):
+        service.confirm_rediscovery(second.id, token)
+    service.confirm_rediscovery(first.id, token)
+
+    with RepositoryUnitOfWork(database) as uow:
+        source = uow.sources.get(first.id)
+        assert source is not None
+        assert source.start_url == "https://example.com/first"
+        assert source.collector_name == "rss"
+        assert source.collector_config == {"max_items": 1000}
+        assert source.discovery_status == "needs_custom_collector"
+        assert uow.items.list() == []
+
+    conflicting = DiscoverySession(
+        replace(_discovery("https://example.com/second"), collector_name="html_list"),
+        preview,
+        rediscover_source_id=first.id,
+    )
+    with pytest.raises(SourceAlreadyExistsError):
+        service.confirm_rediscovery(first.id, store.put(conflicting))
+    with RepositoryUnitOfWork(database) as uow:
+        preserved = uow.sources.get(first.id)
+        assert preserved is not None
+        assert preserved.start_url == "https://example.com/first"
+        assert preserved.collector_name == "rss"
+        assert preserved.collector_config == {"max_items": 1000}
 
 
 def test_web_discovery_preview_escapes_content_and_does_not_write_before_save(

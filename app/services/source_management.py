@@ -3,8 +3,9 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from threading import Lock
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.domain.enums import Category, DiscoveryStatus, SourceOrigin, SourceType
 from app.domain.models import Source
@@ -81,6 +82,7 @@ class SourceManagementService:
     def __init__(self, uow_factory: UnitOfWorkFactory, store: DiscoveryTokenStore) -> None:
         self._uow_factory = uow_factory
         self._store = store
+        self._write_lock = Lock()
 
     def get_discovery(self, token: str) -> DiscoverySession:
         return self._store.get(token)
@@ -101,48 +103,52 @@ class SourceManagementService:
         enabled: bool,
         description: str | None,
     ) -> SourceDetails:
-        session = self._store.get(token)
-        if session.rediscover_source_id is not None:
-            raise SourceManagementError("该检测结果只用于重新检测, 不能创建新来源。")
-        if enabled and not session.can_enable:
-            raise SourceManagementError("当前预览不可用; 只能保存为停用的待处理来源。")
-        cleaned_name = _name(name)
-        cleaned_description = _description(description)
-        category = _category(default_category)
-        discovery = session.discovery
-        persisted_status = (
-            DiscoveryStatus.NEEDS_CONFIGURATION.value
-            if discovery.usable and not session.preview.can_enable
-            else discovery.discovery_status.value
-        )
+        session = self._store.claim(token)
         try:
-            with self._uow_factory() as uow:
-                existing = uow.sources.get_by_start_url(discovery.normalized_url)
-                if existing is not None:
-                    raise SourceAlreadyExistsError(existing.id)
-                source = uow.sources.add(
-                    Source(
-                        name=cleaned_name,
-                        description=cleaned_description,
-                        source_type=discovery.source_type,
-                        start_url=discovery.normalized_url,
-                        enabled=enabled,
-                        default_category=category,
-                        collector_name=discovery.collector_name,
-                        collector_config=dict(discovery.collector_config),
-                        discovery_status=persisted_status,
-                        discovery_confidence=discovery.discovery_confidence,
-                        requires_custom_collector=discovery.requires_custom_collector,
-                        origin=SourceOrigin.USER_ADDED,
-                        last_tested_at=discovery.tested_at,
+            if session.rediscover_source_id is not None:
+                raise SourceManagementError("该检测结果只用于重新检测, 不能创建新来源。")
+            if enabled and not session.can_enable:
+                raise SourceManagementError("当前预览不可用; 只能保存为停用的待处理来源。")
+            cleaned_name = _name(name)
+            cleaned_description = _description(description)
+            category = _category(default_category)
+            discovery = session.discovery
+            persisted_status = (
+                DiscoveryStatus.NEEDS_CONFIGURATION.value
+                if discovery.usable and not session.preview.can_enable
+                else discovery.discovery_status.value
+            )
+            try:
+                with self._write_lock, self._uow_factory() as uow:
+                    existing = uow.sources.get_by_start_url(discovery.normalized_url)
+                    if existing is not None:
+                        raise SourceAlreadyExistsError(existing.id)
+                    source = uow.sources.add(
+                        Source(
+                            name=cleaned_name,
+                            description=cleaned_description,
+                            source_type=discovery.source_type,
+                            start_url=discovery.normalized_url,
+                            enabled=enabled,
+                            default_category=category,
+                            collector_name=discovery.collector_name,
+                            collector_config=dict(discovery.collector_config),
+                            discovery_status=persisted_status,
+                            discovery_confidence=discovery.discovery_confidence,
+                            requires_custom_collector=discovery.requires_custom_collector,
+                            origin=SourceOrigin.USER_ADDED,
+                            last_tested_at=discovery.tested_at,
+                        )
                     )
-                )
-                source_id = source.id
-        except IntegrityError as exc:
-            with self._uow_factory() as uow:
-                existing = uow.sources.get_by_start_url(discovery.normalized_url)
-                if existing is not None:
-                    raise SourceAlreadyExistsError(existing.id) from exc
+                    source_id = source.id
+            except (IntegrityError, OperationalError) as exc:
+                with self._write_lock, self._uow_factory() as uow:
+                    existing = uow.sources.get_by_start_url(discovery.normalized_url)
+                    if existing is not None:
+                        raise SourceAlreadyExistsError(existing.id) from exc
+                raise
+        except Exception:
+            self._store.release(token)
             raise
         self._store.discard(token)
         return self.get_source(source_id)
@@ -159,7 +165,7 @@ class SourceManagementService:
         cleaned_name = _name(name)
         cleaned_description = _description(description)
         category = _category(default_category)
-        with self._uow_factory() as uow:
+        with self._write_lock, self._uow_factory() as uow:
             source = uow.sources.get(source_id)
             if source is None:
                 raise ManagedSourceNotFoundError(f"来源 {source_id} 不存在。")
@@ -176,29 +182,33 @@ class SourceManagementService:
         return self.get_source(source_id)
 
     def confirm_rediscovery(self, source_id: int, token: str) -> SourceDetails:
-        session = self._store.get(token)
-        if session.rediscover_source_id != source_id:
-            raise SourceManagementError("重新检测结果与当前来源不匹配。")
-        discovery = session.discovery
+        session = self._store.claim(token)
         try:
-            with self._uow_factory() as uow:
-                source = uow.sources.get(source_id)
-                if source is None:
-                    raise ManagedSourceNotFoundError(f"来源 {source_id} 不存在。")
-                source.discovery_status = discovery.discovery_status.value
-                source.discovery_confidence = discovery.discovery_confidence
-                source.last_tested_at = discovery.tested_at
-                if session.can_enable:
-                    duplicate = uow.sources.get_by_start_url(discovery.normalized_url)
-                    if duplicate is not None and duplicate.id != source_id:
-                        raise SourceAlreadyExistsError(duplicate.id)
-                    source.start_url = discovery.normalized_url
-                    source.source_type = discovery.source_type
-                    source.collector_name = discovery.collector_name
-                    source.collector_config = dict(discovery.collector_config)
-                    source.requires_custom_collector = False
-        except IntegrityError as exc:
-            raise SourceManagementError("新检测网址与已有来源冲突, 原配置保持不变。") from exc
+            if session.rediscover_source_id != source_id:
+                raise SourceManagementError("重新检测结果与当前来源不匹配。")
+            discovery = session.discovery
+            try:
+                with self._write_lock, self._uow_factory() as uow:
+                    source = uow.sources.get(source_id)
+                    if source is None:
+                        raise ManagedSourceNotFoundError(f"来源 {source_id} 不存在。")
+                    source.discovery_status = discovery.discovery_status.value
+                    source.discovery_confidence = discovery.discovery_confidence
+                    source.last_tested_at = discovery.tested_at
+                    if session.can_enable:
+                        duplicate = uow.sources.get_by_start_url(discovery.normalized_url)
+                        if duplicate is not None and duplicate.id != source_id:
+                            raise SourceAlreadyExistsError(duplicate.id)
+                        source.start_url = discovery.normalized_url
+                        source.source_type = discovery.source_type
+                        source.collector_name = discovery.collector_name
+                        source.collector_config = dict(discovery.collector_config)
+                        source.requires_custom_collector = False
+            except IntegrityError as exc:
+                raise SourceManagementError("新检测网址与已有来源冲突, 原配置保持不变。") from exc
+        except Exception:
+            self._store.release(token)
+            raise
         self._store.discard(token)
         return self.get_source(source_id)
 

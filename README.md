@@ -39,7 +39,7 @@
 - 网页复用 `UpdatePipeline` 的全量/单来源同步更新与进程内互斥锁；
 - 显式、幂等的三个示例来源导入命令。
 - 来源添加向导，支持 RSS/Atom、GitHub Releases 和简单 HTML 列表自动识别；
-- 逐跳 DNS/IP/端口校验、重定向复查、超时和响应大小限制的 SSRF 安全 Fetcher；
+- 实际连接固定到已验证公网 IP、逐跳复查、禁用环境代理并限制超时和解压后响应大小的 SSRF 安全 Fetcher；
 - 复用现有 CollectorRegistry、Collector 和 Classifier 的最多 10 条无落库预览；
 - 有 TTL 和容量上限的进程内检测 token，保存时不信任浏览器提交的采集器配置；
 - 来源详情编辑、disabled 待处理来源和确认后才替换配置的重新检测流程；

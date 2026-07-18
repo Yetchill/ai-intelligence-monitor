@@ -191,9 +191,12 @@ SourceDiscoverer 与正式 Collector 必须保持分离。新增字段或约束�
 `SourceManagementService` 只在最终保存、允许字段编辑或用户确认重新检测时打开短 UoW。
 
 用户输入网络请求使用独立 `SafeHttpFetcher`：`SourceUrlGuard` 在初始 URL 和每次重定向前检查
-协议、认证信息、安全端口、DNS 的全部 IP 和公网属性，并限制重定向、响应大小和超时。正式
-UpdatePipeline 不被修改。
+协议、认证信息、安全端口、DNS 的全部 IP 和公网属性；自定义 httpcore 网络后端在实际建连时
+再次校验并直接连接已验证 IP，消除校验后由客户端二次 DNS 解析的目标偏移。Fetcher 禁用系统
+代理与底层自动重定向，并限制逐项超时、解压后响应大小和请求头。用户添加来源的正式更新在
+组合层选择同一安全 Fetcher，现有 UpdatePipeline 不被修改或复制。
 
-`DiscoveryTokenStore` 是单进程、15 分钟 TTL、256 条上限的临时状态。它只持有结构化检测结果和
-预览，不持有完整响应。浏览器 token 不能决定 collector 名称或配置。完整流程见
+`DiscoveryTokenStore` 是单进程、15 分钟 TTL、256 条上限的临时状态。它只持有有长度边界的
+结构化检测结果和预览，不持有完整响应。保存时会原子占用并在成功后消费 token；浏览器 token
+不能决定 collector 名称或配置。多进程与应用重启不会共享状态。完整流程见
 [`source-onboarding.md`](source-onboarding.md)。

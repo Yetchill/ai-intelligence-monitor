@@ -33,8 +33,25 @@ HTML_SELECTOR_CANDIDATES = (
     "h3:has(a[href])",
 )
 GITHUB_PART_PATTERN = re.compile(r"[A-Za-z0-9_.-]+")
+GITHUB_RESERVED_OWNERS = {
+    "collections",
+    "events",
+    "features",
+    "login",
+    "marketplace",
+    "new",
+    "organizations",
+    "orgs",
+    "search",
+    "settings",
+    "sponsors",
+    "topics",
+    "users",
+}
 DISCOVERY_TTL_SECONDS = 15 * 60
 DISCOVERY_CACHE_SIZE = 256
+MAX_PREVIEW_TITLE_LENGTH = 1000
+MAX_PREVIEW_SUMMARY_LENGTH = 2000
 
 
 class DiscoveryTokenError(ValueError):
@@ -55,6 +72,7 @@ class DiscoveryTokenStore:
         self._ttl = ttl_seconds
         self._max_entries = max_entries
         self._entries: OrderedDict[str, tuple[float, DiscoverySession]] = OrderedDict()
+        self._claimed: set[str] = set()
         self._lock = Lock()
 
     def put(self, session: DiscoverySession) -> str:
@@ -63,6 +81,8 @@ class DiscoveryTokenStore:
             while len(self._entries) >= self._max_entries:
                 self._entries.popitem(last=False)
             token = secrets.token_urlsafe(32)
+            while token in self._entries:
+                token = secrets.token_urlsafe(32)
             self._entries[token] = (monotonic() + self._ttl, session)
             return token
 
@@ -72,14 +92,35 @@ class DiscoveryTokenStore:
         with self._lock:
             self._purge_expired()
             entry = self._entries.get(token)
-            if entry is None:
+            if entry is None or token in self._claimed:
                 raise DiscoveryTokenError("检测结果无效或已过期, 请重新检测。")
             self._entries.move_to_end(token)
             return entry[1]
 
+    def claim(self, token: str) -> DiscoverySession:
+        """Exclusively reserve a token until the operation succeeds or releases it."""
+
+        if not token or len(token) > 128:
+            raise DiscoveryTokenError("检测结果无效或已过期, 请重新检测。")
+        with self._lock:
+            self._purge_expired()
+            entry = self._entries.get(token)
+            if entry is None or token in self._claimed:
+                raise DiscoveryTokenError("检测结果无效或已过期, 请重新检测。")
+            self._claimed.add(token)
+            return entry[1]
+
+    def release(self, token: str) -> None:
+        """Make a failed operation's still-valid token available again."""
+
+        with self._lock:
+            if token in self._entries:
+                self._claimed.discard(token)
+
     def discard(self, token: str) -> None:
         with self._lock:
             self._entries.pop(token, None)
+            self._claimed.discard(token)
 
     def __len__(self) -> int:
         with self._lock:
@@ -91,6 +132,7 @@ class DiscoveryTokenStore:
         expired = [token for token, (deadline, _) in self._entries.items() if deadline <= now]
         for token in expired:
             self._entries.pop(token, None)
+            self._claimed.discard(token)
 
 
 class SourceDiscoveryService:
@@ -204,11 +246,26 @@ class SourcePreviewService:
 
         items: list[PreviewItem] = []
         errors: list[str] = []
+        seen_urls: set[str] = set()
+        seen_titles: set[str] = set()
+        rejected = 0
         for item in collected:
             if len(items) >= 10:
                 break
             if not is_http_url(item.original_url):
                 errors.append("已跳过一条链接格式无效的预览记录。")
+                rejected += 1
+                continue
+            normalized_url = canonicalize_url(item.original_url)
+            normalized_title = " ".join(item.title.split())
+            title_key = normalized_title.casefold()
+            if (
+                normalized_url is None
+                or not normalized_title
+                or normalized_url in seen_urls
+                or title_key in seen_titles
+            ):
+                rejected += 1
                 continue
             try:
                 classification = await self._classifier.classify(item, source_default=None)
@@ -218,13 +275,18 @@ class SourcePreviewService:
                 errors.append("一条预览记录分类失败, 已标记为待分类。")
             items.append(
                 PreviewItem(
-                    title=item.title,
-                    url=item.original_url,
+                    title=_bounded_text(normalized_title, MAX_PREVIEW_TITLE_LENGTH) or "无标题",
+                    url=normalized_url,
                     published_at=item.published_at,
-                    summary=item.summary,
+                    summary=_bounded_text(item.summary, MAX_PREVIEW_SUMMARY_LENGTH),
                     category=category,
                 )
             )
+            seen_urls.add(normalized_url)
+            seen_titles.add(title_key)
+        if rejected >= 3 and rejected * 3 >= len(collected) * 2:
+            errors.append("预览中重复或无效记录过多, 当前结果需要人工处理且不能直接启用。")
+            items.clear()
         if not items:
             errors.append("没有抓取到有效的“标题 + 链接”, 当前来源不能直接启用。")
         return PreviewResult(tuple(items), tuple(dict.fromkeys(errors)))
@@ -235,10 +297,19 @@ def _github_result(url: str, tested_at: datetime) -> DiscoveryResult | None:
     if (parts.hostname or "").casefold() not in {"github.com", "www.github.com"}:
         return None
     segments = [part for part in parts.path.split("/") if part]
+    owner = segments[0] if segments else ""
+    repository = segments[1].removesuffix(".git") if len(segments) >= 2 else ""
     valid = (
         len(segments) in {2, 3}
         and (len(segments) == 2 or segments[2].casefold() == "releases")
-        and all(GITHUB_PART_PATTERN.fullmatch(part) for part in segments[:2])
+        and not parts.query
+        and parts.path
+        in {
+            f"/{'/'.join(segments[:2])}",
+            f"/{'/'.join(segments[:2])}/{segments[2]}" if len(segments) == 3 else "",
+        }
+        and _valid_github_owner(owner)
+        and _valid_github_repository(repository)
     )
     if not valid:
         return _failed_result(
@@ -247,8 +318,7 @@ def _github_result(url: str, tested_at: datetime) -> DiscoveryResult | None:
             "GitHub 地址必须是明确的 owner/repository 或其 Releases 页面。",
             tested_at,
         )
-    owner, repository = segments[:2]
-    normalized = f"https://github.com/{owner}/{repository.removesuffix('.git')}/releases"
+    normalized = f"https://github.com/{owner}/{repository}/releases"
     return DiscoveryResult(
         collector_name="github_release",
         source_type=SourceType.GITHUB_RELEASE,
@@ -272,14 +342,32 @@ def _is_feed(response: FetchResult) -> bool:
     version = str(parsed.get("version", "")).casefold()
     entries_value = parsed.get("entries", ())
     entries = cast(list[object], entries_value) if isinstance(entries_value, list) else []
-    has_entries = bool(entries)
-    return ("rss" in content_type or "atom" in content_type or bool(version)) and has_entries
+    valid_entries = sum(_valid_feed_entry(entry, response.url) for entry in entries)
+    has_reliable_entries = valid_entries > 0 and valid_entries * 2 >= len(entries)
+    return (
+        "rss" in content_type or "atom" in content_type or bool(version)
+    ) and has_reliable_entries
 
 
 def _looks_like_html(response: FetchResult) -> bool:
     content_type = response.headers.get("content-type", "").casefold()
     prefix = response.content[:1000].lstrip().lower()
     return "html" in content_type or b"<html" in prefix or b"<!doctype html" in prefix
+
+
+def _valid_feed_entry(value: object, base_url: str) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    raw = cast(Mapping[object, object], value)
+    entry = {str(key): child for key, child in raw.items()}
+    title = entry.get("title")
+    link = entry.get("link")
+    return bool(
+        isinstance(title, str)
+        and title.strip()
+        and isinstance(link, str)
+        and canonicalize_url(link, base_url=base_url) is not None
+    )
 
 
 def _alternate_feed_urls(soup: BeautifulSoup, page_url: str) -> tuple[str, ...]:
@@ -321,8 +409,11 @@ def _feed_result(url: str, tested_at: datetime, *, direct: bool) -> DiscoveryRes
 def _html_result(soup: BeautifulSoup, page_url: str, tested_at: datetime) -> DiscoveryResult:
     hostname = (urlsplit(page_url).hostname or "").casefold()
     for selector in HTML_SELECTOR_CANDIDATES:
-        valid = [_node_link(node, page_url, hostname) for node in soup.select(selector)]
-        count = sum(item is not None for item in valid)
+        candidates = [_node_link(node, page_url, hostname) for node in soup.select(selector)]
+        valid = {item for item in candidates if item is not None}
+        unique_urls = {item[1] for item in valid}
+        unique_titles = {item[0].casefold() for item in valid}
+        count = min(len(unique_urls), len(unique_titles))
         if count >= 2:
             return DiscoveryResult(
                 collector_name="html_list",
@@ -349,8 +440,12 @@ def _html_result(soup: BeautifulSoup, page_url: str, tested_at: datetime) -> Dis
                 tested_at=tested_at,
             )
 
-    candidates = [_anchor_link(anchor, page_url, hostname) for anchor in soup.select("a[href]")]
-    paths = [urlsplit(item[1]).path for item in candidates if item is not None]
+    candidates = {
+        item
+        for anchor in soup.select("a[href]")
+        if (item := _anchor_link(anchor, page_url, hostname))
+    }
+    paths = list({urlsplit(item[1]).path for item in candidates})
     prefixes = [
         f"/{parts[0]}/" for path in paths if (parts := path.strip("/").split("/")) and parts[0]
     ]
@@ -399,13 +494,70 @@ def _anchor_link(anchor: Tag, page_url: str, hostname: str) -> tuple[str, str] |
     title = " ".join(anchor.get_text(" ", strip=True).split())
     if not isinstance(href, str) or len(title) < 4:
         return None
+    if _in_non_content_region(anchor):
+        return None
     url = canonicalize_url(href, base_url=page_url)
     if url is None or (urlsplit(url).hostname or "").casefold() != hostname:
         return None
     lowered = title.casefold()
-    if any(term in lowered for term in ("登录", "注册", "联系我们", "login", "register")):
+    path = urlsplit(url).path.casefold()
+    if any(
+        term in lowered
+        for term in (
+            "登录",
+            "注册",
+            "联系我们",
+            "关于我们",
+            "友情链接",
+            "login",
+            "register",
+            "contact",
+            "privacy",
+        )
+    ) or any(
+        segment in path
+        for segment in ("/login", "/register", "/about", "/contact", "/privacy", "/links")
+    ):
         return None
     return title, url
+
+
+def _valid_github_owner(value: str) -> bool:
+    return bool(
+        1 <= len(value) <= 39
+        and value.casefold() not in GITHUB_RESERVED_OWNERS
+        and re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", value)
+        and "--" not in value
+    )
+
+
+def _in_non_content_region(anchor: Tag) -> bool:
+    for node in (anchor, *anchor.parents):
+        if node.name in {"nav", "footer", "header", "aside"}:
+            return True
+        class_value = node.get("class")
+        classes = cast(list[object], class_value) if isinstance(class_value, list) else []
+        identifiers = " ".join(
+            [str(node.get("id", "")), *[str(value) for value in classes]]
+        ).casefold()
+        if any(term in identifiers for term in ("footer", "header", "sidebar", "nav", "menu")):
+            return True
+    return False
+
+
+def _valid_github_repository(value: str) -> bool:
+    return bool(
+        1 <= len(value) <= 100 and GITHUB_PART_PATTERN.fullmatch(value) and value not in {".", ".."}
+    )
+
+
+def _bounded_text(value: str | None, limit: int) -> str | None:
+    if value is None:
+        return None
+    cleaned = " ".join(value.split())
+    if not cleaned:
+        return None
+    return cleaned if len(cleaned) <= limit else f"{cleaned[: limit - 1].rstrip()}…"
 
 
 def _failed_result(

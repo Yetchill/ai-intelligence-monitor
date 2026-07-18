@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from app.collectors.registry import CollectorRegistry
 from app.domain.collection import CollectContext, CollectedItem, Fetcher
-from app.domain.enums import SourceType
+from app.domain.enums import SourceOrigin, SourceType
 from app.domain.models import Source
 from app.domain.update import UpdateMode
 
@@ -14,9 +14,16 @@ from app.domain.update import UpdateMode
 class CrawlService:
     """Create collectors from source configuration and execute bounded collection."""
 
-    def __init__(self, registry: CollectorRegistry, fetcher: Fetcher) -> None:
+    def __init__(
+        self,
+        registry: CollectorRegistry,
+        fetcher: Fetcher,
+        *,
+        user_source_fetcher: Fetcher | None = None,
+    ) -> None:
         self._registry = registry
         self._fetcher = fetcher
+        self._user_source_fetcher = user_source_fetcher
 
     async def collect(
         self,
@@ -36,7 +43,12 @@ class CrawlService:
             published_from=published_from,
             published_to=published_to,
         )
-        collector = self._registry.create(source, self._fetcher)
+        fetcher = (
+            self._user_source_fetcher
+            if source.origin is SourceOrigin.USER_ADDED and self._user_source_fetcher is not None
+            else self._fetcher
+        )
+        collector = self._registry.create(source, fetcher)
         items = await collector.collect(
             CollectContext(
                 source_url=source.start_url,
