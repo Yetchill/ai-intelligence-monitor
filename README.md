@@ -1,7 +1,7 @@
 # AI 行业动态与成果申报情报工具
 
-这是一个面向公司内部使用的本地信息聚合工具。当前已完成 **阶段二：基础采集器**，并完成
-**阶段三的分类系统子范围**。阶段三更新流水线尚未实现。
+这是一个面向公司内部使用的本地信息聚合工具。当前已完成基础数据库、采集器、规则分类，
+以及 **阶段四：更新流水线、分类持久化与运行记录**。网页 UI 仍未实现。
 
 ## 当前已实现
 
@@ -24,13 +24,21 @@
 - 来源默认分类回退、人工分类最高优先级和可读分类原因；
 - 保守的中英文文本规范化，以及 71 条固定人工标注分类样本；
 - 不接 SDK、API Key 或外部服务的 `LLMClassifier` / `HybridClassifier` 扩展空实现；
+- UI、CLI 和未来任务可共同调用的 `UpdatePipeline` 应用服务；
+- enabled/指定来源选择、disabled 来源保护及 incremental/history 两种更新模式；
+- 采集后标准化、同来源 fingerprint 去重、全局 canonical URL 去重和幂等更新；
+- 规则分类结果持久化、人工分类保护及独立 `reclassify_item` / `reclassify_all` 接口；
+- 内容有效变化的精确 `ItemRevision`，以及可选的 `CrawlRun` 关联；
+- `running`、`success`、`partial_success`、`failed` 完整运行生命周期和来源故障隔离；
+- 跨来源相同 URL 保留首条记录并在 `extra._source_discoveries` 记录额外发现来源；
+- 最小开发 CLI 和使用临时数据库的真实网络流水线烟雾测试；
 - Ruff 与 Pyright 静态检查配置。
 
 ## 尚未实现
 
-更新流水线、分类结果持久化、信息源自动发现/添加向导、FastAPI 和网页 UI、Excel/Word
-导出、定时任务、一键启动、浏览器采集和真实 AI 功能尚未实现。阶段二 Collector 仍只返回纯
-采集结果，不写入正式数据库；分类器也不访问数据库或修改 `CollectedItem`。
+信息源自动发现/添加向导、FastAPI 和网页 UI、Excel/Word 导出、定时任务、一键启动、浏览器
+采集和真实 AI 功能尚未实现。Collector 和分类器仍保持纯逻辑边界，数据库写入只由应用服务
+通过 Repository Unit of Work 完成。
 
 ## 开发环境
 
@@ -59,6 +67,24 @@ uv run alembic current
 
 数据库结构变更必须通过新的 Alembic revision 完成，不得通过删除 SQLite 数据库解决。
 
+## 更新流水线调试
+
+数据库完成迁移并已有来源后，可使用最小 CLI：
+
+```bash
+uv run python -m app.cli update
+uv run python -m app.cli update --source-id 1
+uv run python -m app.cli update --source-id 1 --allow-disabled
+uv run python -m app.cli update --mode history --max-pages 5 --max-items 200
+uv run python -m app.cli runs --limit 5
+```
+
+CLI 不包含终端 UI；它与未来网页和任务调度入口共享同一个 `UpdatePipeline`。详细执行流程、
+事务与去重策略见 [`docs/update-pipeline.md`](docs/update-pipeline.md)。
+
+这些 CLI 命令默认直接读取并写入 `AIM_DATABASE_URL` 指向的数据库；未配置时就是正式本地库
+`data/intelligence.db`。开发、测试或迁移验证应显式把 `AIM_DATABASE_URL` 指向临时数据库。
+
 ## 质量检查
 
 ```bash
@@ -72,10 +98,11 @@ uv run alembic check
 默认 `pytest` 跳过真实网络测试。手动验证公开来源：
 
 ```bash
-uv run pytest -m network -s
+uv run pytest -m network -s -q
 ```
 
-网络测试只在内存中保留采集结果，不写入 `data/intelligence.db`。GitHub Releases 优先使用公开 API；未认证 API 配额耗尽时降级到公开 Releases Atom Feed。
+真实网络测试使用 pytest 临时数据库，不写入 `data/intelligence.db`。GitHub Releases 优先使用
+公开 API；未认证 API 配额耗尽时降级到公开 Releases Atom Feed。
 
 项目架构和关键约束见 [`docs/architecture.md`](docs/architecture.md)，新增或配置采集器见
 [`docs/source-development.md`](docs/source-development.md)，分类规则和扩展方式见

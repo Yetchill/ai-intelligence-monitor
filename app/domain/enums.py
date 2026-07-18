@@ -29,6 +29,10 @@ class SourceOrigin(StrEnum):
 
 class CrawlStatus(StrEnum):
     RUNNING = "running"
-    SUCCEEDED = "succeeded"
-    PARTIAL = "partial"
+    SUCCESS = "success"
+    PARTIAL_SUCCESS = "partial_success"
     FAILED = "failed"
+
+    # Source compatibility for callers compiled against the stage-one names.
+    SUCCEEDED = SUCCESS
+    PARTIAL = PARTIAL_SUCCESS

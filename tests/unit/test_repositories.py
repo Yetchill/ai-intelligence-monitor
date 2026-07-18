@@ -81,6 +81,14 @@ def test_crawl_run_and_revision_relationship(database: Database, source: Source)
         assert loaded_revision.crawl_run.id == run_id
         assert loaded_revision.item.title == "Original title"
 
+    with RepositoryUnitOfWork(database) as repositories:
+        assert repositories.crawl_runs.delete(run_id) is True
+
+    with RepositoryUnitOfWork(database) as repositories:
+        retained_revision = repositories.revisions.get(revision_id)
+        assert retained_revision is not None
+        assert retained_revision.crawl_run_id is None
+
 
 def test_repository_crud(database: Database, source: Source) -> None:
     with RepositoryUnitOfWork(database) as repositories:

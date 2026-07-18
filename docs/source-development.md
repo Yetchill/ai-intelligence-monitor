@@ -4,6 +4,11 @@
 
 Collector 的职责是从一个已确认来源发现列表项并返回 `CollectedItem`。它不保存数据库、不分类、不执行更新流水线、不进入详情页，也不处理登录、验证码或浏览器渲染。
 
+正式更新由 `UpdatePipeline` 通过 `CollectorRegistry` 创建 Collector。incremental/history 模式、
+`max_pages`、`max_items` 和可选时间范围会放入运行时 `CollectContext.config`；已有 Collector 仍会
+应用自身硬上限（HTML 100 页/10000 条、RSS 10000 条、GitHub Releases 100 条），history 模式
+不会绕过这些边界。
+
 每个实现接收一个 `Fetcher`，并实现：
 
 ```python
