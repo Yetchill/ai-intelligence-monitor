@@ -1,0 +1,32 @@
+"""Shared construction for the update pipeline used by CLI and local Web UI."""
+
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
+from app.classifiers.rule_based import RuleBasedClassifier
+from app.collectors.registry import default_collector_registry
+from app.fetchers.http import HttpFetcher
+from app.services.classification_service import ClassificationService
+from app.services.crawl_service import CrawlService
+from app.services.update_pipeline import UpdatePipeline
+from app.storage.database import Database
+from app.storage.repositories import RepositoryUnitOfWork
+
+
+@asynccontextmanager
+async def update_pipeline_context(
+    database: Database,
+    pipeline_class: type[UpdatePipeline] = UpdatePipeline,
+) -> AsyncGenerator[UpdatePipeline]:
+    """Build one pipeline execution with a safely closed HTTP client."""
+
+    def uow_factory() -> RepositoryUnitOfWork:
+        return RepositoryUnitOfWork(database)
+
+    classification = ClassificationService(RuleBasedClassifier.from_yaml(), uow_factory)
+    async with HttpFetcher() as fetcher:
+        yield pipeline_class(
+            uow_factory=uow_factory,
+            crawl_service=CrawlService(default_collector_registry(), fetcher),
+            classification_service=classification,
+        )

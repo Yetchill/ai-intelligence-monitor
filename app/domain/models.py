@@ -109,6 +109,9 @@ class IntelligenceItem(Base):
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
     category: Mapped[Category] = mapped_column(
         enum_type(Category), nullable=False, default=Category.UNCLASSIFIED
     )

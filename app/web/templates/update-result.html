@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}更新结果 · AI 行业情报{% endblock %}
+{% block content %}
+  <section class="page-heading"><div><p class="eyebrow">更新完成</p><h1>更新结果</h1><p>本次任务已结束，结果已写入本地运行记录。</p></div></section>
+  <section class="result-panel">
+    <div class="result-status"><span class="status-badge {{ result.status.value }}">{{ status_label(result.status) }}</span><span>运行 #{{ result.crawl_run_id }}</span></div>
+    <div class="stats-grid">
+      <div><strong>{{ result.source_success }}</strong><span>成功来源</span></div><div><strong>{{ result.source_failed }}</strong><span>失败来源</span></div>
+      <div><strong>{{ result.discovered_count }}</strong><span>发现</span></div><div><strong>{{ result.new_count }}</strong><span>新增</span></div>
+      <div><strong>{{ result.updated_count }}</strong><span>更新</span></div><div><strong>{{ result.skipped_count }}</strong><span>跳过</span></div>
+      <div><strong>{{ result.unclassified_count }}</strong><span>待分类</span></div>
+    </div>
+    {% if result.error_summary %}<p class="notice error">{{ result.error_summary }}</p>{% endif %}
+    <div class="page-actions"><a class="button primary" href="/">返回资讯</a><a class="button subtle" href="/runs#run-{{ result.crawl_run_id }}">查看更新记录</a></div>
+  </section>
+{% endblock %}

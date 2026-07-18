@@ -97,6 +97,49 @@ def test_status_migration_preserves_existing_crawl_runs(tmp_path: Path) -> None:
         repeated.dispose()
 
 
+def test_item_updated_at_migration_preserves_existing_rows(tmp_path: Path) -> None:
+    database_path = tmp_path / "item-updated-at-migration.db"
+    config = Config(PROJECT_ROOT / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+    command.upgrade(config, "8df43a9b1c2e")
+    database = Database(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with database.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO sources "
+                    "(name, source_type, start_url, enabled, collector_name, collector_config, "
+                    "requires_custom_collector, origin, created_at, updated_at) VALUES "
+                    "('Feed', 'rss', 'https://example.com/feed', 1, 'rss', '{}', 0, "
+                    "'preset', '2026-07-18 00:00:00', '2026-07-18 00:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO intelligence_items "
+                    "(source_id, title, original_url, canonical_url, discovered_at, last_seen_at, "
+                    "category, fingerprint, is_favorite, is_active, extra) VALUES "
+                    "(1, 'Existing item', 'https://example.com/item', 'https://example.com/item', "
+                    "'2026-07-18 01:00:00', '2026-07-18 02:00:00', 'unclassified', "
+                    f"'{('a' * 64)}', 0, 1, '{{}}')"
+                )
+            )
+    finally:
+        database.dispose()
+
+    command.upgrade(config, "head")
+    migrated = Database(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with migrated.engine.connect() as connection:
+            row = connection.execute(
+                text("SELECT title, last_seen_at, updated_at FROM intelligence_items")
+            ).one()
+        assert row.title == "Existing item"
+        assert row.updated_at == row.last_seen_at
+    finally:
+        migrated.dispose()
+
+
 def test_status_migration_rejects_unknown_history_before_schema_changes(tmp_path: Path) -> None:
     database_path = tmp_path / "unknown-status-migration.db"
     config = Config(PROJECT_ROOT / "alembic.ini")

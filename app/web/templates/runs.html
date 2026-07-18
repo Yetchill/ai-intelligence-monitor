@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}更新记录 · AI 行业情报{% endblock %}
+{% block content %}
+  <section class="page-heading"><div><p class="eyebrow">运行审计</p><h1>更新记录</h1><p>查看每次更新的状态、来源统计与资讯处理结果。</p></div></section>
+  {% if page.entries %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>状态</th><th>开始 / 完成</th><th>来源</th><th>discovered</th><th>new</th><th>updated</th><th>skipped</th><th>待分类</th><th>错误摘要</th></tr></thead>
+        <tbody>
+          {% for run in page.entries %}
+            <tr id="run-{{ run.id }}">
+              <td><span class="status-badge {{ run.status.value }}">{{ status_label(run.status) }}</span><div class="muted">#{{ run.id }}</div></td>
+              <td>{{ format_time(run.started_at) }}<br><span class="muted">{{ format_time(run.finished_at) if run.finished_at else '尚未完成' }}</span></td>
+              <td>{{ run.source_success }} 成功 / {{ run.source_failed }} 失败<br><span class="muted">共 {{ run.source_total }}</span></td>
+              <td>{{ run.discovered_count }}</td><td>{{ run.new_count }}</td><td>{{ run.updated_count }}</td><td>{{ run.skipped_count }}</td><td>{{ run.unclassified_count }}</td>
+              <td class="error-cell">{{ run.error_summary or '—' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}<section class="empty-state"><h2>还没有更新记录</h2><p>从资讯页或来源页运行更新后，结果会显示在这里。</p></section>{% endif %}
+  {% include "pagination.html" %}
+{% endblock %}

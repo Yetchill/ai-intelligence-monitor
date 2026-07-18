@@ -4,7 +4,8 @@
 
 分类器保持纯逻辑：消费不可变 `CollectedItem`，返回 `ClassificationResult`，不访问数据库、
 不修改采集结果，也不调用外部 API 或大模型。阶段四由 `ClassificationService` 调用规则分类器，
-再由 `ItemPersistenceService` 保存自动分类字段；网页人工改分类仍未实现。
+再由 `ItemPersistenceService` 保存自动分类字段；阶段五 A 网页通过 `WebDataService` 只修改
+`manual_category`，不会覆盖自动分类结果。
 
 一级分类严格限定为：
 
@@ -37,8 +38,8 @@ manual_category
 
 新增条目保存 `category`、`classification_score`、`classification_reason` 和
 `automatic_category_provider`，`manual_category` 为空。已有条目重新出现时可以刷新自动分类字段，
-但绝不修改 `manual_category`；展示层必须使用 `manual_category or category`。分类变化不创建内容
-Revision。基础 `reclassify_item` / `reclassify_all` 服务已提供，但没有 UI 或自动批量触发。
+但绝不修改 `manual_category`；展示层使用 `manual_category or category`。人工修改和自动分类变化
+都不创建内容 Revision。基础 `reclassify_item` / `reclassify_all` 服务已提供，但没有自动批量触发。
 
 `ClassificationResult` 包含：
 

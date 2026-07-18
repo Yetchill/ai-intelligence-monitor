@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}来源 · AI 行业情报{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <div><p class="eyebrow">基础管理</p><h1>来源</h1><p>查看预设来源状态，启用、停用或立即更新单个来源。</p></div>
+    <form action="/updates" method="post" data-update-form><button class="button primary" type="submit" data-processing-text="正在更新…">更新全部来源</button></form>
+  </section>
+  {% if page.entries %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>来源</th><th>类型 / 采集器</th><th>状态</th><th>默认分类</th><th>最近检查</th><th>最近成功</th><th>最近错误</th><th>操作</th></tr></thead>
+        <tbody>
+          {% for source in page.entries %}
+            <tr>
+              <td><strong>{{ source.name }}</strong>{% if source.start_url %}<a class="source-url" href="{{ source.start_url }}" target="_blank" rel="noopener noreferrer">{{ source.start_url }}</a>{% endif %}</td>
+              <td>{{ source.source_type.value }}<br><span class="muted">{{ source.collector_name }}</span></td>
+              <td><span class="status-badge {{ 'success' if source.enabled else 'neutral' }}">{{ '已启用' if source.enabled else '已停用' }}</span></td>
+              <td>{{ category_label(source.default_category) if source.default_category else '自动判断' }}</td>
+              <td>{{ format_time(source.last_checked_at) }}</td>
+              <td>{{ format_time(source.last_success_at) }}</td>
+              <td class="error-cell">{{ source.last_error or '—' }}</td>
+              <td>
+                <div class="stack-actions">
+                  <form action="/sources/{{ source.id }}/enabled" method="post">
+                    <input type="hidden" name="enabled" value="{{ 'false' if source.enabled else 'true' }}">
+                    <input type="hidden" name="return_to" value="{{ return_to }}">
+                    <button class="button small" type="submit">{{ '停用来源' if source.enabled else '启用来源' }}</button>
+                  </form>
+                  {% if source.enabled %}
+                    <form action="/sources/{{ source.id }}/updates" method="post" data-update-form>
+                      <button class="button small primary" type="submit" data-processing-text="更新中…">立即更新</button>
+                    </form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <section class="empty-state"><h2>还没有来源</h2><p>请先通过文档中的显式命令导入示例来源。即使没有来源，页面仍可正常访问。</p></section>
+  {% endif %}
+  {% include "pagination.html" %}
+{% endblock %}

@@ -1,16 +1,17 @@
-# 阶段四更新流水线架构
+# 阶段五 A 本地网页架构
 
 ## 范围
 
 当前架构覆盖基础设施、基础采集器、纯逻辑分类子系统，以及更新流水线、分类持久化与运行
-记录。信息源发现、Web、导出、定时任务、一键启动、浏览器获取和真实 AI 模块尚未创建。
+记录，以及本地 Web UI 与基础人工操作。信息源自动发现/添加向导、导出、定时任务、一键启动、
+Windows 打包、浏览器获取和真实 AI 模块尚未创建。
 
 ## 依赖方向
 
 ```text
-UI / 最小 CLI / 未来任务入口
+Jinja2 Web / 最小 CLI / 未来任务入口
           ↓
-                  UpdatePipeline
+      WebDataService / UpdatePipeline
           ↓             ↓                 ↓
    CrawlService   ClassificationService   CrawlRunService
           ↓             ↓                 ↓
@@ -156,8 +157,27 @@ UTC 规范化边界。
 该保存点并重新查询已有记录。一个来源写入失败不会回滚已成功来源，失败状态再用独立短 UoW
 写入。Repository 和服务均不公开 Session。
 
+## Web 层
+
+`app/web/app.py` 负责应用工厂、静态文件、Jinja2 自动转义、迁移状态检查和统一错误页面；
+`app/web/routes/` 只解析已校验输入并调用应用服务。`WebDataService` 持有短 Unit of Work 边界，
+路由从不接触 SQLAlchemy Session。
+
+资讯列表的 count 与 data 使用相同 SQLAlchemy 条件。data 查询一次联表 `Source`，按
+`coalesce(published_at, discovered_at, updated_at) DESC, id DESC` 稳定排序，再在数据库执行
+`LIMIT/OFFSET`。标题/简介关键词使用绑定参数和显式 LIKE 通配符转义；人工分类筛选和展示均按
+`manual_category` 优先。来源和 CrawlRun 也使用数据库分页。
+
+所有状态修改均为 POST。收藏、人工分类和来源启停由 `WebDataService` 提供明确接口；人工分类
+只写 `manual_category` 和 `updated_at`，不修改自动分类字段、`last_seen_at` 或 ItemRevision。
+`WebUpdateService` 使用进程内非阻塞锁串行化更新，并通过共享工厂构造现有 `UpdatePipeline`；
+锁在 `finally` 中释放。
+
+Web 应用启动时只核对当前 Alembic revision 与 head。版本落后会给出升级命令，不自动迁移、
+重建数据库、导入来源或启动采集。详细运行和安全边界见 [`web-ui.md`](web-ui.md)。
+
 ## 后续扩展边界
 
-未来 Web/API、CLI 和任务入口都应调用现有 `UpdatePipeline`；Fetcher/Collector 不得直接持有
+Web、CLI 和未来任务入口都调用现有 `UpdatePipeline`；Fetcher/Collector 不得直接持有
 Session。分类器不得操作数据库，Web/API 层不得包含采集逻辑。
 SourceDiscoverer 与正式 Collector 必须保持分离。新增字段或约束必须随 Alembic migration 一起提交。
