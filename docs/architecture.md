@@ -130,7 +130,14 @@ uv run alembic upgrade head
 
 `Database.create_schema()` 只为隔离单元测试提供快速建表能力。任何正式模型变更都必须新增迁移，不能删除数据库重建。
 
+迁移 `8df43a9b1c2e` 对 `succeeded`/`partial` 做一一状态重命名，`running`/`failed` 原样保留；
+升级前若发现约束之外的未知历史状态，会在任何表结构修改前明确失败并保留原数据。downgrade
+执行反向一一映射，因此该状态迁移可无损往返。
+
 SQLite 连接会启用 `PRAGMA foreign_keys=ON`。Repository 默认 `expire_on_commit=False`，便于事务结束后读取已提交实体的标量字段。
+SQLite 的 `DateTime(timezone=True)` 读回值可能不携带 `tzinfo`；应用服务在比较和返回运行时间时
+统一把 naive 值解释为 UTC，避免与 aware datetime 混用。未来迁移到更严格数据库时仍使用同一
+UTC 规范化边界。
 
 ## 日志
 

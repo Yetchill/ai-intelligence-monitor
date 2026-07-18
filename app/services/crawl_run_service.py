@@ -45,7 +45,9 @@ class CrawlRunService:
             fatal=fatal_error is not None,
         )
         errors = [
-            f"{result.source_name}: {result.error}" for result in source_results if result.error
+            sanitize_error(f"{result.source_name}: {result.error}", limit=1000)
+            for result in source_results
+            if result.error
         ]
         if fatal_error is not None:
             errors.append(f"pipeline: {sanitize_error(fatal_error)}")
@@ -95,8 +97,8 @@ def _to_result(
     return UpdateResult(
         crawl_run_id=run.id,
         status=run.status,
-        started_at=run.started_at,
-        finished_at=run.finished_at,
+        started_at=_utc(run.started_at),
+        finished_at=_utc(run.finished_at),
         source_total=run.source_total,
         source_success=run.source_success,
         source_failed=run.source_failed,
@@ -108,3 +110,9 @@ def _to_result(
         error_summary=run.error_summary,
         source_results=tuple(source_results),
     )
+
+
+def _utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)

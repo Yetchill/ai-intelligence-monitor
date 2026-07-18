@@ -1,7 +1,7 @@
 """Stage-four update pipeline behavior with no public-network dependency."""
 
-from collections.abc import Mapping
-from datetime import UTC, datetime
+from collections.abc import Callable, Mapping
+from datetime import UTC, datetime, timedelta, timezone
 from typing import cast
 
 import pytest
@@ -111,18 +111,24 @@ def _pipeline(
     backend: ScenarioFetcher,
     *,
     crawl_run_service: CrawlRunService | None = None,
+    uow_factory: Callable[[], RepositoryUnitOfWork] | None = None,
 ) -> UpdatePipeline:
-    def uow_factory() -> RepositoryUnitOfWork:
-        return TrackingUnitOfWork(database, backend)
+    resolved_uow_factory = uow_factory
+    if resolved_uow_factory is None:
+
+        def default_uow_factory() -> RepositoryUnitOfWork:
+            return TrackingUnitOfWork(database, backend)
+
+        resolved_uow_factory = default_uow_factory
 
     registry = CollectorRegistry()
     registry.register("scenario", ScenarioCollector)
-    classification = ClassificationService(RuleBasedClassifier.from_yaml(), uow_factory)
+    classification = ClassificationService(RuleBasedClassifier.from_yaml(), resolved_uow_factory)
     return UpdatePipeline(
-        uow_factory=uow_factory,
+        uow_factory=resolved_uow_factory,
         crawl_service=CrawlService(registry, backend),
         classification_service=classification,
-        persistence_service=ItemPersistenceService(uow_factory),
+        persistence_service=ItemPersistenceService(resolved_uow_factory),
         crawl_run_service=crawl_run_service,
     )
 
@@ -169,6 +175,83 @@ async def test_first_run_persists_classification_and_second_run_is_skipped(
 
 
 @pytest.mark.asyncio
+async def test_same_batch_duplicate_item_has_one_mutually_exclusive_outcome(
+    database: Database,
+) -> None:
+    source = _source("Feed", "https://example.com/feed")
+    _add_sources(database, source)
+    duplicate = _item("https://example.com/article?b=2&a=1&utm_source=test#fragment")
+    equivalent = _item("https://example.com/article?a=1&b=2")
+    backend = ScenarioFetcher()
+    backend.responses[source.start_url] = [[duplicate, equivalent]]
+
+    result = await _pipeline(database, backend).update()
+
+    assert result.discovered_count == 2
+    assert (result.new_count, result.updated_count, result.skipped_count) == (1, 0, 0)
+    with RepositoryUnitOfWork(database) as uow:
+        assert len(uow.items.list()) == 1
+        assert uow.revisions.list() == []
+
+
+@pytest.mark.asyncio
+async def test_final_normalization_preserves_configured_business_query_parameters(
+    database: Database,
+) -> None:
+    source = _source("Feed", "https://example.com/feed")
+    source.collector_config = {"keep_query_params": ["utm_source", "id"]}
+    _add_sources(database, source)
+    backend = ScenarioFetcher()
+    backend.responses[source.start_url] = [
+        [_item("https://example.com/article?ignored=x&utm_source=route&id=42#fragment")]
+    ]
+
+    result = await _pipeline(database, backend).update()
+
+    assert result.new_count == 1
+    with RepositoryUnitOfWork(database) as uow:
+        stored = uow.items.list()[0]
+    assert stored.canonical_url == "https://example.com/article?id=42&utm_source=route"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("second", "expected_url"),
+    [
+        (
+            _item("https://example.com/one", title="后到标题", summary="后到简介"),
+            "https://example.com/one",
+        ),
+        (
+            _item("https://example.com/two"),
+            "https://example.com/one",
+        ),
+    ],
+)
+async def test_same_batch_url_or_fingerprint_collision_uses_first_valid_item(
+    database: Database,
+    second: CollectedItem,
+    expected_url: str,
+) -> None:
+    source = _source("Feed", "https://example.com/feed")
+    _add_sources(database, source)
+    first = _item("https://example.com/one")
+    backend = ScenarioFetcher()
+    backend.responses[source.start_url] = [[first, second]]
+
+    result = await _pipeline(database, backend).update()
+
+    assert (result.discovered_count, result.new_count, result.updated_count) == (2, 1, 0)
+    with RepositoryUnitOfWork(database) as uow:
+        items = uow.items.list()
+        revisions = uow.revisions.list()
+    assert len(items) == 1
+    assert items[0].canonical_url == expected_url
+    assert items[0].title == first.title
+    assert revisions == []
+
+
+@pytest.mark.asyncio
 async def test_content_change_creates_revision_with_only_changed_fields(
     database: Database,
 ) -> None:
@@ -200,6 +283,64 @@ async def test_content_change_creates_revision_with_only_changed_fields(
     assert set(revisions[0].new_data) == {"summary", "published_at", "extra"}
     assert revisions[0].old_data["extra"] == {"attachment": "a.pdf"}
     assert revisions[0].new_data["extra"] == {"attachment": "b.pdf"}
+
+
+@pytest.mark.asyncio
+async def test_json_key_order_and_equivalent_timezone_do_not_create_revision(
+    database: Database,
+) -> None:
+    source = _source("Feed", "https://example.com/feed")
+    _add_sources(database, source)
+    first_time = datetime(2026, 7, 18, 16, 0, tzinfo=UTC)
+    backend = ScenarioFetcher()
+    backend.responses[source.start_url] = [
+        [_item("https://example.com/1", published_at=first_time, extra={"a": 1, "b": 2})],
+        [
+            _item(
+                "https://example.com/1",
+                published_at=datetime(
+                    2026,
+                    7,
+                    19,
+                    0,
+                    0,
+                    tzinfo=timezone(timedelta(hours=8)),
+                ),
+                extra={"b": 2, "a": 1},
+            )
+        ],
+    ]
+    pipeline = _pipeline(database, backend)
+
+    await pipeline.update()
+    result = await pipeline.update()
+
+    assert (result.updated_count, result.skipped_count) == (0, 1)
+    assert result.started_at.tzinfo is UTC
+    assert result.finished_at.tzinfo is UTC
+    with RepositoryUnitOfWork(database) as uow:
+        assert uow.revisions.list() == []
+
+
+@pytest.mark.asyncio
+async def test_business_extra_list_order_is_a_revision_worthy_change(database: Database) -> None:
+    source = _source("Feed", "https://example.com/feed")
+    _add_sources(database, source)
+    backend = ScenarioFetcher()
+    backend.responses[source.start_url] = [
+        [_item("https://example.com/1", extra={"attachments": ["a", "b"]})],
+        [_item("https://example.com/1", extra={"attachments": ["b", "a"]})],
+    ]
+    pipeline = _pipeline(database, backend)
+
+    await pipeline.update()
+    result = await pipeline.update()
+
+    assert result.updated_count == 1
+    with RepositoryUnitOfWork(database) as uow:
+        revision = uow.revisions.list()[0]
+    assert revision.old_data == {"extra": {"attachments": ["a", "b"]}}
+    assert revision.new_data == {"extra": {"attachments": ["b", "a"]}}
 
 
 @pytest.mark.asyncio
@@ -240,14 +381,19 @@ async def test_manual_category_is_preserved_while_automatic_fields_refresh(
     with RepositoryUnitOfWork(database) as uow:
         item = uow.items.list()[0]
         item.manual_category = Category.AWARD_CASE
+        item.is_favorite = True
 
-    await pipeline.update()
+    result = await pipeline.update()
 
     with RepositoryUnitOfWork(database) as uow:
         item = uow.items.list()[0]
+        revisions = uow.revisions.list()
+    assert result.updated_count == 1
     assert item.manual_category is Category.AWARD_CASE
     assert item.category is Category.AGENT_PRODUCT
     assert (item.manual_category or item.category) is Category.AWARD_CASE
+    assert item.is_favorite is True
+    assert len(revisions) == 1
 
 
 @pytest.mark.asyncio
@@ -273,7 +419,10 @@ async def test_source_failure_is_isolated_and_produces_partial_success(database:
     _add_sources(database, failing, working)
     backend = ScenarioFetcher()
     backend.responses[failing.start_url] = [
-        RuntimeError("<html>huge body</html> token=super-secret https://x.test/a?token=secret")
+        RuntimeError(
+            "<html>huge body</html> token=super-secret "
+            "https://url-user:url-pass@x.test/a?token=secret"
+        )
     ]
     backend.responses[working.start_url] = [[_item("https://example.com/ok")]]
 
@@ -289,6 +438,8 @@ async def test_source_failure_is_isolated_and_produces_partial_success(database:
     assert "super-secret" not in failed_error
     assert "<html>" not in failed_error
     assert "?token=" not in failed_error
+    assert "url-user" not in failed_error
+    assert "url-pass" not in failed_error
     with RepositoryUnitOfWork(database) as uow:
         failed_source = uow.sources.get(failing.id)
         working_source = uow.sources.get(working.id)
@@ -399,6 +550,7 @@ async def test_cross_source_url_keeps_first_item_and_records_discovery(database:
     await pipeline.update(source_id=first.id)
     with RepositoryUnitOfWork(database) as uow:
         stored = uow.items.list()[0]
+        discovered_at = stored.discovered_at
         stored.manual_category = Category.ENTERPRISE_CASE
         stored.is_favorite = True
 
@@ -411,6 +563,7 @@ async def test_cross_source_url_keeps_first_item_and_records_discovery(database:
     assert len(items) == 1
     stored = items[0]
     assert stored.source_id == first.id
+    assert stored.discovered_at == discovered_at
     assert stored.title == "关于开展优秀人工智能案例征集的通知"
     assert stored.category is Category.SOLICITATION
     assert stored.manual_category is Category.ENTERPRISE_CASE
@@ -419,6 +572,83 @@ async def test_cross_source_url_keeps_first_item_and_records_discovery(database:
     assert isinstance(discoveries, list)
     assert discoveries[0]["source_id"] == second.id
     assert revisions == []
+
+
+@pytest.mark.asyncio
+async def test_cross_source_reserved_metadata_is_stable_and_not_business_content(
+    database: Database,
+) -> None:
+    first = _source("First", "https://example.com/feed-1")
+    second = _source("Second", "https://example.com/feed-2")
+    third = _source("Third", "https://example.com/feed-3")
+    _add_sources(database, first, second, third)
+    shared_url = "https://shared.example.com/article"
+    forged = {
+        "business": True,
+        "_source_discoveries": [
+            {
+                "source_id": 999,
+                "source_name": "forged",
+                "first_seen_at": "never",
+                "last_seen_at": "never",
+            }
+        ],
+    }
+    backend = ScenarioFetcher()
+    backend.responses[first.start_url] = [[_item(shared_url, extra=forged)]]
+    backend.responses[second.start_url] = [
+        [_item(shared_url, extra={"_source_discoveries": "forged"})],
+        [_item(shared_url, extra={"_source_discoveries": []})],
+    ]
+    backend.responses[third.start_url] = [[_item(shared_url)]]
+    pipeline = _pipeline(database, backend)
+
+    await pipeline.update(source_id=first.id)
+    with RepositoryUnitOfWork(database) as uow:
+        assert uow.items.list()[0].extra == {"business": True}
+
+    await pipeline.update(source_id=third.id)
+    first_discovery = await pipeline.update(source_id=second.id)
+    with RepositoryUnitOfWork(database) as uow:
+        stored_after_first = uow.items.list()[0]
+        discoveries_after_first = stored_after_first.extra["_source_discoveries"]
+        first_seen = discoveries_after_first[0]["first_seen_at"]
+    repeated = await pipeline.update(source_id=second.id)
+
+    assert (first_discovery.updated_count, first_discovery.skipped_count) == (0, 1)
+    assert (repeated.updated_count, repeated.skipped_count) == (0, 1)
+    with RepositoryUnitOfWork(database) as uow:
+        stored = uow.items.list()[0]
+        revisions = uow.revisions.list()
+    discoveries = stored.extra["_source_discoveries"]
+    assert [entry["source_id"] for entry in discoveries] == [second.id, third.id]
+    assert discoveries[0]["first_seen_at"] == first_seen
+    assert discoveries[0]["last_seen_at"] >= first_seen
+    assert stored.extra["business"] is True
+    assert revisions == []
+
+
+@pytest.mark.asyncio
+async def test_cross_source_discovery_recovers_legacy_non_object_extra(database: Database) -> None:
+    first = _source("First", "https://example.com/feed-1")
+    second = _source("Second", "https://example.com/feed-2")
+    _add_sources(database, first, second)
+    shared_url = "https://shared.example.com/article"
+    backend = ScenarioFetcher()
+    backend.responses[first.start_url] = [[_item(shared_url)]]
+    backend.responses[second.start_url] = [[_item(shared_url)]]
+    pipeline = _pipeline(database, backend)
+    await pipeline.update(source_id=first.id)
+    with database.engine.begin() as connection:
+        connection.exec_driver_sql("UPDATE intelligence_items SET extra = '[]'")
+
+    result = await pipeline.update(source_id=second.id)
+
+    assert result.status is CrawlStatus.SUCCESS
+    assert (result.updated_count, result.skipped_count) == (0, 1)
+    with RepositoryUnitOfWork(database) as uow:
+        stored = uow.items.list()[0]
+    assert stored.extra["_source_discoveries"][0]["source_id"] == second.id
 
 
 @pytest.mark.asyncio
@@ -440,6 +670,27 @@ async def test_same_source_fingerprint_deduplicates_a_changed_url(database: Data
         items = uow.items.list()
     assert len(items) == 1
     assert items[0].canonical_url == "https://example.com/old-url"
+
+
+@pytest.mark.asyncio
+async def test_changed_url_and_changed_short_title_are_not_fuzzily_merged(
+    database: Database,
+) -> None:
+    source = _source("Feed", "https://example.com/feed")
+    _add_sources(database, source)
+    backend = ScenarioFetcher()
+    backend.responses[source.start_url] = [
+        [_item("https://example.com/one", title="AI 周报 1")],
+        [_item("https://example.com/two", title="AI 周报 2")],
+    ]
+    pipeline = _pipeline(database, backend)
+
+    await pipeline.update()
+    result = await pipeline.update()
+
+    assert (result.new_count, result.updated_count, result.skipped_count) == (1, 0, 0)
+    with RepositoryUnitOfWork(database) as uow:
+        assert len(uow.items.list()) == 2
 
 
 @pytest.mark.asyncio
@@ -479,6 +730,19 @@ class FailFirstFinishService(CrawlRunService):
         return super().finish(*args, **kwargs)  # pyright: ignore[reportArgumentType]
 
 
+class AlwaysFailFinishService(CrawlRunService):
+    def __init__(self, database: Database) -> None:
+        super().__init__(lambda: RepositoryUnitOfWork(database))
+        self.calls = 0
+
+    def finish(self, *args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+        del args, kwargs
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("original finalization failure")
+        raise RuntimeError("failed-state persistence failure")
+
+
 @pytest.mark.asyncio
 async def test_uncaught_exception_still_moves_run_out_of_running(database: Database) -> None:
     source = _source("Feed", "https://example.com/feed")
@@ -494,6 +758,22 @@ async def test_uncaught_exception_still_moves_run_out_of_running(database: Datab
         run = uow.crawl_runs.list()[0]
     assert run.status is CrawlStatus.FAILED
     assert run.finished_at is not None
+
+
+@pytest.mark.asyncio
+async def test_failed_state_persistence_does_not_recurse_or_mask_original_error(
+    database: Database,
+) -> None:
+    source = _source("Feed", "https://example.com/feed")
+    _add_sources(database, source)
+    backend = ScenarioFetcher()
+    backend.responses[source.start_url] = [[]]
+    service = AlwaysFailFinishService(database)
+
+    with pytest.raises(RuntimeError, match="original finalization failure"):
+        await _pipeline(database, backend, crawl_run_service=service).update()
+
+    assert service.calls == 2
 
 
 def test_unique_constraint_conflict_recovers_inside_savepoint(database: Database) -> None:
@@ -523,12 +803,175 @@ def test_unique_constraint_conflict_recovers_inside_savepoint(database: Database
         source_in_same_transaction = uow.sources.get(source.id)
         assert source_in_same_transaction is not None
         source_in_same_transaction.last_error = "transaction remains usable"
+        following = uow.items.add_or_get_existing(
+            IntelligenceItem(
+                source_id=source.id,
+                title="Following item",
+                original_url="https://example.com/following",
+                canonical_url="https://example.com/following",
+                fingerprint="c" * 64,
+            )
+        )
 
     assert inserted is False
     assert recovered.id == existing.id
+    assert following[1] is True
     with RepositoryUnitOfWork(database) as uow:
-        assert len(uow.items.list()) == 1
+        assert len(uow.items.list()) == 2
         assert uow.sources.get(source.id).last_error == "transaction remains usable"  # type: ignore[union-attr]
+
+
+class CommitFailureController:
+    def __init__(self, fail_on: set[int]) -> None:
+        self.commit_attempts = 0
+        self.fail_on = fail_on
+
+
+class FailingCommitUnitOfWork(TrackingUnitOfWork):
+    def __init__(
+        self,
+        database: Database,
+        tracker: ScenarioFetcher,
+        controller: CommitFailureController,
+    ) -> None:
+        super().__init__(database, tracker)
+        self._controller = controller
+
+    def __exit__(self, *args: object) -> None:
+        if args and args[0] is None:
+            self._controller.commit_attempts += 1
+            if self._controller.commit_attempts in self._controller.fail_on:
+                failure = RuntimeError("injected transaction commit failure")
+                super().__exit__(type(failure), failure, None)
+                raise failure
+        super().__exit__(*args)
+
+
+@pytest.mark.asyncio
+async def test_source_commit_failure_rolls_back_counts_and_later_source_continues(
+    database: Database,
+) -> None:
+    failing = _source("Failing", "https://example.com/failing")
+    working = _source("Working", "https://example.com/working")
+    _add_sources(database, failing, working)
+    backend = ScenarioFetcher()
+    backend.responses[failing.start_url] = [[_item("https://example.com/rolled-back")]]
+    backend.responses[working.start_url] = [[_item("https://example.com/committed")]]
+    controller = CommitFailureController({3})
+
+    def uow_factory() -> RepositoryUnitOfWork:
+        return FailingCommitUnitOfWork(database, backend, controller)
+
+    result = await _pipeline(database, backend, uow_factory=uow_factory).update()
+
+    assert result.status is CrawlStatus.PARTIAL_SUCCESS
+    assert (result.source_success, result.source_failed) == (1, 1)
+    assert (result.new_count, result.updated_count) == (1, 0)
+    assert [entry.status for entry in result.source_results] == [
+        SourceUpdateStatus.FAILED,
+        SourceUpdateStatus.SUCCESS,
+    ]
+    with RepositoryUnitOfWork(database) as uow:
+        items = uow.items.list()
+        failed_source = uow.sources.get(failing.id)
+        run = uow.crawl_runs.list()[0]
+    assert [item.canonical_url for item in items] == ["https://example.com/committed"]
+    assert failed_source is not None
+    assert failed_source.last_checked_at is not None
+    assert failed_source.last_success_at is None
+    assert run.new_count == 1
+    assert run.finished_at is not None
+
+
+@pytest.mark.asyncio
+async def test_source_commit_failure_rolls_back_item_update_and_revision(
+    database: Database,
+) -> None:
+    source = _source("Feed", "https://example.com/feed")
+    _add_sources(database, source)
+    item_url = "https://example.com/existing"
+    with RepositoryUnitOfWork(database) as uow:
+        uow.items.add(
+            IntelligenceItem(
+                source_id=source.id,
+                title="Existing",
+                original_url=item_url,
+                canonical_url=item_url,
+                summary="old summary",
+                fingerprint=generate_item_fingerprint("Existing"),
+            )
+        )
+    backend = ScenarioFetcher()
+    backend.responses[source.start_url] = [
+        [_item(item_url, title="Existing", summary="new summary")]
+    ]
+    controller = CommitFailureController({3})
+
+    def uow_factory() -> RepositoryUnitOfWork:
+        return FailingCommitUnitOfWork(database, backend, controller)
+
+    result = await _pipeline(database, backend, uow_factory=uow_factory).update()
+
+    assert result.status is CrawlStatus.FAILED
+    assert (result.new_count, result.updated_count) == (0, 0)
+    with RepositoryUnitOfWork(database) as uow:
+        stored = uow.items.list()[0]
+        revisions = uow.revisions.list()
+    assert stored.summary == "old summary"
+    assert revisions == []
+
+
+@pytest.mark.asyncio
+async def test_source_failure_state_commit_failure_does_not_stop_later_sources(
+    database: Database,
+) -> None:
+    failing = _source("Failing", "https://example.com/failing")
+    working = _source("Working", "https://example.com/working")
+    _add_sources(database, failing, working)
+    backend = ScenarioFetcher()
+    backend.responses[failing.start_url] = [RuntimeError("network failed")]
+    backend.responses[working.start_url] = [[_item("https://example.com/committed")]]
+    # Selection and CrawlRun start are commits 1 and 2; source failure state is commit 3.
+    controller = CommitFailureController({3})
+
+    def uow_factory() -> RepositoryUnitOfWork:
+        return FailingCommitUnitOfWork(database, backend, controller)
+
+    result = await _pipeline(database, backend, uow_factory=uow_factory).update()
+
+    assert result.status is CrawlStatus.PARTIAL_SUCCESS
+    assert (result.source_success, result.source_failed, result.new_count) == (1, 1, 1)
+    with RepositoryUnitOfWork(database) as uow:
+        assert [item.canonical_url for item in uow.items.list()] == [
+            "https://example.com/committed"
+        ]
+        assert uow.crawl_runs.list()[0].finished_at is not None
+
+
+@pytest.mark.asyncio
+async def test_crawl_run_finish_commit_failure_uses_independent_failed_transaction(
+    database: Database,
+) -> None:
+    source = _source("Feed", "https://example.com/feed")
+    _add_sources(database, source)
+    backend = ScenarioFetcher()
+    backend.responses[source.start_url] = [[_item("https://example.com/committed")]]
+    # Selection, CrawlRun start and source persistence are commits 1-3; finalization is 4.
+    controller = CommitFailureController({4})
+
+    def uow_factory() -> RepositoryUnitOfWork:
+        return FailingCommitUnitOfWork(database, backend, controller)
+
+    with pytest.raises(RuntimeError, match="injected transaction commit failure"):
+        await _pipeline(database, backend, uow_factory=uow_factory).update()
+
+    with RepositoryUnitOfWork(database) as uow:
+        items = uow.items.list()
+        run = uow.crawl_runs.list()[0]
+    assert [item.canonical_url for item in items] == ["https://example.com/committed"]
+    assert run.status is CrawlStatus.FAILED
+    assert run.finished_at is not None
+    assert (run.source_success, run.source_failed, run.new_count) == (1, 0, 1)
 
 
 def test_application_services_do_not_expose_sqlalchemy_session(database: Database) -> None:
@@ -565,6 +1008,7 @@ async def test_reclassify_item_and_all_are_independent_service_interfaces(
                 original_url="https://example.com/item",
                 canonical_url="https://example.com/item",
                 category=Category.UNCLASSIFIED,
+                manual_category=Category.ENTERPRISE_CASE,
                 fingerprint="f" * 64,
             )
         )
@@ -582,4 +1026,5 @@ async def test_reclassify_item_and_all_are_independent_service_interfaces(
         stored = uow.items.get(item.id)
     assert stored is not None
     assert stored.category is Category.POLICY_INDUSTRY
+    assert stored.manual_category is Category.ENTERPRISE_CASE
     assert stored.classification_reason

@@ -4,6 +4,7 @@ import logging
 import traceback
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import cast
 
 from app.domain.classification import ClassificationResult
 from app.domain.collection import CollectedItem
@@ -129,9 +130,12 @@ class UpdatePipeline:
             )
             discovered = len(collected)
             normalized_items: list[CollectedItem] = []
+            keep_query_params = _keep_query_params(source)
             for item in collected:
                 try:
-                    normalized_items.append(normalize_collected_item(item))
+                    normalized_items.append(
+                        normalize_collected_item(item, keep_query_params=keep_query_params)
+                    )
                 except ItemNormalizationError as exc:
                     invalid_skipped += 1
                     LOGGER.warning(
@@ -204,12 +208,18 @@ class UpdatePipeline:
             )
 
     def _mark_source_failed(self, source_id: int, error: str) -> None:
-        with self._uow_factory() as uow:
-            source = uow.sources.get(source_id)
-            if source is None:
-                raise LookupError(f"source {source_id} no longer exists")
-            source.last_checked_at = datetime.now(UTC)
-            source.last_error = sanitize_error(error)
+        try:
+            with self._uow_factory() as uow:
+                source = uow.sources.get(source_id)
+                if source is None:
+                    raise LookupError(f"source {source_id} no longer exists")
+                source.last_checked_at = datetime.now(UTC)
+                source.last_error = sanitize_error(error)
+        except Exception as state_error:
+            _log_exception(
+                f"Failed to persist failure state for source_id={source_id}",
+                state_error,
+            )
 
 
 def _log_exception(context: str, error: BaseException) -> None:
@@ -218,3 +228,11 @@ def _log_exception(context: str, error: BaseException) -> None:
         for frame in traceback.extract_tb(error.__traceback__)
     )
     LOGGER.error("%s: %s; traceback=%s", context, sanitize_error(error), stack or "unavailable")
+
+
+def _keep_query_params(source: Source) -> tuple[str, ...] | None:
+    value = source.collector_config.get("keep_query_params")
+    if not isinstance(value, list):
+        return None
+    values = cast(list[object], value)
+    return tuple(item for item in values if isinstance(item, str))

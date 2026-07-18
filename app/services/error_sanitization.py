@@ -22,6 +22,10 @@ def sanitize_error(error: BaseException | str, *, limit: int = 500) -> str:
 def _strip_url_query(match: re.Match[str]) -> str:
     try:
         parts = urlsplit(match.group(0))
-        return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+        hostname = parts.hostname or ""
+        if ":" in hostname and not hostname.startswith("["):
+            hostname = f"[{hostname}]"
+        netloc = hostname if parts.port is None else f"{hostname}:{parts.port}"
+        return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
     except ValueError:
         return "[invalid URL]"

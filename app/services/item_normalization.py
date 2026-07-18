@@ -1,7 +1,7 @@
 """Final normalization boundary between collectors and durable intelligence items."""
 
 import json
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from datetime import UTC, datetime
 from typing import cast
 
@@ -15,7 +15,11 @@ class ItemNormalizationError(ValueError):
     """Raised when one collected record cannot safely be persisted."""
 
 
-def normalize_collected_item(item: CollectedItem) -> CollectedItem:
+def normalize_collected_item(
+    item: CollectedItem,
+    *,
+    keep_query_params: Collection[str] | None = None,
+) -> CollectedItem:
     title = " ".join(item.title.split())
     if not title:
         raise ItemNormalizationError("item title is empty")
@@ -23,7 +27,7 @@ def normalize_collected_item(item: CollectedItem) -> CollectedItem:
     original_url = item.original_url.strip()
     if not is_http_url(original_url):
         raise ItemNormalizationError("item URL must be an absolute HTTP(S) URL")
-    canonical_url = canonicalize_url(original_url)
+    canonical_url = canonicalize_url(original_url, keep_query_params=keep_query_params)
     if canonical_url is None:
         raise ItemNormalizationError("item URL cannot be canonicalized")
 

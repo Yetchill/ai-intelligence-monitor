@@ -21,7 +21,11 @@ class Database:
         self.database_url = database_url or get_settings().database_url
         self._ensure_sqlite_parent(self.database_url)
         connect_args = (
-            {"check_same_thread": False} if self.database_url.startswith("sqlite") else {}
+            # Python 3.12's modern SQLite transaction mode makes SELECT and
+            # SAVEPOINT participate in the outer source transaction.
+            {"check_same_thread": False, "autocommit": False}
+            if self.database_url.startswith("sqlite")
+            else {}
         )
         self.engine: Engine = create_engine(
             self.database_url,
@@ -83,6 +87,11 @@ class Database:
     @staticmethod
     def _enable_sqlite_foreign_keys(dbapi_connection: object, _connection_record: object) -> None:
         connection = cast(SQLiteConnection, dbapi_connection)
+        previous_autocommit = connection.autocommit
+        connection.autocommit = True
         cursor = connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+        finally:
+            cursor.close()
+            connection.autocommit = previous_autocommit

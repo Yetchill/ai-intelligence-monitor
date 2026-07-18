@@ -17,8 +17,9 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Rename completed status values without discarding existing runs."""
+    """Rename completed statuses; unknown legacy values fail before schema changes."""
 
+    _require_known_statuses({"running", "succeeded", "partial", "failed"})
     with op.batch_alter_table("crawl_runs") as batch_op:
         batch_op.drop_constraint("crawlstatus", type_="check")
     op.execute("UPDATE crawl_runs SET status = 'success' WHERE status = 'succeeded'")
@@ -41,8 +42,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Restore the original stage-one status values."""
+    """Losslessly restore the original stage-one status names."""
 
+    _require_known_statuses({"running", "success", "partial_success", "failed"})
     with op.batch_alter_table("crawl_runs") as batch_op:
         batch_op.drop_constraint("crawlstatus", type_="check")
     op.execute("UPDATE crawl_runs SET status = 'succeeded' WHERE status = 'success'")
@@ -62,3 +64,13 @@ def downgrade() -> None:
             ),
             existing_nullable=False,
         )
+
+
+def _require_known_statuses(known: set[str]) -> None:
+    statuses = set(
+        op.get_bind().execute(sa.text("SELECT DISTINCT status FROM crawl_runs")).scalars()
+    )
+    unknown = statuses - known
+    if unknown:
+        rendered = ", ".join(sorted(repr(value) for value in unknown))
+        raise RuntimeError(f"crawl_runs contains unknown status values: {rendered}")

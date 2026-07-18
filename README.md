@@ -82,6 +82,9 @@ uv run python -m app.cli runs --limit 5
 CLI 不包含终端 UI；它与未来网页和任务调度入口共享同一个 `UpdatePipeline`。详细执行流程、
 事务与去重策略见 [`docs/update-pipeline.md`](docs/update-pipeline.md)。
 
+这些 CLI 命令默认直接读取并写入 `AIM_DATABASE_URL` 指向的数据库；未配置时就是正式本地库
+`data/intelligence.db`。开发、测试或迁移验证应显式把 `AIM_DATABASE_URL` 指向临时数据库。
+
 ## 质量检查
 
 ```bash

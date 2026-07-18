@@ -51,6 +51,7 @@ class ItemPersistenceService:
         updated_count = 0
         skipped_count = invalid_skipped
         unclassified_count = 0
+        processed_item_ids: set[int] = set()
 
         with self._uow_factory() as uow:
             source = uow.sources.get(source_id)
@@ -83,6 +84,8 @@ class ItemPersistenceService:
                         extra=dict(normalized.extra),
                     )
                     existing, inserted = uow.items.add_or_get_existing(candidate)
+                    if existing.id in processed_item_ids:
+                        continue
                     if inserted:
                         new_count += 1
                     else:
@@ -98,6 +101,8 @@ class ItemPersistenceService:
                         updated_count += outcome == "updated"
                         skipped_count += outcome == "skipped"
                 else:
+                    if existing.id in processed_item_ids:
+                        continue
                     outcome = self._update_existing(
                         uow,
                         existing,
@@ -110,6 +115,7 @@ class ItemPersistenceService:
                     updated_count += outcome == "updated"
                     skipped_count += outcome == "skipped"
 
+                processed_item_ids.add(existing.id)
                 effective_category = existing.manual_category or existing.category
                 unclassified_count += effective_category is Category.UNCLASSIFIED
 
@@ -196,7 +202,7 @@ def _apply_content(
     if "published_at" in changes:
         existing.published_at = incoming.published_at
     if "extra" in changes:
-        discoveries = existing.extra.get(INTERNAL_DISCOVERIES_KEY)
+        discoveries = _extra_mapping(existing.extra).get(INTERNAL_DISCOVERIES_KEY)
         extra = dict(incoming.extra)
         if discoveries is not None:
             extra[INTERNAL_DISCOVERIES_KEY] = discoveries
@@ -213,45 +219,71 @@ def _apply_classification(
     existing.automatic_category_provider = result.provider
 
 
-def _business_extra(extra: dict[str, Any]) -> dict[str, object]:
+def _business_extra(extra: object) -> dict[str, object]:
     return {
-        key: cast(object, value) for key, value in extra.items() if key != INTERNAL_DISCOVERIES_KEY
+        key: cast(object, value)
+        for key, value in _extra_mapping(extra).items()
+        if key != INTERNAL_DISCOVERIES_KEY
     }
 
 
 def _record_additional_source(
-    extra: dict[str, Any],
+    extra: object,
     *,
     source_id: int,
     source_name: str,
     seen_at: datetime,
 ) -> dict[str, Any]:
-    updated = dict(extra)
+    updated = _extra_mapping(extra)
     raw_discoveries = updated.get(INTERNAL_DISCOVERIES_KEY)
-    discoveries: list[dict[str, object]] = []
+    discoveries_by_source: dict[int, dict[str, object]] = {}
     if isinstance(raw_discoveries, list):
         for value in cast(list[object], raw_discoveries):
             if not isinstance(value, Mapping):
                 continue
             mapping = cast(Mapping[object, object], value)
-            if all(isinstance(key, str) for key in mapping):
-                discoveries.append({cast(str, key): item for key, item in mapping.items()})
+            discovery_source_id = mapping.get("source_id")
+            if not isinstance(discovery_source_id, int) or isinstance(discovery_source_id, bool):
+                continue
+            first_seen = mapping.get("first_seen_at")
+            last_seen = mapping.get("last_seen_at")
+            name = mapping.get("source_name")
+            if not isinstance(first_seen, str) or not isinstance(last_seen, str):
+                continue
+            previous = discoveries_by_source.get(discovery_source_id)
+            if previous is None:
+                discoveries_by_source[discovery_source_id] = {
+                    "source_id": discovery_source_id,
+                    "source_name": name if isinstance(name, str) else "",
+                    "first_seen_at": first_seen,
+                    "last_seen_at": last_seen,
+                }
+            else:
+                previous["first_seen_at"] = min(cast(str, previous["first_seen_at"]), first_seen)
+                previous["last_seen_at"] = max(cast(str, previous["last_seen_at"]), last_seen)
     seen_at_text = seen_at.isoformat()
-    for discovery in discoveries:
-        if discovery.get("source_id") == source_id:
-            discovery["last_seen_at"] = seen_at_text
-            break
+    discovery = discoveries_by_source.get(source_id)
+    if discovery is None:
+        discoveries_by_source[source_id] = {
+            "source_id": source_id,
+            "source_name": source_name,
+            "first_seen_at": seen_at_text,
+            "last_seen_at": seen_at_text,
+        }
     else:
-        discoveries.append(
-            {
-                "source_id": source_id,
-                "source_name": source_name,
-                "first_seen_at": seen_at_text,
-                "last_seen_at": seen_at_text,
-            }
-        )
-    updated[INTERNAL_DISCOVERIES_KEY] = discoveries
+        discovery["source_name"] = source_name
+        discovery["last_seen_at"] = seen_at_text
+    updated[INTERNAL_DISCOVERIES_KEY] = [
+        discoveries_by_source[key] for key in sorted(discoveries_by_source)
+    ]
     return updated
+
+
+def _extra_mapping(extra: object) -> dict[str, Any]:
+    if not isinstance(extra, Mapping):
+        return {}
+    mapping = cast(Mapping[object, object], extra)
+    return {key: value for key, value in mapping.items() if isinstance(key, str)}
 
 
 def _json_datetime(value: datetime | None) -> str | None:
