@@ -4,9 +4,10 @@ from typing import Annotated
 from urllib.parse import urlencode, urlsplit
 
 from fastapi import APIRouter, Form, Path, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.domain.enums import Category
+from app.domain.onboarding import DiscoverySession
 from app.domain.update import UpdateResult
 from app.services.error_sanitization import sanitize_error
 from app.web.schemas import MAX_DATABASE_ID, ItemQueryParams, PageParams, WebInputError
@@ -57,6 +58,128 @@ async def sources_page(request: Request) -> HTMLResponse:
             "return_to": _current_path(request),
         },
     )
+
+
+@router.get("/sources/new", response_class=HTMLResponse)
+async def new_source_page(request: Request) -> HTMLResponse:
+    return request.app.state.templates.TemplateResponse(request, "source-new.html", {})
+
+
+@router.post("/sources/discover", response_class=HTMLResponse)
+async def discover_source(
+    request: Request,
+    url: Annotated[str, Form(min_length=1, max_length=2048)],
+) -> RedirectResponse:
+    token = await request.app.state.services.onboarding.start(url)
+    return RedirectResponse(f"/sources/discover/{token}", status_code=303)
+
+
+@router.get("/sources/discover/{token}", response_class=HTMLResponse)
+async def discovery_page(
+    request: Request,
+    token: Annotated[str, Path(min_length=1, max_length=128)],
+) -> HTMLResponse:
+    session: DiscoverySession = request.app.state.services.sources.get_discovery(token)
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "source-discovery.html",
+        {
+            "token": token,
+            "session": session,
+            "categories": tuple(Category),
+            "suggested_name": str(urlsplit(session.discovery.normalized_url).hostname or "新来源"),
+        },
+    )
+
+
+@router.post("/sources", response_class=HTMLResponse)
+async def create_source(
+    request: Request,
+    token: Annotated[str, Form(min_length=1, max_length=128)],
+    name: Annotated[str, Form(min_length=1, max_length=255)],
+    default_category: Annotated[str, Form(max_length=50)] = "",
+    description: Annotated[str, Form(max_length=2000)] = "",
+    enabled: Annotated[str | None, Form(max_length=5)] = None,
+    action: Annotated[str, Form(max_length=30)] = "save",
+) -> Response:
+    if enabled not in {None, "true"}:
+        raise WebInputError("来源状态无效。")
+    if action not in {"save", "save_and_update"}:
+        raise WebInputError("保存操作无效。")
+    source = request.app.state.services.sources.create_from_token(
+        token,
+        name=name,
+        default_category=default_category or None,
+        enabled=enabled == "true",
+        description=description or None,
+    )
+    if action == "save_and_update" and source.enabled:
+        result = await request.app.state.services.updates.update(source_id=source.id)
+        return _update_response(request, result)
+    return RedirectResponse(f"/sources/{source.id}?saved=1", status_code=303)
+
+
+@router.get("/sources/{source_id}", response_class=HTMLResponse)
+async def source_detail_page(
+    request: Request,
+    source_id: Annotated[int, Path(ge=1, le=MAX_DATABASE_ID)],
+) -> HTMLResponse:
+    source = request.app.state.services.sources.get_source(source_id)
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "source-detail.html",
+        {
+            "source": source,
+            "categories": tuple(Category),
+            "saved": request.query_params.get("saved") == "1",
+            "updated": request.query_params.get("updated") == "1",
+        },
+    )
+
+
+@router.post("/sources/{source_id}/edit", response_class=HTMLResponse)
+async def edit_source(
+    request: Request,
+    source_id: Annotated[int, Path(ge=1, le=MAX_DATABASE_ID)],
+    name: Annotated[str, Form(min_length=1, max_length=255)],
+    default_category: Annotated[str, Form(max_length=50)] = "",
+    description: Annotated[str, Form(max_length=2000)] = "",
+    enabled: Annotated[str | None, Form(max_length=5)] = None,
+) -> RedirectResponse:
+    if enabled not in {None, "true"}:
+        raise WebInputError("来源状态无效。")
+    request.app.state.services.sources.edit(
+        source_id,
+        name=name,
+        default_category=default_category or None,
+        enabled=enabled == "true",
+        description=description or None,
+    )
+    return RedirectResponse(f"/sources/{source_id}?updated=1", status_code=303)
+
+
+@router.post("/sources/{source_id}/rediscover", response_class=HTMLResponse)
+async def rediscover_source(
+    request: Request,
+    source_id: Annotated[int, Path(ge=1, le=MAX_DATABASE_ID)],
+) -> RedirectResponse:
+    source = request.app.state.services.sources.get_source(source_id)
+    if source.start_url is None:
+        raise WebInputError("当前来源网址无效, 无法重新检测。")
+    token = await request.app.state.services.onboarding.start(
+        source.start_url, rediscover_source_id=source_id
+    )
+    return RedirectResponse(f"/sources/discover/{token}", status_code=303)
+
+
+@router.post("/sources/{source_id}/rediscover/confirm", response_class=HTMLResponse)
+async def confirm_rediscovery(
+    request: Request,
+    source_id: Annotated[int, Path(ge=1, le=MAX_DATABASE_ID)],
+    token: Annotated[str, Form(min_length=1, max_length=128)],
+) -> RedirectResponse:
+    request.app.state.services.sources.confirm_rediscovery(source_id, token)
+    return RedirectResponse(f"/sources/{source_id}?updated=1", status_code=303)
 
 
 @router.get("/runs", response_class=HTMLResponse)

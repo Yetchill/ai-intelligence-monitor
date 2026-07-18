@@ -2,14 +2,16 @@
 
 ## 当前范围
 
-阶段五 A 提供三个本地服务端渲染页面：
+阶段五 B 提供本地服务端渲染页面：
 
 - `/`：资讯卡片、搜索筛选、收藏和人工分类；
-- `/sources`：已有来源查看、启停和单来源更新；
+- `/sources`：来源查看、添加入口、启停和单来源更新；
+- `/sources/new` 与 `/sources/discover/{token}`：安全检测、类型说明和最多 10 条抓取预览；
+- `/sources/{id}`：允许字段编辑、状态说明和重新检测入口；
 - `/runs`：更新运行记录和净化后的错误摘要。
 
-当前不包含来源自动识别/添加向导、来源删除或 `collector_config` 编辑、Excel/Word 导出、定时
-任务、Windows 打包、浏览器自动化、真实 AI、登录权限、后台队列或 WebSocket。
+当前不包含来源删除或任意 `collector_config` 编辑、Excel/Word 导出、定时任务、Windows 打包、
+浏览器自动化、真实 AI、登录权限、后台队列或 WebSocket。
 
 ## 准备与启动
 
@@ -58,6 +60,11 @@ uv run python -m app.web
 收藏、分类、来源启停和更新都使用 POST。全量更新只选择 enabled 来源，单来源更新复用同一个
 `UpdatePipeline`。更新期间前端禁用按钮，后端进程内锁拒绝并发任务。完成页显示来源成功/失败、
 discovered、new、updated、skipped 和待分类数量，并可跳转运行记录。
+
+来源添加先 POST 检测，再跳转到只读结果页。预览为空或需要自定义采集器时，页面明确提示不能
+直接启用。保存表单不包含 collector JSON；来源详情也只编辑名称、enabled、默认分类和说明。
+重新检测先显示独立预览，确认前不改旧配置。完整说明见
+[`source-onboarding.md`](source-onboarding.md)。
 
 ## 本地安全边界
 

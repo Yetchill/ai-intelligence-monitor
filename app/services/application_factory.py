@@ -8,6 +8,7 @@ from app.collectors.registry import default_collector_registry
 from app.fetchers.http import HttpFetcher
 from app.services.classification_service import ClassificationService
 from app.services.crawl_service import CrawlService
+from app.services.source_url_security import SafeHttpFetcher, SourceUrlGuard
 from app.services.update_pipeline import UpdatePipeline
 from app.storage.database import Database
 from app.storage.repositories import RepositoryUnitOfWork
@@ -24,9 +25,13 @@ async def update_pipeline_context(
         return RepositoryUnitOfWork(database)
 
     classification = ClassificationService(RuleBasedClassifier.from_yaml(), uow_factory)
-    async with HttpFetcher() as fetcher:
+    async with HttpFetcher() as fetcher, SafeHttpFetcher(SourceUrlGuard()) as user_source_fetcher:
         yield pipeline_class(
             uow_factory=uow_factory,
-            crawl_service=CrawlService(default_collector_registry(), fetcher),
+            crawl_service=CrawlService(
+                default_collector_registry(),
+                fetcher,
+                user_source_fetcher=user_source_fetcher,
+            ),
             classification_service=classification,
         )

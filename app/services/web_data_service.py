@@ -23,6 +23,10 @@ class EntityNotFoundError(LookupError):
     """Raised when a Web operation targets a missing record."""
 
 
+class SourceStateError(ValueError):
+    """Raised when a source cannot safely enter the requested state."""
+
+
 class WebDataService:
     """Keep query and mutation transaction boundaries outside Web routes."""
 
@@ -69,6 +73,9 @@ class WebDataService:
                     collector_name=source.collector_name,
                     enabled=source.enabled,
                     default_category=source.default_category,
+                    discovery_status=source.discovery_status,
+                    discovery_confidence=source.discovery_confidence,
+                    requires_custom_collector=source.requires_custom_collector,
                     last_checked_at=source.last_checked_at,
                     last_success_at=source.last_success_at,
                     last_error=(
@@ -125,7 +132,18 @@ class WebDataService:
             source = uow.sources.get(source_id)
             if source is None:
                 raise EntityNotFoundError(f"来源 {source_id} 不存在")
+            if enabled and (
+                source.requires_custom_collector
+                or source.discovery_status
+                in {"needs_configuration", "needs_custom_collector", "blocked", "unreachable"}
+            ):
+                raise SourceStateError("该来源尚未通过可用预览, 不能启用。")
             source.enabled = enabled
 
 
-__all__ = ["EntityNotFoundError", "ManualCategoryError", "WebDataService"]
+__all__ = [
+    "EntityNotFoundError",
+    "ManualCategoryError",
+    "SourceStateError",
+    "WebDataService",
+]

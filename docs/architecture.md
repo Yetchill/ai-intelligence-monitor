@@ -1,10 +1,10 @@
-# 阶段五 A 本地网页架构
+# 阶段五 B 来源添加与预览架构
 
 ## 范围
 
 当前架构覆盖基础设施、基础采集器、纯逻辑分类子系统，以及更新流水线、分类持久化与运行
-记录，以及本地 Web UI 与基础人工操作。信息源自动发现/添加向导、导出、定时任务、一键启动、
-Windows 打包、浏览器获取和真实 AI 模块尚未创建。
+记录、本地 Web UI 与基础人工操作，以及信息源发现、预览、保存和确认式重新检测。导出、定时
+任务、一键启动、Windows 打包、浏览器获取和真实 AI 模块尚未创建。
 
 ## 依赖方向
 
@@ -183,3 +183,20 @@ Web 应用启动时只核对当前 Alembic revision 与 head。版本落后会�
 Web、CLI 和未来任务入口都调用现有 `UpdatePipeline`；Fetcher/Collector 不得直接持有
 Session。分类器不得操作数据库，Web/API 层不得包含采集逻辑。
 SourceDiscoverer 与正式 Collector 必须保持分离。新增字段或约束必须随 Alembic migration 一起提交。
+
+## 来源添加边界
+
+`SourceDiscoveryService` 只识别并生成有限配置，`SourcePreviewService` 通过现有
+`CollectorRegistry` 和 `Classifier` 执行最多 10 条预览。两者都不依赖 Repository。
+`SourceManagementService` 只在最终保存、允许字段编辑或用户确认重新检测时打开短 UoW。
+
+用户输入网络请求使用独立 `SafeHttpFetcher`：`SourceUrlGuard` 在初始 URL 和每次重定向前检查
+协议、认证信息、安全端口、DNS 的全部 IP 和公网属性；自定义 httpcore 网络后端在实际建连时
+再次校验并直接连接已验证 IP，消除校验后由客户端二次 DNS 解析的目标偏移。Fetcher 禁用系统
+代理与底层自动重定向，并限制逐项超时、解压后响应大小和请求头。用户添加来源的正式更新在
+组合层选择同一安全 Fetcher，现有 UpdatePipeline 不被修改或复制。
+
+`DiscoveryTokenStore` 是单进程、15 分钟 TTL、256 条上限的临时状态。它只持有有长度边界的
+结构化检测结果和预览，不持有完整响应。保存时会原子占用并在成功后消费 token；浏览器 token
+不能决定 collector 名称或配置。多进程与应用重启不会共享状态。完整流程见
+[`source-onboarding.md`](source-onboarding.md)。

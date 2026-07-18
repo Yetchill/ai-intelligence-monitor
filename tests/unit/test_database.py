@@ -203,6 +203,98 @@ def test_item_updated_at_migration_preserves_existing_rows(tmp_path: Path) -> No
         repeated.dispose()
 
 
+def test_source_description_migration_round_trip_preserves_nonempty_graph(tmp_path: Path) -> None:
+    database_path = tmp_path / "source-description-migration.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+    config = Config(PROJECT_ROOT / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(config, "a51f8e8d29c4")
+    database = Database(database_url)
+    try:
+        with database.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO sources "
+                    "(name, source_type, start_url, enabled, collector_name, collector_config, "
+                    "requires_custom_collector, origin, created_at, updated_at) VALUES "
+                    "('Existing source', 'rss', 'https://example.com/feed', 1, 'rss', '{}', 0, "
+                    "'user_added', '2026-07-18 00:00:00', '2026-07-18 00:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO crawl_runs "
+                    "(started_at, status, source_total, source_success, source_failed, "
+                    "discovered_count, new_count, updated_count, skipped_count, "
+                    "unclassified_count) VALUES "
+                    "('2026-07-18 00:00:00', 'success', 1, 1, 0, 1, 1, 0, 0, 1)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO intelligence_items "
+                    "(source_id, title, original_url, canonical_url, discovered_at, last_seen_at, "
+                    "updated_at, category, fingerprint, is_favorite, is_active, extra) VALUES "
+                    "(1, 'Existing item', 'https://example.com/item', "
+                    "'https://example.com/item', '2026-07-18 01:00:00', "
+                    "'2026-07-18 02:00:00', '2026-07-18 02:00:00', 'unclassified', "
+                    f"'{('d' * 64)}', 1, 1, '{{}}')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO item_revisions "
+                    "(item_id, crawl_run_id, changed_at, old_data, new_data) VALUES "
+                    "(1, 1, '2026-07-18 02:00:00', '{\"title\": \"Old\"}', "
+                    '\'{"title": "Existing item"}\')'
+                )
+            )
+    finally:
+        database.dispose()
+
+    command.upgrade(config, "head")
+    migrated = Database(database_url)
+    try:
+        with migrated.engine.begin() as connection:
+            assert connection.scalar(text("SELECT description FROM sources WHERE id = 1")) is None
+            connection.execute(
+                text(
+                    "UPDATE sources SET description = 'review note', name = 'Renamed' WHERE id = 1"
+                )
+            )
+    finally:
+        migrated.dispose()
+
+    command.downgrade(config, "a51f8e8d29c4")
+    downgraded = Database(database_url)
+    try:
+        assert "description" not in {
+            column["name"] for column in inspect(downgraded.engine).get_columns("sources")
+        }
+        with downgraded.engine.connect() as connection:
+            assert connection.scalar(text("SELECT name FROM sources WHERE id = 1")) == "Renamed"
+            assert (
+                connection.scalar(text("SELECT origin FROM sources WHERE id = 1")) == "user_added"
+            )
+            assert connection.scalar(text("SELECT count(*) FROM intelligence_items")) == 1
+            assert connection.scalar(text("SELECT count(*) FROM item_revisions")) == 1
+            assert connection.scalar(text("SELECT count(*) FROM crawl_runs")) == 1
+            assert list(connection.execute(text("PRAGMA foreign_key_check"))) == []
+    finally:
+        downgraded.dispose()
+
+    command.upgrade(config, "head")
+    repeated = Database(database_url)
+    try:
+        with repeated.engine.connect() as connection:
+            assert connection.scalar(text("SELECT description FROM sources WHERE id = 1")) is None
+            assert connection.scalar(text("SELECT name FROM sources WHERE id = 1")) == "Renamed"
+            assert connection.scalar(text("SELECT is_favorite FROM intelligence_items")) == 1
+            assert list(connection.execute(text("PRAGMA foreign_key_check"))) == []
+    finally:
+        repeated.dispose()
+
+
 def test_status_migration_rejects_unknown_history_before_schema_changes(tmp_path: Path) -> None:
     database_path = tmp_path / "unknown-status-migration.db"
     config = Config(PROJECT_ROOT / "alembic.ini")

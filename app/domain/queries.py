@@ -72,6 +72,9 @@ class SourceListEntry:
     collector_name: str
     enabled: bool
     default_category: Category | None
+    discovery_status: str | None
+    discovery_confidence: float | None
+    requires_custom_collector: bool
     last_checked_at: datetime | None
     last_success_at: datetime | None
     last_error: str | None

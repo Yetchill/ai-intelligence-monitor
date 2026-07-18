@@ -154,3 +154,15 @@ uv run pytest -m network -s
 ```
 
 集成测试只断言纯采集结果，不创建或写入正式数据库。网络状态、站点结构和公共 API 配额会变化，失败时应先确认错误类别，再更新来源配置或固定样本。
+
+## 自动识别与 Collector 的关系
+
+来源添加由 `SourceDiscoveryService` 生成候选配置，再由 `SourcePreviewService` 通过本文件描述的
+Registry/Collector 接口验证。Discoverer 不复制 Collector 解析逻辑，也不保存业务数据。
+
+HTML 自动识别只会选择代码内固定的常见结构，或生成有限的同路径 `include_url_patterns`；普通
+用户不能提交 CSS、XPath、JSON 配置或代码。新站点无法被这些保守规则可靠识别时，应标记为
+`needs_custom_collector`，再按本文件流程开发并注册专用 Collector，而不是放宽为任意规则执行。
+
+来源检测的 SSRF、token、预览和重新检测约束见
+[`source-onboarding.md`](source-onboarding.md)。
