@@ -135,7 +135,9 @@ uv run alembic upgrade head
 升级前若发现约束之外的未知历史状态，会在任何表结构修改前明确失败并保留原数据。downgrade
 执行反向一一映射，因此该状态迁移可无损往返。
 
-SQLite 连接会启用 `PRAGMA foreign_keys=ON`。Repository 默认 `expire_on_commit=False`，便于事务结束后读取已提交实体的标量字段。
+应用运行时的 SQLite 连接会启用 `PRAGMA foreign_keys=ON`。Alembic 自有的迁移连接保持 SQLite
+默认的外键关闭状态，避免 batch 重建父表时触发子表的 `ON DELETE` 动作并误删或改写历史数据；
+迁移结束后的应用连接仍会重新启用并校验外键。Repository 默认 `expire_on_commit=False`，便于事务结束后读取已提交实体的标量字段。
 SQLite 的 `DateTime(timezone=True)` 读回值可能不携带 `tzinfo`；应用服务在比较和返回运行时间时
 统一把 naive 值解释为 UTC，避免与 aware datetime 混用。未来迁移到更严格数据库时仍使用同一
 UTC 规范化边界。

@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from app.domain.enums import Category
 from app.domain.queries import ItemQuery
 
+MAX_DATABASE_ID = 9_223_372_036_854_775_807
+
 
 class WebInputError(ValueError):
     """A concise validation error suitable for an HTML response."""
@@ -37,7 +39,7 @@ class PageParams(BaseModel):
 class ItemQueryParams(PageParams):
     keyword: str | None = Field(default=None, max_length=200)
     category: Category | None = None
-    source_id: int | None = Field(default=None, ge=1)
+    source_id: int | None = Field(default=None, ge=1, le=MAX_DATABASE_ID)
     favorite: Literal["all", "yes", "no"] = "all"
     published_from: date | None = None
     published_to: date | None = None
@@ -115,4 +117,10 @@ def _start(value: date | None) -> datetime | None:
 
 
 def _exclusive_end(value: date | None) -> datetime | None:
-    return datetime.combine(value + timedelta(days=1), time.min, UTC) if value else None
+    if value is None:
+        return None
+    try:
+        next_day = value + timedelta(days=1)
+    except OverflowError as exc:
+        raise WebInputError("结束日期超出支持范围。") from exc
+    return datetime.combine(next_day, time.min, UTC)

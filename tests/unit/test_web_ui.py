@@ -5,6 +5,7 @@
 import asyncio
 from collections.abc import AsyncGenerator, Iterator
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
@@ -12,7 +13,9 @@ from typing import cast
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event
+from sqlalchemy.exc import OperationalError
 
 from app import cli
 from app.domain.enums import Category, CrawlStatus, SourceOrigin, SourceType
@@ -178,6 +181,17 @@ def test_database_pagination_stable_and_capped(database: Database, client: TestC
     assert excessive.status_code == 400
 
 
+def test_page_beyond_available_results_returns_clear_400(
+    database: Database, client: TestClient
+) -> None:
+    _seed_content(database, count=23)
+
+    response = client.get("/?per_page=20&page=3")
+
+    assert response.status_code == 400
+    assert "页码超出范围" in response.text
+
+
 @pytest.mark.parametrize(
     ("query", "included", "excluded"),
     [
@@ -226,9 +240,11 @@ def test_filters_combine_with_and_and_pagination_preserves_values(
     [
         "category=not-real",
         "source_id=-1",
+        "source_id=9223372036854775808",
         "favorite=maybe",
         "published_from=2026-99-99",
         "published_from=2026-07-19&published_to=2026-07-18",
+        "published_to=9999-12-31",
         "page=0",
         f"keyword={'x' * 201}",
         "unexpected=value",
@@ -252,7 +268,7 @@ def test_blank_filter_form_values_are_ignored(client: TestClient) -> None:
     assert "暂时没有符合条件的资讯" in response.text
 
 
-@pytest.mark.parametrize("keyword", ["%", "_", "'", '"', "中文"])
+@pytest.mark.parametrize("keyword", ["%", "_", "\\", "'", '"', "中文"])
 def test_special_search_characters_are_safe(
     database: Database, client: TestClient, keyword: str
 ) -> None:
@@ -262,6 +278,39 @@ def test_special_search_characters_are_safe(
 
     assert response.status_code == 200
     assert "SQLAlchemy" not in response.text
+
+
+@pytest.mark.parametrize("keyword", ["%", "_", "\\"])
+def test_like_wildcards_and_escape_character_are_matched_literally(
+    database: Database, client: TestClient, keyword: str
+) -> None:
+    source = _source("符号来源", "https://literal.example/feed")
+    with RepositoryUnitOfWork(database) as uow:
+        uow.sources.add(source)
+        uow.items.add(
+            IntelligenceItem(
+                source_id=source.id,
+                title="包含字面符号 100%_路径\\文件",
+                original_url="https://literal.example/special",
+                canonical_url="https://literal.example/special",
+                fingerprint="c" * 64,
+            )
+        )
+        uow.items.add(
+            IntelligenceItem(
+                source_id=source.id,
+                title="不含特殊符号的普通标题",
+                original_url="https://literal.example/plain",
+                canonical_url="https://literal.example/plain",
+                fingerprint="d" * 64,
+            )
+        )
+
+    response = client.get("/", params={"keyword": keyword})
+
+    assert response.status_code == 200
+    assert "包含字面符号" in response.text
+    assert "不含特殊符号" not in response.text
 
 
 def test_favorite_and_unfavorite_are_idempotent_and_persisted(
@@ -357,6 +406,86 @@ def test_source_enable_disable_and_no_delete_or_config_edit(
         assert uow.sources.get(first.id).enabled is True  # type: ignore[union-attr]
 
 
+def test_missing_mutation_targets_return_404(client: TestClient) -> None:
+    assert client.post("/items/999/favorite", data={"favorite": "true"}).status_code == 404
+    assert client.post("/items/999/category", data={"category": "award_case"}).status_code == 404
+    assert client.post("/sources/999/enabled", data={"enabled": "true"}).status_code == 404
+    assert client.post("/sources/999/updates").status_code == 404
+
+
+def test_out_of_range_path_ids_return_400(client: TestClient) -> None:
+    huge = 9_223_372_036_854_775_808
+    assert client.post(f"/items/{huge}/favorite", data={"favorite": "true"}).status_code == 400
+    assert client.post(f"/sources/{huge}/updates").status_code == 400
+
+
+def test_unsafe_return_path_cannot_redirect_off_origin(
+    database: Database, client: TestClient
+) -> None:
+    _, _, item_ids = _seed_content(database)
+
+    response = client.post(
+        f"/items/{item_ids[0]}/favorite",
+        data={"favorite": "true", "return_to": "/\\evil.example"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+
+
+def test_disabled_source_update_returns_400_without_run(
+    database: Database, client: TestClient
+) -> None:
+    source = _source("停用来源", "https://disabled.example/feed", enabled=False)
+    with RepositoryUnitOfWork(database) as uow:
+        uow.sources.add(source)
+
+    response = client.post(f"/sources/{source.id}/updates")
+
+    assert response.status_code == 400
+    with RepositoryUnitOfWork(database) as uow:
+        assert uow.crawl_runs.list() == []
+
+
+def test_write_failure_rolls_back_and_hides_database_details(
+    database: Database, client: TestClient
+) -> None:
+    _, _, item_ids = _seed_content(database)
+    item_id = item_ids[1]
+
+    def fail_item_update(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: object,
+    ) -> None:
+        if statement.lstrip().upper().startswith("UPDATE INTELLIGENCE_ITEMS"):
+            raise OperationalError(
+                "UPDATE intelligence_items SET secret='database-path'",
+                {},
+                RuntimeError("/private/formal/intelligence.db token=top-secret"),
+            )
+
+    event.listen(database.engine, "before_cursor_execute", fail_item_update)
+    try:
+        response = client.post(
+            f"/items/{item_id}/favorite",
+            data={"favorite": "true"},
+        )
+    finally:
+        event.remove(database.engine, "before_cursor_execute", fail_item_update)
+
+    assert response.status_code == 500
+    assert "UPDATE intelligence_items" not in response.text
+    assert "intelligence.db" not in response.text
+    assert "top-secret" not in response.text
+    with RepositoryUnitOfWork(database) as uow:
+        assert uow.items.get(item_id).is_favorite is False  # type: ignore[union-attr]
+
+
 def test_all_write_routes_reject_get(database: Database, client: TestClient) -> None:
     first, _, item_ids = _seed_content(database)
 
@@ -407,6 +536,33 @@ def test_web_updates_call_shared_pipeline_and_render_result(database: Database) 
         assert "/runs#run-1" in response.text
 
 
+def test_update_result_error_is_sanitized_escaped_and_truncated(database: Database) -> None:
+    pipeline = RecordingPipeline(
+        replace(
+            _result(),
+            error_summary="<script>Traceback token=top-secret</script> " + "x" * 500,
+        )
+    )
+
+    @asynccontextmanager
+    async def context(_database: Database) -> AsyncGenerator[UpdatePipeline]:
+        yield pipeline
+
+    application = create_app(
+        database=database,
+        enforce_migrations=False,
+        pipeline_context_factory=context,
+    )
+    with TestClient(application) as update_client:
+        response = update_client.post("/updates")
+
+    assert response.status_code == 200
+    assert "<script>" not in response.text
+    assert "top-secret" not in response.text
+    assert "Traceback" not in response.text
+    assert "x" * 301 not in response.text
+
+
 class BlockingPipeline(UpdatePipeline):
     def __init__(self, started: asyncio.Event, release: asyncio.Event) -> None:
         self.started = started
@@ -438,6 +594,34 @@ async def test_update_lock_rejects_concurrency(database: Database) -> None:
 
 
 @pytest.mark.asyncio
+async def test_two_simultaneous_http_updates_return_success_and_409(database: Database) -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+    pipeline = BlockingPipeline(started, release)
+
+    @asynccontextmanager
+    async def context(_database: Database) -> AsyncGenerator[UpdatePipeline]:
+        yield pipeline
+
+    application = create_app(
+        database=database,
+        enforce_migrations=False,
+        pipeline_context_factory=context,
+    )
+    transport = ASGITransport(app=application, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as update_client:
+        first = asyncio.create_task(update_client.post("/updates"))
+        await started.wait()
+        second = await update_client.post("/updates")
+        release.set()
+        first_response = await first
+
+    assert first_response.status_code == 200
+    assert second.status_code == 409
+    assert "已有更新正在运行" in second.text
+
+
+@pytest.mark.asyncio
 async def test_update_lock_releases_after_exception(database: Database) -> None:
     calls = 0
 
@@ -457,6 +641,38 @@ async def test_update_lock_releases_after_exception(database: Database) -> None:
     with pytest.raises(RuntimeError):
         await service.update()
     assert (await service.update()).status is CrawlStatus.SUCCESS
+
+
+def test_pipeline_exception_does_not_break_web_and_lock_is_released(database: Database) -> None:
+    calls = 0
+
+    class SometimesFailingPipeline(UpdatePipeline):
+        async def update(self, **_kwargs: object) -> UpdateResult:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise RuntimeError("Traceback token=top-secret /private/formal/intelligence.db")
+            return _result()
+
+    @asynccontextmanager
+    async def context(_database: Database) -> AsyncGenerator[UpdatePipeline]:
+        yield SometimesFailingPipeline.__new__(SometimesFailingPipeline)
+
+    application = create_app(
+        database=database,
+        enforce_migrations=False,
+        pipeline_context_factory=context,
+    )
+    with TestClient(application, raise_server_exceptions=False) as update_client:
+        failed = update_client.post("/updates")
+        home = update_client.get("/")
+        succeeded = update_client.post("/updates")
+
+    assert failed.status_code == 500
+    assert "top-secret" not in failed.text
+    assert "intelligence.db" not in failed.text
+    assert home.status_code == 200
+    assert succeeded.status_code == 200
 
 
 def test_runs_page_is_latest_first_paginated_and_sanitized(
@@ -528,6 +744,21 @@ def test_seed_sources_is_idempotent_and_does_not_overwrite_existing(database: Da
     assert google is not None
     assert google.name == "用户保留名称"
     assert google.enabled is False
+
+
+def test_seed_does_not_duplicate_equivalent_user_url(database: Database) -> None:
+    existing = _source("用户来源", "https://blog.google/rss/", enabled=False)
+    with RepositoryUnitOfWork(database) as uow:
+        uow.sources.add(existing)
+
+    service = SourceSeedService(lambda: RepositoryUnitOfWork(database))
+
+    assert service.seed() == (2, 1)
+    with RepositoryUnitOfWork(database) as uow:
+        sources = uow.sources.list()
+    assert len(sources) == 3
+    assert sum(source.name == "用户来源" for source in sources) == 1
+    assert next(source for source in sources if source.name == "用户来源").enabled is False
 
 
 def test_seed_sources_cli_is_idempotent(

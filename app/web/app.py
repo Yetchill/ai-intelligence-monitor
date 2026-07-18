@@ -15,10 +15,12 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.classifiers.manual import ManualCategoryError
 from app.config import Settings, get_settings
 from app.config.settings import PROJECT_ROOT
 from app.domain.enums import Category, CrawlStatus
 from app.services.error_sanitization import sanitize_error
+from app.services.update_pipeline import SourceDisabledError, SourceNotFoundError
 from app.services.web_data_service import EntityNotFoundError
 from app.storage.database import Database
 from app.utils.logging import configure_logging
@@ -154,9 +156,6 @@ def _register_error_handlers(application: FastAPI, templates: Jinja2Templates) -
     async def update_conflict(request: Request, exc: Exception) -> HTMLResponse:
         return await render_error(request, 409, sanitize_error(exc, limit=200))
 
-    async def invalid_value(request: Request, exc: Exception) -> HTMLResponse:
-        return await render_error(request, 400, sanitize_error(exc, limit=300))
-
     async def database_error(request: Request, _exc: Exception) -> HTMLResponse:
         return await render_error(request, 500, "本地数据库暂时不可用, 请稍后重试并检查日志。")
 
@@ -164,10 +163,12 @@ def _register_error_handlers(application: FastAPI, templates: Jinja2Templates) -
         return await render_error(request, 500, "操作未能完成, 请稍后重试并检查应用日志。")
 
     application.add_exception_handler(WebInputError, input_error)
+    application.add_exception_handler(ManualCategoryError, input_error)
+    application.add_exception_handler(SourceDisabledError, input_error)
     application.add_exception_handler(RequestValidationError, request_validation_error)
     application.add_exception_handler(EntityNotFoundError, not_found)
+    application.add_exception_handler(SourceNotFoundError, not_found)
     application.add_exception_handler(UpdateInProgressError, update_conflict)
-    application.add_exception_handler(ValueError, invalid_value)
     application.add_exception_handler(SQLAlchemyError, database_error)
     application.add_exception_handler(Exception, unexpected_error)
 

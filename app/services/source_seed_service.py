@@ -25,11 +25,16 @@ class SourceSeedService:
         created = 0
         existing = 0
         with self._uow_factory() as uow:
+            existing_urls = {
+                canonicalize_url(source.start_url) or source.start_url
+                for source in uow.sources.list()
+            }
             for preset in presets:
-                if uow.sources.get_by_start_url(preset.start_url) is not None:
+                if preset.start_url in existing_urls:
                     existing += 1
                     continue
                 uow.sources.add(preset)
+                existing_urls.add(preset.start_url)
                 created += 1
         return created, existing
 

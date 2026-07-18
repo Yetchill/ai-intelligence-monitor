@@ -43,11 +43,11 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        if connection.dialect.name == "sqlite":
-            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
-            # SQLAlchemy autobegins on the PRAGMA. Finish that transaction so
-            # Alembic can manage and persist its own version-table transaction.
-            connection.commit()
+        # Keep SQLite's migration-only connection at its default foreign_keys=OFF.
+        # Alembic batch operations rebuild tables with DROP/RENAME; enabling
+        # referential actions here can silently cascade-delete rows in child
+        # tables while the parent is being rebuilt. Runtime Database connections
+        # independently enable foreign key enforcement.
         context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
         with context.begin_transaction():
             context.run_migrations()

@@ -137,7 +137,11 @@ class IntelligenceItemRepository(BaseRepository[IntelligenceItem]):
         self, query: ItemQuery
     ) -> tuple[list[tuple[IntelligenceItem, str]], int]:
         filters = _item_filters(query)
-        total_statement = select(func.count(IntelligenceItem.id)).where(*filters)
+        total_statement = (
+            select(func.count(IntelligenceItem.id))
+            .join(Source, IntelligenceItem.source_id == Source.id)
+            .where(*filters)
+        )
         total = self._session.scalar(total_statement) or 0
         effective_date = func.coalesce(
             IntelligenceItem.published_at,
