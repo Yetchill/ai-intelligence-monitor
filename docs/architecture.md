@@ -29,9 +29,9 @@ Alembic 版本化迁移
 ```
 
 `ExportService` 与 `WebDataService` 共享 `ItemFilter`，Repository 的 `_item_filters` 和
-`_item_order` 是列表与导出的唯一 SQL 条件和排序实现。分页列表增加 `LIMIT/OFFSET`；导出先以
-同一条件计数，通过格式上限后再执行一次有界联表查询。过滤不在 Python 中重做，也不会加载
-正式数据库全部资讯。
+`_item_order` 是列表与导出的唯一 SQL 条件和排序实现。分页列表增加 `LIMIT/OFFSET`；导出按
+格式上限加一执行单次有界联表查询，用额外一条判断是否超限。过滤不在 Python 中重做，也不会
+加载正式数据库全部资讯；单次查询也避免了 count 与 data 分两次读取产生快照差异。
 
 导出器通过 `Exporter` Protocol 接收脱离 Session 的 `ExportItem` 和 `ExportMetadata`，不创建
 Session、不查询数据库、不处理 Web 响应或 CLI 路径。`ExcelExporter` 与 `WordExporter` 只负责

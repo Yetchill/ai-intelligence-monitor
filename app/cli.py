@@ -163,6 +163,7 @@ def _parse_export_date(value: str | None, *, exclusive_end: bool = False) -> dat
 
 def _atomic_write(path: Path, content: bytes, *, force: bool) -> None:
     path = path.expanduser()
+    _validate_output_target(path, force=force)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path: Path | None = None
     try:
@@ -177,6 +178,7 @@ def _atomic_write(path: Path, content: bytes, *, force: bool) -> None:
             temporary.write(content)
             temporary.flush()
             os.fsync(temporary.fileno())
+        _validate_output_target(path, force=force)
         if force:
             os.replace(temporary_path, path)
             temporary_path = None
@@ -187,6 +189,15 @@ def _atomic_write(path: Path, content: bytes, *, force: bool) -> None:
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
+
+
+def _validate_output_target(path: Path, *, force: bool) -> None:
+    if path.is_symlink():
+        raise ValueError("output path must not be a symbolic link")
+    if path.exists() and path.is_dir():
+        raise ValueError("output path must be a file, not a directory")
+    if path.exists() and not force:
+        raise FileExistsError(17, "File exists", path)
 
 
 def _parser() -> argparse.ArgumentParser:

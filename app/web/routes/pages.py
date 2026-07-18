@@ -1,5 +1,6 @@
 """Server-rendered HTML pages and POST-only manual operations."""
 
+import re
 from typing import Annotated
 from urllib.parse import quote, urlencode, urlsplit
 
@@ -14,6 +15,7 @@ from app.services.error_sanitization import sanitize_error
 from app.web.schemas import MAX_DATABASE_ID, ItemQueryParams, PageParams, WebInputError
 
 router = APIRouter()
+_ASCII_DOWNLOAD_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -322,6 +324,10 @@ def _require_existing_page(page: int, total_pages: int) -> None:
 
 
 def _content_disposition(filename: str, ascii_filename: str) -> str:
-    if any(character in filename + ascii_filename for character in ("\r", "\n", '"')):
+    if (
+        any(ord(character) < 32 or ord(character) == 127 for character in filename)
+        or '"' in filename
+        or _ASCII_DOWNLOAD_NAME.fullmatch(ascii_filename) is None
+    ):
         raise WebInputError("导出文件名无效。")
     return f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{quote(filename, safe='')}"

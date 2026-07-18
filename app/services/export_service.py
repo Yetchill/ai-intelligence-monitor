@@ -39,15 +39,13 @@ class ExportService:
             )
 
         with self._uow_factory() as uow:
-            total = uow.items.count_filtered(query.filters)
-            if total == 0:
+            rows = uow.items.list_filtered_with_sources(query.filters, limit=limit + 1)
+            if not rows:
                 raise EmptyExportError("当前筛选没有结果, 请调整范围后再导出。")
-            if total > limit:
+            if len(rows) > limit:
                 raise ExportLimitExceededError(
-                    f"当前筛选共有 {total} 条, 超过 {export_format.value} 导出上限 "
-                    f"{limit} 条, 请缩小筛选范围。"
+                    f"当前筛选超过 {export_format.value} 导出上限 {limit} 条, 请缩小筛选范围。"
                 )
-            rows = uow.items.list_filtered_with_sources(query.filters, limit=limit)
             items = tuple(
                 ExportItem(
                     id=item.id,
@@ -71,7 +69,7 @@ class ExportService:
         metadata = ExportMetadata(
             generated_at=generated_at,
             filter_summary=_filter_summary(query.filters),
-            item_count=total,
+            item_count=len(items),
         )
         try:
             rendered = exporter.render(items, metadata)
@@ -82,7 +80,7 @@ class ExportService:
             filename=rendered.filename,
             ascii_filename=rendered.ascii_filename,
             media_type=rendered.media_type,
-            item_count=total,
+            item_count=len(items),
         )
 
 

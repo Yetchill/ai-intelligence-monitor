@@ -4,9 +4,12 @@
 
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 from typing import cast
+from xml.etree import ElementTree
+from zipfile import ZipFile
 
 import pytest
 from docx import Document
@@ -15,7 +18,7 @@ from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 from openpyxl.cell.cell import Cell
 from openpyxl.worksheet.worksheet import Worksheet
-from sqlalchemy import event
+from sqlalchemy import event, insert, select
 
 from app import cli
 from app.domain.enums import Category, SourceOrigin, SourceType
@@ -26,15 +29,18 @@ from app.domain.exports import (
     ExportQuery,
     InvalidExportLimitError,
 )
-from app.domain.models import IntelligenceItem, Source
-from app.domain.queries import ItemFilter
-from app.exporters.common import CATEGORY_LABELS, safe_filename
+from app.domain.models import Base, IntelligenceItem, Source
+from app.domain.queries import ItemFilter, ItemQuery
+from app.exporters.common import CATEGORY_LABELS, CATEGORY_ORDER, excel_safe_text, safe_filename
 from app.exporters.excel import ExcelExporter
 from app.exporters.word import WordExporter
 from app.services.application_factory import build_export_service
+from app.services.web_data_service import WebDataService
 from app.storage.database import Database
 from app.storage.repositories import RepositoryUnitOfWork
 from app.web.app import create_app
+from app.web.routes.pages import _content_disposition
+from app.web.schemas import WebInputError
 
 
 @pytest.fixture
@@ -122,6 +128,49 @@ def _excel_titles(content: bytes) -> list[str]:
         workbook.close()  # type: ignore[attr-defined]
 
 
+def _word_titles(content: bytes) -> list[str]:
+    document = Document(BytesIO(content))
+    return [
+        paragraph.text.split(". ", maxsplit=1)[1]
+        for paragraph in document.paragraphs
+        if paragraph.style is not None and paragraph.style.name == "Heading 2"
+    ]
+
+
+def _bulk_seed(database: Database, count: int) -> None:
+    source = _source("边界来源", "https://boundary.example/feed")
+    now = datetime(2026, 7, 18, 8, 0, tzinfo=UTC)
+    with database.session() as session:
+        session.add(source)
+        session.flush()
+        session.execute(
+            insert(IntelligenceItem),
+            [
+                {
+                    "source_id": source.id,
+                    "title": f"边界条目 {index}",
+                    "summary": None,
+                    "original_url": f"https://boundary.example/items/{index}",
+                    "canonical_url": f"https://boundary.example/items/{index}",
+                    "published_at": None,
+                    "discovered_at": now,
+                    "last_seen_at": now,
+                    "updated_at": now,
+                    "category": Category.MODEL_TECHNOLOGY,
+                    "classification_score": None,
+                    "classification_reason": None,
+                    "automatic_category_provider": None,
+                    "manual_category": None,
+                    "fingerprint": f"{index:064x}",
+                    "is_favorite": False,
+                    "is_active": True,
+                    "extra": {},
+                }
+                for index in range(count)
+            ],
+        )
+
+
 def test_excel_normal_export_structure_and_safe_filename(database: Database) -> None:
     _seed(database)
     result = _excel_result(database)
@@ -199,7 +248,7 @@ def test_source_filter_and_multi_condition_and(database: Database) -> None:
     assert _excel_titles(_excel_result(database, item_filter).content) == ["企业案例"]
 
 
-@pytest.mark.parametrize("prefix", ["=SUM(1,1)", "+cmd", "-1+1", "@example"])
+@pytest.mark.parametrize("prefix", ["=SUM(1,1)", "+cmd", "+42", "-1+1", "@example"])
 def test_excel_formula_injection_is_plain_text(database: Database, prefix: str) -> None:
     source = _source(prefix, f"https://formula-{len(prefix)}.example/feed")
     with RepositoryUnitOfWork(database) as uow:
@@ -224,6 +273,38 @@ def test_excel_formula_injection_is_plain_text(database: Database, prefix: str) 
             assert str(cell.value).startswith("'")
     finally:
         workbook.close()  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        " =SUM(1,1)",
+        "\t =SUM(1,1)",
+        "\r\n@cmd",
+        "\x00\x7f-1+1",
+        "\ufeff+cmd",
+    ],
+)
+def test_excel_formula_injection_after_whitespace_and_controls_is_plain_text(
+    value: str,
+) -> None:
+    rendered = excel_safe_text(value)
+    assert rendered.startswith("'")
+    assert len(rendered) <= 32_767
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["-123", "-12.50", "-1e3", "2026-07-18", "普通文本", "说明 - 正常内容"],
+)
+def test_excel_formula_protection_preserves_normal_values(value: str) -> None:
+    assert excel_safe_text(value) == value
+
+
+def test_excel_formula_protection_respects_string_length_limit() -> None:
+    rendered = excel_safe_text("=" + "长" * 40_000)
+    assert rendered.startswith("'=")
+    assert len(rendered) == 32_767
 
 
 def test_malicious_long_unicode_is_safely_written(database: Database) -> None:
@@ -253,6 +334,32 @@ def test_malicious_long_unicode_is_safely_written(database: Database) -> None:
     document = Document(BytesIO(word.content))
     assert "<script>" in "\n".join(paragraph.text for paragraph in document.paragraphs)
     assert len(document.inline_shapes) == 0
+
+
+def test_office_packages_reopen_and_have_only_expected_parts(database: Database) -> None:
+    _seed(database)
+    results = (
+        _excel_result(database),
+        build_export_service(database).export(ExportFormat.WORD, ExportQuery()),
+    )
+    for result in results:
+        with ZipFile(BytesIO(result.content)) as package:
+            assert package.testzip() is None
+            names = set(package.namelist())
+            assert not any(
+                forbidden in name.lower()
+                for name in names
+                for forbidden in ("vbaproject", "externallinks", "embeddings/", "media/")
+            )
+            for name in names:
+                if name.endswith((".xml", ".rels")):
+                    ElementTree.fromstring(package.read(name))
+            if result.media_type == WordExporter.media_type:
+                styles = package.read("word/styles.xml")
+                assert b"eastAsia" in styles
+    workbook = load_workbook(BytesIO(results[0].content))
+    workbook.close()
+    Document(BytesIO(results[1].content))
 
 
 def test_word_structure_group_order_no_empty_sections_and_hyperlinks(database: Database) -> None:
@@ -384,6 +491,42 @@ def test_web_word_content_type_and_openable_document(
     assert "待分类无简介" in "\n".join(paragraph.text for paragraph in document.paragraphs)
 
 
+def test_web_export_is_post_only_and_content_disposition_is_strict(
+    export_client: TestClient,
+) -> None:
+    assert export_client.get("/exports/excel").status_code == 405
+    header = _content_disposition("中文 报告.xlsx", "report.xlsx")
+    assert header == (
+        'attachment; filename="report.xlsx"; '
+        "filename*=UTF-8''%E4%B8%AD%E6%96%87%20%E6%8A%A5%E5%91%8A.xlsx"
+    )
+    for filename, ascii_filename in (
+        ("恶意\r\nX-Evil: yes.xlsx", "report.xlsx"),
+        ("正常.xlsx", "报告.xlsx"),
+        ("正常.xlsx", 'report.xlsx"; X-Evil=yes'),
+    ):
+        with pytest.raises(WebInputError):
+            _content_disposition(filename, ascii_filename)
+
+
+def test_web_generation_failure_returns_no_partial_download(
+    database: Database,
+    export_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed(database)
+
+    def fail_render(*_args: object, **_kwargs: object) -> object:
+        raise RuntimeError("/private/tmp/secret-office-part")
+
+    monkeypatch.setattr(ExcelExporter, "render", fail_render)
+    response = export_client.post("/exports/excel")
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/html")
+    assert "content-disposition" not in response.headers
+    assert "secret-office-part" not in response.text
+
+
 def test_export_query_order_matches_home_stable_order(database: Database) -> None:
     _seed(database)
     assert _excel_titles(_excel_result(database).content) == [
@@ -391,6 +534,84 @@ def test_export_query_order_matches_home_stable_order(database: Database) -> Non
         "待分类无简介",
         "企业案例",
         "大模型发布",
+    ]
+
+
+def test_null_published_at_order_is_stable_and_matches_home(database: Database) -> None:
+    source = _source("无发布时间来源", "https://no-date.example/feed")
+    fallback_time = datetime(2026, 7, 18, 8, 0, tzinfo=UTC)
+    with RepositoryUnitOfWork(database) as uow:
+        uow.sources.add(source)
+        for index in range(3):
+            uow.items.add(
+                IntelligenceItem(
+                    source_id=source.id,
+                    title=f"无发布时间 {index}",
+                    original_url=f"https://no-date.example/{index}",
+                    canonical_url=f"https://no-date.example/{index}",
+                    published_at=None,
+                    discovered_at=fallback_time,
+                    fingerprint=f"{index + 10:064x}",
+                )
+            )
+    page = WebDataService(lambda: RepositoryUnitOfWork(database)).list_items(ItemQuery())
+    home_titles = [item.title for item in page.entries]
+    assert home_titles == ["无发布时间 2", "无发布时间 1", "无发布时间 0"]
+    assert _excel_titles(_excel_result(database).content) == home_titles
+
+
+def test_excel_and_word_contain_same_items_with_documented_group_order(
+    database: Database,
+) -> None:
+    _seed(database)
+    excel = _excel_result(database)
+    word = build_export_service(database).export(ExportFormat.WORD, ExportQuery())
+    workbook, sheet = _excel_sheet(excel.content)
+    try:
+        excel_rows = [
+            (str(sheet.cell(row, 2).value), str(sheet.cell(row, 3).value))
+            for row in range(2, sheet.max_row + 1)
+        ]
+    finally:
+        workbook.close()  # type: ignore[attr-defined]
+    expected_word_order = [
+        title
+        for category in CATEGORY_ORDER
+        for title, label in excel_rows
+        if label == CATEGORY_LABELS[category]
+    ]
+    assert _word_titles(word.content) == expected_word_order
+    assert {title for title, _label in excel_rows} == set(_word_titles(word.content))
+
+
+@pytest.mark.parametrize("keyword", ["%", "_", "\\", "'", '"', "中文"])
+def test_export_search_treats_special_characters_safely_and_literally(
+    database: Database,
+    keyword: str,
+) -> None:
+    source = _source("搜索来源", "https://search-export.example/feed")
+    with RepositoryUnitOfWork(database) as uow:
+        uow.sources.add(source)
+        uow.items.add(
+            IntelligenceItem(
+                source_id=source.id,
+                title=f"包含字面搜索值 {keyword}",
+                original_url="https://search-export.example/match",
+                canonical_url="https://search-export.example/match",
+                fingerprint="c" * 64,
+            )
+        )
+        uow.items.add(
+            IntelligenceItem(
+                source_id=source.id,
+                title="不相关标题",
+                original_url="https://search-export.example/other",
+                canonical_url="https://search-export.example/other",
+                fingerprint="d" * 64,
+            )
+        )
+    assert _excel_titles(_excel_result(database, ItemFilter(keyword=keyword)).content) == [
+        f"包含字面搜索值 {keyword}"
     ]
 
 
@@ -432,28 +653,89 @@ def test_unsafe_original_url_is_not_written_as_hyperlink(database: Database) -> 
     )
 
 
-def test_export_uses_count_and_one_bounded_data_select(database: Database) -> None:
+def test_export_uses_one_limit_plus_one_select(database: Database) -> None:
     _seed(database)
-    selects: list[str] = []
+    selects: list[tuple[str, object]] = []
 
     def record_select(
         _connection: object,
         _cursor: object,
         statement: str,
-        _parameters: object,
+        parameters: object,
         _context: object,
         _executemany: object,
     ) -> None:
         if statement.lstrip().upper().startswith("SELECT"):
-            selects.append(statement)
+            selects.append((statement, parameters))
 
     event.listen(database.engine, "before_cursor_execute", record_select)
     try:
-        _excel_result(database)
+        build_export_service(database).export(
+            ExportFormat.EXCEL,
+            ExportQuery(limit=4),
+        )
     finally:
         event.remove(database.engine, "before_cursor_execute", record_select)
-    assert len(selects) == 2
-    assert "LIMIT" in selects[1].upper()
+    assert len(selects) == 1
+    assert "LIMIT" in selects[0][0].upper()
+    assert 5 in cast(tuple[object, ...], selects[0][1])
+
+
+@pytest.mark.parametrize(
+    ("export_format", "maximum"),
+    [(ExportFormat.EXCEL, 10_000), (ExportFormat.WORD, 2_000)],
+)
+def test_format_hard_limit_boundary_succeeds(
+    database: Database,
+    export_format: ExportFormat,
+    maximum: int,
+) -> None:
+    _bulk_seed(database, maximum)
+    result = build_export_service(database).export(export_format, ExportQuery())
+    assert result.item_count == maximum
+    if export_format is ExportFormat.EXCEL:
+        workbook, sheet = _excel_sheet(result.content)
+        try:
+            assert sheet.max_row == maximum + 1
+        finally:
+            workbook.close()  # type: ignore[attr-defined]
+    else:
+        assert len(_word_titles(result.content)) == maximum
+
+
+@pytest.mark.parametrize(
+    ("export_format", "count", "query_limit"),
+    [(ExportFormat.EXCEL, 10_001, 10_001), (ExportFormat.WORD, 2_001, 2_001)],
+)
+def test_format_hard_limit_plus_one_is_rejected_by_one_bounded_query(
+    database: Database,
+    export_format: ExportFormat,
+    count: int,
+    query_limit: int,
+) -> None:
+    _bulk_seed(database, count)
+    selects: list[tuple[str, object]] = []
+
+    def record_select(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        parameters: object,
+        _context: object,
+        _executemany: object,
+    ) -> None:
+        if statement.lstrip().upper().startswith("SELECT"):
+            selects.append((statement, parameters))
+
+    event.listen(database.engine, "before_cursor_execute", record_select)
+    try:
+        with pytest.raises(ExportLimitExceededError):
+            build_export_service(database).export(export_format, ExportQuery())
+    finally:
+        event.remove(database.engine, "before_cursor_execute", record_select)
+    assert len(selects) == 1
+    assert "LIMIT" in selects[0][0].upper()
+    assert query_limit in cast(tuple[object, ...], selects[0][1])
 
 
 def test_cli_invalid_date_returns_nonzero_without_output(
@@ -555,6 +837,60 @@ def test_cli_default_output_directory_and_temp_cleanup(
         cli._atomic_write(failed_output, b"content", force=False)
     assert not failed_output.exists()
     assert list(tmp_path.glob(".failed.xlsx.*.tmp")) == []
+
+
+def test_cli_rejects_directory_and_symlink_targets_and_cleans_force_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    directory_target = tmp_path / "directory.xlsx"
+    directory_target.mkdir()
+    with pytest.raises(ValueError, match="directory"):
+        cli._atomic_write(directory_target, b"content", force=True)
+
+    real_target = tmp_path / "real.xlsx"
+    real_target.write_bytes(b"original")
+    symlink_target = tmp_path / "link.xlsx"
+    symlink_target.symlink_to(real_target)
+    with pytest.raises(ValueError, match="symbolic link"):
+        cli._atomic_write(symlink_target, b"replacement", force=True)
+    assert symlink_target.is_symlink()
+    assert real_target.read_bytes() == b"original"
+
+    output = tmp_path / "replace.xlsx"
+    output.write_bytes(b"original")
+
+    def fail_replace(_source: Path, _target: Path) -> None:
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(cli.os, "replace", fail_replace)
+    with pytest.raises(OSError, match="replace failure"):
+        cli._atomic_write(output, b"replacement", force=True)
+    assert output.read_bytes() == b"original"
+    assert list(tmp_path.glob(".replace.xlsx.*.tmp")) == []
+
+
+def test_export_preserves_all_database_rows_and_file_hash(database: Database) -> None:
+    _seed(database)
+
+    def snapshot() -> dict[str, list[dict[str, object]]]:
+        with database.engine.connect() as connection:
+            return {
+                table.name: [
+                    dict(row)
+                    for row in connection.execute(select(table).order_by(table.c.id)).mappings()
+                ]
+                for table in Base.metadata.sorted_tables
+            }
+
+    database_path = Path(str(database.engine.url.database))
+    before_rows = snapshot()
+    before_hash = sha256(database_path.read_bytes()).hexdigest()
+    service = build_export_service(database)
+    service.export(ExportFormat.EXCEL, ExportQuery())
+    service.export(ExportFormat.WORD, ExportQuery())
+    assert snapshot() == before_rows
+    assert sha256(database_path.read_bytes()).hexdigest() == before_hash
 
 
 def test_output_is_gitignored_but_gitkeep_is_tracked_configuration() -> None:
