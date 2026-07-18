@@ -4,7 +4,21 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 修复 SQLite batch migration 在已有修订记录时可能触发级联删除的问题；
+- 修复不存在来源的单来源网页更新返回 500，以及超页分页和极端输入边界；
+- 修复示例来源导入对等价 URL 重复创建来源的问题，并收紧更新错误与回跳地址展示边界；
+
 ### Added
+
+- 增加 FastAPI、Jinja2、原生 JavaScript/CSS 的本地资讯、来源和更新记录页面；
+- 增加资讯数据库层服务端分页、稳定回退排序、来源联表及组合筛选；
+- 增加 POST 收藏、人工分类设置/清除、来源启停和安全回跳；
+- 增加复用 `UpdatePipeline` 的全量/单来源网页更新及异常安全的进程内互斥锁；
+- 增加 CrawlRun 分页页面、状态标签、净化错误摘要和更新结果页面；
+- 增加显式、幂等且不覆盖同 URL 来源的三个示例来源导入命令；
+- 增加资讯 `updated_at` Alembic 迁移和本地网页专项测试；
 
 - 增加共享 `UpdatePipeline`、`CrawlService`、`ClassificationService`、
   `ItemPersistenceService` 和 `CrawlRunService`；
@@ -36,6 +50,9 @@
 
 ### Changed
 
+- 项目进度进入阶段五 A 本地网页 UI 与基础人工操作；
+- CLI 与网页通过共享应用工厂构造同一个 `UpdatePipeline`；
+
 - CrawlRun 完成状态统一为 `success`、`partial_success` 和 `failed`；
 - 项目进度进入阶段四更新流水线、分类持久化与运行记录；
 - 项目进度进入阶段三分类系统子范围，阶段二 Collector 接口和行为保持不变；
@@ -49,7 +66,8 @@
 
 ### Not Included
 
-- 网页 UI、信息源添加向导、导出、定时任务、一键启动、浏览器采集和真实 AI 调用。
+- 信息源自动发现/添加向导、Excel/Word 导出、定时任务、一键启动、Windows 打包、浏览器采集、
+  登录权限和真实 AI 调用。
 
 ## [0.1.0] - 2026-07-17
 

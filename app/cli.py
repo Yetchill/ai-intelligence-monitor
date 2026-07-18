@@ -6,14 +6,11 @@ import sys
 from collections.abc import Sequence
 from datetime import datetime
 
-from app.classifiers.rule_based import RuleBasedClassifier
-from app.collectors.registry import default_collector_registry
 from app.domain.enums import CrawlStatus
 from app.domain.update import UpdateMode, UpdateResult
-from app.fetchers.http import HttpFetcher
-from app.services.classification_service import ClassificationService
-from app.services.crawl_service import CrawlService
+from app.services.application_factory import update_pipeline_context
 from app.services.error_sanitization import sanitize_error
+from app.services.source_seed_service import SourceSeedService
 from app.services.update_pipeline import UpdatePipeline
 from app.storage.database import Database
 from app.storage.repositories import RepositoryUnitOfWork
@@ -30,6 +27,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if arguments.command == "runs":
             _print_runs(database, arguments.limit)
             return 0
+        if arguments.command == "sources":
+            _seed_sources(database)
+            return 0
         return asyncio.run(_run_update(database, arguments))
     except Exception as exc:
         print(f"error: {sanitize_error(exc)}", file=sys.stderr)
@@ -40,17 +40,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 async def _run_update(database: Database, arguments: argparse.Namespace) -> int:
-    def uow_factory() -> RepositoryUnitOfWork:
-        return RepositoryUnitOfWork(database)
-
-    classifier = RuleBasedClassifier.from_yaml()
-    classification_service = ClassificationService(classifier, uow_factory)
-    async with HttpFetcher() as fetcher:
-        pipeline = UpdatePipeline(
-            uow_factory=uow_factory,
-            crawl_service=CrawlService(default_collector_registry(), fetcher),
-            classification_service=classification_service,
-        )
+    async with update_pipeline_context(database, UpdatePipeline) as pipeline:
         result = await pipeline.update(
             source_id=arguments.source_id,
             allow_disabled=arguments.allow_disabled,
@@ -62,6 +52,12 @@ async def _run_update(database: Database, arguments: argparse.Namespace) -> int:
         )
     _print_result(result)
     return 1 if result.status is CrawlStatus.FAILED else 0
+
+
+def _seed_sources(database: Database) -> None:
+    service = SourceSeedService(lambda: RepositoryUnitOfWork(database))
+    created, existing = service.seed()
+    print(f"preset sources: created={created} existing={existing}")
 
 
 def _print_result(result: UpdateResult) -> None:
@@ -125,6 +121,9 @@ def _parser() -> argparse.ArgumentParser:
     update.add_argument("--to", dest="published_to")
     runs = commands.add_parser("runs", help="show recent crawl run summaries")
     runs.add_argument("--limit", type=int, default=5)
+    sources = commands.add_parser("sources", help="manage preset source configuration")
+    source_commands = sources.add_subparsers(dest="source_command", required=True)
+    source_commands.add_parser("seed", help="idempotently import documented example sources")
     return parser
 
 

@@ -1,0 +1,38 @@
+sources:
+  - name: Google Blog RSS
+    source_type: rss
+    start_url: https://blog.google/rss/
+    collector_name: rss
+    default_category: null
+    collector_config:
+      max_items: 100
+
+  - name: AIIA
+    source_type: html_list
+    start_url: https://www.aiiaorg.cn/
+    collector_name: html_list
+    default_category: policy_industry
+    collector_config:
+      allowed_domains:
+        - www.aiiaorg.cn
+        - mp.weixin.qq.com
+      discovery:
+        mode: selectors
+        max_pages: 1
+        max_depth: 0
+        max_items: 100
+      extraction:
+        item_selector: .news-scroll-area div.cursor-pointer
+        title_selector: h3
+        date_selector: span
+        embedded_title_key: title
+        embedded_link_key: external_url
+
+  - name: Qwen-Agent Releases
+    source_type: github_release
+    start_url: https://github.com/QwenLM/Qwen-Agent/releases
+    collector_name: github_release
+    default_category: agent_product
+    collector_config:
+      max_releases: 100
+      include_prereleases: false

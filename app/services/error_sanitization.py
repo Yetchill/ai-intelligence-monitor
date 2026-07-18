@@ -6,6 +6,7 @@ from urllib.parse import urlsplit, urlunsplit
 _HTML_TAG = re.compile(r"<[^>]{0,500}>")
 _SECRET = re.compile(r"(?i)(api[_-]?key|token|password|secret)(\s*[=:]\s*)([^\s,;]+)")
 _URL = re.compile(r"https?://[^\s<>'\"]+")
+_INTERNAL_TERM = re.compile(r"(?i)\b(?:traceback|sqlalchemy(?:error)?|python)\b")
 
 
 def sanitize_error(error: BaseException | str, *, limit: int = 500) -> str:
@@ -13,6 +14,7 @@ def sanitize_error(error: BaseException | str, *, limit: int = 500) -> str:
     text = _HTML_TAG.sub(" ", text)
     text = _SECRET.sub(r"\1\2[REDACTED]", text)
     text = _URL.sub(_strip_url_query, text)
+    text = _INTERNAL_TERM.sub("internal error", text)
     text = " ".join(text.split())
     if not text:
         text = type(error).__name__ if isinstance(error, BaseException) else "unknown error"

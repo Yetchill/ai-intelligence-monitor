@@ -23,6 +23,21 @@ Collector，执行顺序为：
 `UpdateMode.history` 共用同一流水线；历史模式只传递受限的页数、条数和时间范围，不承诺所有
 Collector 都实现多年翻页，也不能突破 Collector 自身硬上限。
 
+本地网页的“更新全部来源”和单来源“立即更新”都通过
+`app/services/application_factory.py` 构造该流水线，与 CLI 没有第二份采集或持久化实现。网页
+全量更新不传 `allow_disabled`，因此只处理 enabled 来源；来源页面也只为 enabled 来源展示立即
+更新按钮。
+
+## Web 同步执行与互斥
+
+阶段五 A 允许 HTTP POST 同步等待完整更新。`WebUpdateService` 在进入流水线前获取进程内
+非阻塞锁；同一进程已有更新时返回 409 友好页面，不创建第二个 CrawlRun。按钮提交后由本地
+JavaScript 立即禁用并显示处理中。流水线正常返回、网络异常或未捕获异常都通过 `finally` 释放
+锁，不使用后台队列、Celery 或 WebSocket。
+
+锁只保证单个 Uvicorn 进程内互斥；当前开发启动方式应使用单进程。未来多进程部署需要持久化
+或跨进程协调机制，但这不属于本阶段。
+
 ## 标准化与分类
 
 入库前重新压缩标题/简介空白，以采集结果的 `original_url` 重新生成 canonical HTTP(S) URL，

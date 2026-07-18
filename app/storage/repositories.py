@@ -4,11 +4,13 @@ from collections.abc import Mapping
 from types import TracebackType
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.domain.models import Base, CrawlRun, IntelligenceItem, ItemRevision, Source
+from app.domain.queries import ItemQuery
 from app.storage.database import Database
 
 
@@ -69,6 +71,20 @@ class SourceRepository(BaseRepository[Source]):
         statement = select(Source).where(Source.enabled.is_(True)).order_by(Source.id)
         return list(self._session.scalars(statement))
 
+    def list_options(self) -> list[tuple[int, str]]:
+        statement = select(Source.id, Source.name).order_by(Source.name, Source.id)
+        return [(source_id, name) for source_id, name in self._session.execute(statement)]
+
+    def paginate(self, *, page: int, per_page: int) -> tuple[list[Source], int]:
+        total = self._session.scalar(select(func.count(Source.id))) or 0
+        statement = (
+            select(Source)
+            .order_by(Source.name, Source.id)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        return list(self._session.scalars(statement)), total
+
 
 class IntelligenceItemRepository(BaseRepository[IntelligenceItem]):
     model = IntelligenceItem
@@ -117,6 +133,32 @@ class IntelligenceItemRepository(BaseRepository[IntelligenceItem]):
                 raise
             return existing, False
 
+    def paginate_with_sources(
+        self, query: ItemQuery
+    ) -> tuple[list[tuple[IntelligenceItem, str]], int]:
+        filters = _item_filters(query)
+        total_statement = (
+            select(func.count(IntelligenceItem.id))
+            .join(Source, IntelligenceItem.source_id == Source.id)
+            .where(*filters)
+        )
+        total = self._session.scalar(total_statement) or 0
+        effective_date = func.coalesce(
+            IntelligenceItem.published_at,
+            IntelligenceItem.discovered_at,
+            IntelligenceItem.updated_at,
+        )
+        statement = (
+            select(IntelligenceItem, Source.name)
+            .join(Source, IntelligenceItem.source_id == Source.id)
+            .where(*filters)
+            .order_by(effective_date.desc(), IntelligenceItem.id.desc())
+            .offset((query.page - 1) * query.per_page)
+            .limit(query.per_page)
+        )
+        rows = [(item, source_name) for item, source_name in self._session.execute(statement)]
+        return rows, total
+
 
 class CrawlRunRepository(BaseRepository[CrawlRun]):
     model = CrawlRun
@@ -128,6 +170,16 @@ class CrawlRunRepository(BaseRepository[CrawlRun]):
             .limit(max(1, min(limit, 100)))
         )
         return list(self._session.scalars(statement))
+
+    def paginate(self, *, page: int, per_page: int) -> tuple[list[CrawlRun], int]:
+        total = self._session.scalar(select(func.count(CrawlRun.id))) or 0
+        statement = (
+            select(CrawlRun)
+            .order_by(CrawlRun.started_at.desc(), CrawlRun.id.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        return list(self._session.scalars(statement)), total
 
 
 class ItemRevisionRepository(BaseRepository[ItemRevision]):
@@ -192,3 +244,52 @@ class RepositoryUnitOfWork:
         if self._session is None:
             raise RuntimeError("Unit of work is not active")
         self._session.rollback()
+
+
+def _item_filters(query: ItemQuery) -> list[ColumnElement[bool]]:
+    filters: list[ColumnElement[bool]] = [IntelligenceItem.is_active.is_(True)]
+    if query.keyword:
+        escaped = _escape_like(query.keyword)
+        pattern = f"%{escaped}%"
+        filters.append(
+            or_(
+                IntelligenceItem.title.ilike(pattern, escape="\\"),
+                IntelligenceItem.summary.ilike(pattern, escape="\\"),
+            )
+        )
+    if query.category is not None:
+        filters.append(
+            or_(
+                IntelligenceItem.manual_category == query.category,
+                and_(
+                    IntelligenceItem.manual_category.is_(None),
+                    IntelligenceItem.category == query.category,
+                ),
+            )
+        )
+    if query.source_id is not None:
+        filters.append(IntelligenceItem.source_id == query.source_id)
+    if query.favorite is not None:
+        filters.append(IntelligenceItem.is_favorite.is_(query.favorite))
+    if query.published_from is not None:
+        filters.append(IntelligenceItem.published_at >= query.published_from)
+    if query.published_to is not None:
+        filters.append(IntelligenceItem.published_at < query.published_to)
+    if query.discovered_from is not None:
+        filters.append(IntelligenceItem.discovered_at >= query.discovered_from)
+    if query.discovered_to is not None:
+        filters.append(IntelligenceItem.discovered_at < query.discovered_to)
+    if query.unclassified is not None:
+        is_unclassified = or_(
+            IntelligenceItem.manual_category == "unclassified",
+            and_(
+                IntelligenceItem.manual_category.is_(None),
+                IntelligenceItem.category == "unclassified",
+            ),
+        )
+        filters.append(is_unclassified if query.unclassified else ~is_unclassified)
+    return filters
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

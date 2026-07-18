@@ -12,6 +12,7 @@ from app.domain.enums import Category
 from app.domain.models import IntelligenceItem, Source
 from app.storage.database import Database
 from app.storage.repositories import RepositoryUnitOfWork
+from app.web.app import require_current_migration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -37,6 +38,26 @@ def test_alembic_initializes_database(tmp_path: Path) -> None:
             "intelligence_items",
             "item_revisions",
             "sources",
+        }
+    finally:
+        database.dispose()
+
+
+def test_web_startup_migration_check_does_not_upgrade_database(tmp_path: Path) -> None:
+    database_path = tmp_path / "behind-head.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+    config = Config(PROJECT_ROOT / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(config, "8df43a9b1c2e")
+    database = Database(database_url)
+    try:
+        with pytest.raises(RuntimeError, match="数据库结构未升级"):
+            require_current_migration(database)
+        with database.engine.connect() as connection:
+            revision = connection.scalar(text("SELECT version_num FROM alembic_version"))
+        assert revision == "8df43a9b1c2e"
+        assert "updated_at" not in {
+            column["name"] for column in inspect(database.engine).get_columns("intelligence_items")
         }
     finally:
         database.dispose()
@@ -93,6 +114,91 @@ def test_status_migration_preserves_existing_crawl_runs(tmp_path: Path) -> None:
         with repeated.engine.connect() as connection:
             statuses = list(connection.scalars(text("SELECT status FROM crawl_runs ORDER BY id")))
         assert statuses == ["success", "partial_success", "running", "failed"]
+    finally:
+        repeated.dispose()
+
+
+def test_item_updated_at_migration_preserves_existing_rows(tmp_path: Path) -> None:
+    database_path = tmp_path / "item-updated-at-migration.db"
+    config = Config(PROJECT_ROOT / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+    command.upgrade(config, "8df43a9b1c2e")
+    database = Database(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with database.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO sources "
+                    "(name, source_type, start_url, enabled, collector_name, collector_config, "
+                    "requires_custom_collector, origin, created_at, updated_at) VALUES "
+                    "('Feed', 'rss', 'https://example.com/feed', 1, 'rss', '{}', 0, "
+                    "'preset', '2026-07-18 00:00:00', '2026-07-18 00:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO intelligence_items "
+                    "(source_id, title, original_url, canonical_url, discovered_at, last_seen_at, "
+                    "category, fingerprint, is_favorite, is_active, extra) VALUES "
+                    "(1, 'Existing item', 'https://example.com/item', 'https://example.com/item', "
+                    "'2026-07-18 01:00:00', '2026-07-18 02:00:00', 'unclassified', "
+                    f"'{('a' * 64)}', 0, 1, '{{}}')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO item_revisions "
+                    "(item_id, changed_at, old_data, new_data) VALUES "
+                    "(1, '2026-07-18 02:00:00', '{\"title\": \"Old\"}', "
+                    '\'{"title": "Existing item"}\')'
+                )
+            )
+    finally:
+        database.dispose()
+
+    command.upgrade(config, "head")
+    migrated = Database(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with migrated.engine.connect() as connection:
+            row = connection.execute(
+                text("SELECT title, last_seen_at, updated_at FROM intelligence_items")
+            ).one()
+            revision = connection.execute(
+                text("SELECT item_id, old_data, new_data FROM item_revisions")
+            ).one()
+            foreign_key_violations = list(connection.execute(text("PRAGMA foreign_key_check")))
+        assert row.title == "Existing item"
+        assert row.updated_at == row.last_seen_at
+        assert revision.item_id == 1
+        assert '"Old"' in revision.old_data
+        assert foreign_key_violations == []
+    finally:
+        migrated.dispose()
+
+    command.downgrade(config, "8df43a9b1c2e")
+    downgraded = Database(f"sqlite:///{database_path.as_posix()}")
+    try:
+        inspector = inspect(downgraded.engine)
+        assert "updated_at" not in {
+            column["name"] for column in inspector.get_columns("intelligence_items")
+        }
+        with downgraded.engine.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM intelligence_items")) == 1
+            assert connection.scalar(text("SELECT count(*) FROM item_revisions")) == 1
+            assert list(connection.execute(text("PRAGMA foreign_key_check"))) == []
+    finally:
+        downgraded.dispose()
+
+    command.upgrade(config, "head")
+    repeated = Database(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with repeated.engine.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM intelligence_items")) == 1
+            assert connection.scalar(text("SELECT count(*) FROM item_revisions")) == 1
+            assert connection.scalar(text("SELECT updated_at FROM intelligence_items")) == (
+                "2026-07-18 02:00:00"
+            )
+            assert list(connection.execute(text("PRAGMA foreign_key_check"))) == []
     finally:
         repeated.dispose()
 
