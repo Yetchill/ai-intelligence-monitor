@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}添加来源 · AI 行业情报{% endblock %}
+{% block content %}
+  <section class="page-heading"><div><p class="eyebrow">安全检测</p><h1>添加来源</h1><p>输入公开的 HTTP(S) 地址。检测和预览不会写入来源或资讯数据。</p></div></section>
+  <form class="form-panel" action="/sources/discover" method="post" data-update-form>
+    <label>来源网址<input name="url" type="url" required maxlength="2048" placeholder="https://example.com/feed.xml" autocomplete="url"></label>
+    <p class="help-text">不支持本机、私网、非标准端口、含账号密码的地址，也不会绕过登录、验证码或反爬限制。</p>
+    <div class="page-actions"><a class="button" href="/sources">取消</a><button class="button primary" type="submit" data-processing-text="正在安全检测…">检测并抓取预览</button></div>
+  </form>
+{% endblock %}

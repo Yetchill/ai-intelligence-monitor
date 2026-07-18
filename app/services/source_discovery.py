@@ -1,0 +1,451 @@
+"""Bounded source discovery, collector preview, and temporary server-side state."""
+
+import re
+import secrets
+from collections import Counter, OrderedDict
+from collections.abc import Mapping
+from datetime import UTC, datetime
+from threading import Lock
+from time import monotonic
+from typing import cast
+from urllib.parse import urljoin, urlsplit
+
+import feedparser  # pyright: ignore[reportMissingTypeStubs]
+from bs4 import BeautifulSoup, Tag
+
+from app.collectors.registry import CollectorRegistry
+from app.domain.classification import Classifier
+from app.domain.collection import CollectContext, Fetcher, FetchResult
+from app.domain.enums import Category, DiscoveryStatus, SourceOrigin, SourceType
+from app.domain.models import Source
+from app.domain.onboarding import DiscoveryResult, DiscoverySession, PreviewItem, PreviewResult
+from app.fetchers.errors import FetchError, ForbiddenFetchError
+from app.services.source_url_security import SourceUrlGuard, SourceUrlSecurityError
+from app.utils.url import canonicalize_url, is_http_url
+
+COMMON_FEED_PATHS = ("/feed", "/rss", "/atom.xml", "/feed.xml")
+HTML_SELECTOR_CANDIDATES = (
+    ".news-list li",
+    ".article-list li",
+    ".post-list article",
+    ".posts article",
+    "main article",
+    "h3:has(a[href])",
+)
+GITHUB_PART_PATTERN = re.compile(r"[A-Za-z0-9_.-]+")
+DISCOVERY_TTL_SECONDS = 15 * 60
+DISCOVERY_CACHE_SIZE = 256
+
+
+class DiscoveryTokenError(ValueError):
+    """A missing, forged, or expired temporary discovery token."""
+
+
+class DiscoveryTokenStore:
+    """Process-local bounded TTL store; responses and full HTML are never retained."""
+
+    def __init__(
+        self,
+        *,
+        ttl_seconds: float = DISCOVERY_TTL_SECONDS,
+        max_entries: int = DISCOVERY_CACHE_SIZE,
+    ) -> None:
+        if ttl_seconds <= 0 or max_entries <= 0:
+            raise ValueError("token store limits must be positive")
+        self._ttl = ttl_seconds
+        self._max_entries = max_entries
+        self._entries: OrderedDict[str, tuple[float, DiscoverySession]] = OrderedDict()
+        self._lock = Lock()
+
+    def put(self, session: DiscoverySession) -> str:
+        with self._lock:
+            self._purge_expired()
+            while len(self._entries) >= self._max_entries:
+                self._entries.popitem(last=False)
+            token = secrets.token_urlsafe(32)
+            self._entries[token] = (monotonic() + self._ttl, session)
+            return token
+
+    def get(self, token: str) -> DiscoverySession:
+        if not token or len(token) > 128:
+            raise DiscoveryTokenError("检测结果无效或已过期, 请重新检测。")
+        with self._lock:
+            self._purge_expired()
+            entry = self._entries.get(token)
+            if entry is None:
+                raise DiscoveryTokenError("检测结果无效或已过期, 请重新检测。")
+            self._entries.move_to_end(token)
+            return entry[1]
+
+    def discard(self, token: str) -> None:
+        with self._lock:
+            self._entries.pop(token, None)
+
+    def __len__(self) -> int:
+        with self._lock:
+            self._purge_expired()
+            return len(self._entries)
+
+    def _purge_expired(self) -> None:
+        now = monotonic()
+        expired = [token for token, (deadline, _) in self._entries.items() if deadline <= now]
+        for token in expired:
+            self._entries.pop(token, None)
+
+
+class SourceDiscoveryService:
+    def __init__(self, fetcher: Fetcher, guard: SourceUrlGuard) -> None:
+        self._fetcher = fetcher
+        self._guard = guard
+
+    async def discover(self, input_url: str) -> DiscoveryResult:
+        tested_at = datetime.now(UTC)
+        normalized = self._guard.normalize(input_url)
+        try:
+            normalized = await self._guard.validate(normalized)
+        except SourceUrlSecurityError:
+            raise
+
+        github = _github_result(normalized, tested_at)
+        if github is not None:
+            return github
+
+        try:
+            response = await self._fetcher.fetch(normalized)
+        except ForbiddenFetchError:
+            return _failed_result(
+                normalized,
+                DiscoveryStatus.BLOCKED,
+                "网站拒绝公开访问, 未尝试绕过访问限制。",
+                tested_at,
+            )
+        except FetchError:
+            return _failed_result(
+                normalized,
+                DiscoveryStatus.UNREACHABLE,
+                "当前无法安全访问该网址, 请稍后重试。",
+                tested_at,
+            )
+
+        if _is_feed(response):
+            return _feed_result(await self._guard.validate(response.url), tested_at, direct=True)
+        if not _looks_like_html(response):
+            return _failed_result(
+                normalized,
+                DiscoveryStatus.NEEDS_CUSTOM_COLLECTOR,
+                "响应不是可识别的 RSS、Atom 或普通 HTML 列表页。",
+                tested_at,
+            )
+
+        soup = BeautifulSoup(response.content, "lxml")
+        for feed_url in _alternate_feed_urls(soup, response.url):
+            try:
+                safe_url = await self._guard.validate(feed_url)
+                feed_response = await self._fetcher.fetch(safe_url)
+            except (FetchError, SourceUrlSecurityError):
+                continue
+            if _is_feed(feed_response):
+                return _feed_result(
+                    await self._guard.validate(feed_response.url), tested_at, direct=False
+                )
+
+        origin = f"{urlsplit(response.url).scheme}://{urlsplit(response.url).netloc}"
+        for path in COMMON_FEED_PATHS:
+            feed_url = urljoin(origin, path)
+            try:
+                safe_url = await self._guard.validate(feed_url)
+                feed_response = await self._fetcher.fetch(safe_url)
+            except (FetchError, SourceUrlSecurityError):
+                continue
+            if _is_feed(feed_response):
+                return _feed_result(
+                    await self._guard.validate(feed_response.url), tested_at, direct=False
+                )
+
+        return _html_result(soup, response.url, tested_at)
+
+
+class SourcePreviewService:
+    def __init__(
+        self,
+        registry: CollectorRegistry,
+        fetcher: Fetcher,
+        classifier: Classifier,
+    ) -> None:
+        self._registry = registry
+        self._fetcher = fetcher
+        self._classifier = classifier
+
+    async def preview(self, discovery: DiscoveryResult) -> PreviewResult:
+        if not discovery.usable:
+            return PreviewResult((), ("当前检测结果没有可用于预览的通用采集器。",))
+        source = Source(
+            name="临时预览来源",
+            source_type=discovery.source_type,
+            start_url=discovery.normalized_url,
+            enabled=False,
+            default_category=None,
+            collector_name=discovery.collector_name,
+            collector_config=discovery.collector_config,
+            origin=SourceOrigin.USER_ADDED,
+        )
+        collector = self._registry.create(source, self._fetcher)
+        config = _preview_config(discovery)
+        try:
+            collected = await collector.collect(
+                CollectContext(
+                    source_url=discovery.normalized_url,
+                    source_name=source.name,
+                    config=config,
+                )
+            )
+        except Exception:
+            return PreviewResult((), ("抓取预览失败, 请检查来源状态后重试。",))
+
+        items: list[PreviewItem] = []
+        errors: list[str] = []
+        for item in collected:
+            if len(items) >= 10:
+                break
+            if not is_http_url(item.original_url):
+                errors.append("已跳过一条链接格式无效的预览记录。")
+                continue
+            try:
+                classification = await self._classifier.classify(item, source_default=None)
+                category = classification.category
+            except Exception:
+                category = Category.UNCLASSIFIED
+                errors.append("一条预览记录分类失败, 已标记为待分类。")
+            items.append(
+                PreviewItem(
+                    title=item.title,
+                    url=item.original_url,
+                    published_at=item.published_at,
+                    summary=item.summary,
+                    category=category,
+                )
+            )
+        if not items:
+            errors.append("没有抓取到有效的“标题 + 链接”, 当前来源不能直接启用。")
+        return PreviewResult(tuple(items), tuple(dict.fromkeys(errors)))
+
+
+def _github_result(url: str, tested_at: datetime) -> DiscoveryResult | None:
+    parts = urlsplit(url)
+    if (parts.hostname or "").casefold() not in {"github.com", "www.github.com"}:
+        return None
+    segments = [part for part in parts.path.split("/") if part]
+    valid = (
+        len(segments) in {2, 3}
+        and (len(segments) == 2 or segments[2].casefold() == "releases")
+        and all(GITHUB_PART_PATTERN.fullmatch(part) for part in segments[:2])
+    )
+    if not valid:
+        return _failed_result(
+            url,
+            DiscoveryStatus.NEEDS_CUSTOM_COLLECTOR,
+            "GitHub 地址必须是明确的 owner/repository 或其 Releases 页面。",
+            tested_at,
+        )
+    owner, repository = segments[:2]
+    normalized = f"https://github.com/{owner}/{repository.removesuffix('.git')}/releases"
+    return DiscoveryResult(
+        collector_name="github_release",
+        source_type=SourceType.GITHUB_RELEASE,
+        normalized_url=normalized,
+        discovery_status=DiscoveryStatus.READY,
+        discovery_confidence=0.99,
+        requires_custom_collector=False,
+        collector_config={"max_releases": 30, "include_prereleases": False},
+        explanations=("已确认公开 GitHub 仓库格式, 将通过 Releases 采集器预览。",),
+        errors=(),
+        tested_at=tested_at,
+    )
+
+
+def _is_feed(response: FetchResult) -> bool:
+    content_type = response.headers.get("content-type", "").casefold()
+    parsed = cast(
+        Mapping[str, object],
+        feedparser.parse(response.content),  # pyright: ignore[reportUnknownMemberType]
+    )
+    version = str(parsed.get("version", "")).casefold()
+    entries_value = parsed.get("entries", ())
+    entries = cast(list[object], entries_value) if isinstance(entries_value, list) else []
+    has_entries = bool(entries)
+    return ("rss" in content_type or "atom" in content_type or bool(version)) and has_entries
+
+
+def _looks_like_html(response: FetchResult) -> bool:
+    content_type = response.headers.get("content-type", "").casefold()
+    prefix = response.content[:1000].lstrip().lower()
+    return "html" in content_type or b"<html" in prefix or b"<!doctype html" in prefix
+
+
+def _alternate_feed_urls(soup: BeautifulSoup, page_url: str) -> tuple[str, ...]:
+    urls: list[str] = []
+    for node in soup.select('link[rel~="alternate"][href]'):
+        content_type = str(node.get("type", "")).casefold()
+        href = node.get("href")
+        if content_type not in {"application/rss+xml", "application/atom+xml"}:
+            continue
+        if isinstance(href, str):
+            normalized = canonicalize_url(href, base_url=page_url)
+            if normalized and normalized not in urls:
+                urls.append(normalized)
+        if len(urls) >= 4:
+            break
+    return tuple(urls)
+
+
+def _feed_result(url: str, tested_at: datetime, *, direct: bool) -> DiscoveryResult:
+    explanation = (
+        "输入网址本身是有效的 RSS/Atom。"
+        if direct
+        else "从页面声明或有限的常见路径中确认了 RSS/Atom。"
+    )
+    return DiscoveryResult(
+        collector_name="rss",
+        source_type=SourceType.RSS,
+        normalized_url=url,
+        discovery_status=DiscoveryStatus.READY,
+        discovery_confidence=0.98 if direct else 0.92,
+        requires_custom_collector=False,
+        collector_config={"max_items": 1000},
+        explanations=(explanation,),
+        errors=(),
+        tested_at=tested_at,
+    )
+
+
+def _html_result(soup: BeautifulSoup, page_url: str, tested_at: datetime) -> DiscoveryResult:
+    hostname = (urlsplit(page_url).hostname or "").casefold()
+    for selector in HTML_SELECTOR_CANDIDATES:
+        valid = [_node_link(node, page_url, hostname) for node in soup.select(selector)]
+        count = sum(item is not None for item in valid)
+        if count >= 2:
+            return DiscoveryResult(
+                collector_name="html_list",
+                source_type=SourceType.HTML_LIST,
+                normalized_url=canonicalize_url(page_url) or page_url,
+                discovery_status=DiscoveryStatus.READY if count >= 4 else DiscoveryStatus.PARTIAL,
+                discovery_confidence=min(0.9, 0.68 + count * 0.04),
+                requires_custom_collector=False,
+                collector_config={
+                    "allowed_domains": [hostname],
+                    "allow_subdomains": False,
+                    "discovery": {"mode": "selectors", "max_pages": 1, "max_depth": 0},
+                    "extraction": {
+                        "item_selector": selector,
+                        "title_selector": "a[href]",
+                        "link_selector": "a[href]",
+                    },
+                },
+                explanations=(
+                    f"在固定、可审计的常见列表结构中发现 {count} 个候选标题链接。",
+                    "建议首次保存前人工检查标题、日期和简介的完整性。",
+                ),
+                errors=(),
+                tested_at=tested_at,
+            )
+
+    candidates = [_anchor_link(anchor, page_url, hostname) for anchor in soup.select("a[href]")]
+    paths = [urlsplit(item[1]).path for item in candidates if item is not None]
+    prefixes = [
+        f"/{parts[0]}/" for path in paths if (parts := path.strip("/").split("/")) and parts[0]
+    ]
+    common = Counter(prefixes).most_common(1)
+    if len(paths) >= 3 and common and common[0][1] >= 3 and common[0][1] / len(paths) >= 0.6:
+        prefix = common[0][0]
+        return DiscoveryResult(
+            collector_name="html_list",
+            source_type=SourceType.HTML_LIST,
+            normalized_url=canonicalize_url(page_url) or page_url,
+            discovery_status=DiscoveryStatus.PARTIAL,
+            discovery_confidence=0.66,
+            requires_custom_collector=False,
+            collector_config={
+                "allowed_domains": [hostname],
+                "allow_subdomains": False,
+                "discovery": {
+                    "mode": "link_filter",
+                    "max_pages": 1,
+                    "max_depth": 0,
+                    "include_url_patterns": [prefix],
+                },
+            },
+            explanations=(
+                f"发现多个共享 {prefix} 路径的站内标题链接, 使用有限链接过滤规则。",
+                "页面结构未提供稳定日期或简介规则, 建议人工检查预览。",
+            ),
+            errors=(),
+            tested_at=tested_at,
+        )
+    return _failed_result(
+        canonicalize_url(page_url) or page_url,
+        DiscoveryStatus.NEEDS_CUSTOM_COLLECTOR,
+        "没有找到足够稳定的文章列表结构, 需要开发者提供自定义采集器。",
+        tested_at,
+    )
+
+
+def _node_link(node: Tag, page_url: str, hostname: str) -> tuple[str, str] | None:
+    anchor = node if node.name == "a" else node.select_one("a[href]")
+    return _anchor_link(anchor, page_url, hostname) if isinstance(anchor, Tag) else None
+
+
+def _anchor_link(anchor: Tag, page_url: str, hostname: str) -> tuple[str, str] | None:
+    href = anchor.get("href")
+    title = " ".join(anchor.get_text(" ", strip=True).split())
+    if not isinstance(href, str) or len(title) < 4:
+        return None
+    url = canonicalize_url(href, base_url=page_url)
+    if url is None or (urlsplit(url).hostname or "").casefold() != hostname:
+        return None
+    lowered = title.casefold()
+    if any(term in lowered for term in ("登录", "注册", "联系我们", "login", "register")):
+        return None
+    return title, url
+
+
+def _failed_result(
+    url: str,
+    status: DiscoveryStatus,
+    message: str,
+    tested_at: datetime,
+) -> DiscoveryResult:
+    return DiscoveryResult(
+        collector_name="custom",
+        source_type=SourceType.CUSTOM,
+        normalized_url=url,
+        discovery_status=status,
+        discovery_confidence=0.0,
+        requires_custom_collector=True,
+        collector_config={},
+        explanations=(message,),
+        errors=(message,),
+        tested_at=tested_at,
+    )
+
+
+def _preview_config(discovery: DiscoveryResult) -> dict[str, object]:
+    config = cast(dict[str, object], dict(discovery.collector_config))
+    if discovery.source_type is SourceType.RSS:
+        config["max_items"] = 10
+    elif discovery.source_type is SourceType.GITHUB_RELEASE:
+        config["max_releases"] = 10
+    elif discovery.source_type is SourceType.HTML_LIST:
+        discovery_config = dict(cast(Mapping[str, object], config.get("discovery", {})))
+        discovery_config["max_items"] = 10
+        discovery_config["max_pages"] = 1
+        discovery_config["max_depth"] = 0
+        config["discovery"] = discovery_config
+    return config
+
+
+__all__ = [
+    "DiscoveryTokenError",
+    "DiscoveryTokenStore",
+    "SourceDiscoveryService",
+    "SourcePreviewService",
+]

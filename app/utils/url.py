@@ -56,7 +56,8 @@ def canonicalize_url(
         return None
 
     default_port = (scheme == "http" and port == 80) or (scheme == "https" and port == 443)
-    netloc = hostname if port is None or default_port else f"{hostname}:{port}"
+    display_hostname = f"[{hostname}]" if ":" in hostname else hostname
+    netloc = display_hostname if port is None or default_port else f"{display_hostname}:{port}"
 
     path = parts.path or "/"
     if path != "/":

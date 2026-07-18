@@ -57,6 +57,7 @@ class Source(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_type: Mapped[SourceType] = mapped_column(enum_type(SourceType), nullable=False)
     start_url: Mapped[str] = mapped_column(String(2048), nullable=False, unique=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

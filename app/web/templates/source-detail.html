@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ source.name }} · 来源{% endblock %}
+{% block content %}
+  <section class="page-heading"><div><p class="eyebrow">来源详情</p><h1>{{ source.name }}</h1>{% if source.start_url %}<p><a class="text-link" href="{{ source.start_url }}" target="_blank" rel="noopener noreferrer">{{ source.start_url }}</a></p>{% endif %}</div><a class="button" href="/sources">返回来源列表</a></section>
+  {% if saved %}<div class="notice success">来源已保存。保存本身没有自动执行正式更新。</div>{% endif %}{% if updated %}<div class="notice success">来源设置已更新。</div>{% endif %}
+  <section class="result-panel onboarding-result"><div class="facts-grid"><div><span>来源类型</span><strong>{{ discovery_type_label(source.source_type) }}</strong></div><div><span>检测状态</span><strong>{{ discovery_status_label(source.discovery_status) }}</strong></div><div><span>置信度</span><strong>{{ ((source.discovery_confidence or 0) * 100)|round|int }}%</strong></div><div><span>最后检测</span><strong>{{ format_time(source.last_tested_at) }}</strong></div></div>{% if source.requires_custom_collector %}<div class="notice error">该来源需要自定义采集器，当前不能启用。</div>{% endif %}</section>
+  <form class="form-panel" action="/sources/{{ source.id }}/edit" method="post">
+    <h2>可编辑信息</h2>
+    <label>来源名称<input name="name" required maxlength="255" value="{{ source.name }}"></label>
+    <label>默认分类<select name="default_category"><option value="">自动判断</option>{% for category in categories %}<option value="{{ category.value }}" {% if source.default_category == category %}selected{% endif %}>{{ category_label(category) }}</option>{% endfor %}</select></label>
+    <label>来源说明<textarea name="description" maxlength="2000" rows="4">{{ source.description or '' }}</textarea></label>
+    <label class="check-label"><input type="checkbox" name="enabled" value="true" {% if source.enabled %}checked{% endif %} {% if source.requires_custom_collector %}disabled{% endif %}>启用来源</label>
+    <p class="help-text">入口网址、采集器类型和采集配置不能直接编辑；原始配置 JSON 不在页面展示。</p>
+    <button class="button primary" type="submit">保存修改</button>
+  </form>
+  <section class="form-panel"><h2>重新检测来源</h2><p>先生成独立预览，确认前不会覆盖现有配置，也不会删除已有资讯。</p><form action="/sources/{{ source.id }}/rediscover" method="post" data-update-form><button class="button" type="submit" data-processing-text="正在重新检测…">重新检测来源</button></form></section>
+{% endblock %}

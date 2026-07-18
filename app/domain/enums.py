@@ -27,6 +27,15 @@ class SourceOrigin(StrEnum):
     IMPORTED = "imported"
 
 
+class DiscoveryStatus(StrEnum):
+    READY = "ready"
+    PARTIAL = "partial"
+    NEEDS_CONFIGURATION = "needs_configuration"
+    NEEDS_CUSTOM_COLLECTOR = "needs_custom_collector"
+    BLOCKED = "blocked"
+    UNREACHABLE = "unreachable"
+
+
 class CrawlStatus(StrEnum):
     RUNNING = "running"
     SUCCESS = "success"

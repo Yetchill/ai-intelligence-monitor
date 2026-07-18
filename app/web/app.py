@@ -18,10 +18,19 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.classifiers.manual import ManualCategoryError
 from app.config import Settings, get_settings
 from app.config.settings import PROJECT_ROOT
-from app.domain.enums import Category, CrawlStatus
+from app.domain.collection import Fetcher
+from app.domain.enums import Category, CrawlStatus, DiscoveryStatus, SourceType
+from app.services.application_factory import update_pipeline_context
 from app.services.error_sanitization import sanitize_error
+from app.services.source_discovery import DiscoveryTokenError, DiscoveryTokenStore
+from app.services.source_management import (
+    ManagedSourceNotFoundError,
+    SourceAlreadyExistsError,
+    SourceManagementError,
+)
+from app.services.source_url_security import SourceUrlGuard, SourceUrlSecurityError
 from app.services.update_pipeline import SourceDisabledError, SourceNotFoundError
-from app.services.web_data_service import EntityNotFoundError
+from app.services.web_data_service import EntityNotFoundError, SourceStateError
 from app.storage.database import Database
 from app.utils.logging import configure_logging
 from app.web.dependencies import PipelineContextFactory, UpdateInProgressError, WebServices
@@ -44,6 +53,21 @@ STATUS_LABELS = {
     CrawlStatus.PARTIAL_SUCCESS: "部分成功",
     CrawlStatus.FAILED: "失败",
 }
+DISCOVERY_STATUS_LABELS = {
+    DiscoveryStatus.READY: "可以使用",
+    DiscoveryStatus.PARTIAL: "基本可用, 建议检查",
+    DiscoveryStatus.NEEDS_CONFIGURATION: "需要配置",
+    DiscoveryStatus.NEEDS_CUSTOM_COLLECTOR: "需要自定义采集器",
+    DiscoveryStatus.BLOCKED: "网站拒绝访问",
+    DiscoveryStatus.UNREACHABLE: "暂时无法访问",
+}
+SOURCE_TYPE_LABELS = {
+    SourceType.RSS: "RSS / Atom",
+    SourceType.HTML_LIST: "普通网页列表",
+    SourceType.GITHUB_RELEASE: "GitHub Releases",
+    SourceType.JSON_API: "JSON 接口",
+    SourceType.CUSTOM: "自定义采集器",
+}
 
 
 def create_app(
@@ -52,10 +76,21 @@ def create_app(
     database: Database | None = None,
     enforce_migrations: bool = True,
     pipeline_context_factory: PipelineContextFactory | None = None,
+    source_fetcher: Fetcher | None = None,
+    source_url_guard: SourceUrlGuard | None = None,
+    token_store: DiscoveryTokenStore | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     resolved_database = database or Database.from_settings(resolved_settings)
     owns_database = database is None
+
+    services = WebServices.build(
+        resolved_database,
+        pipeline_context_factory=pipeline_context_factory or update_pipeline_context,
+        source_fetcher=source_fetcher,
+        source_url_guard=source_url_guard,
+        token_store=token_store,
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
@@ -65,6 +100,7 @@ def create_app(
         try:
             yield
         finally:
+            await services.aclose()
             if owns_database:
                 resolved_database.dispose()
 
@@ -77,12 +113,7 @@ def create_app(
     )
     templates = _templates()
     application.state.templates = templates
-    if pipeline_context_factory is None:
-        application.state.services = WebServices.build(resolved_database)
-    else:
-        application.state.services = WebServices.build(
-            resolved_database, pipeline_context_factory=pipeline_context_factory
-        )
+    application.state.services = services
     application.mount("/static", StaticFiles(directory=WEB_ROOT / "static"), name="static")
     application.include_router(router)
     _register_error_handlers(application, templates)
@@ -118,6 +149,8 @@ def _templates() -> Jinja2Templates:
     globals_mapping["category_label"] = _category_label
     globals_mapping["status_label"] = _status_label
     globals_mapping["format_time"] = _format_time
+    globals_mapping["discovery_status_label"] = _discovery_status_label
+    globals_mapping["discovery_type_label"] = _discovery_type_label
     return Jinja2Templates(env=environment)
 
 
@@ -133,6 +166,22 @@ def _category_label(value: Category | str) -> str:
 
 def _status_label(value: CrawlStatus | str) -> str:
     return STATUS_LABELS.get(CrawlStatus(value), "未知")
+
+
+def _discovery_status_label(value: DiscoveryStatus | str | None) -> str:
+    if value is None:
+        return "未检测"
+    try:
+        return DISCOVERY_STATUS_LABELS.get(DiscoveryStatus(value), "未知")
+    except ValueError:
+        return "未知"
+
+
+def _discovery_type_label(value: SourceType | str) -> str:
+    try:
+        return SOURCE_TYPE_LABELS.get(SourceType(value), "未知")
+    except ValueError:
+        return "未知"
 
 
 def _register_error_handlers(application: FastAPI, templates: Jinja2Templates) -> None:
@@ -163,10 +212,16 @@ def _register_error_handlers(application: FastAPI, templates: Jinja2Templates) -
         return await render_error(request, 500, "操作未能完成, 请稍后重试并检查应用日志。")
 
     application.add_exception_handler(WebInputError, input_error)
+    application.add_exception_handler(SourceUrlSecurityError, input_error)
+    application.add_exception_handler(SourceManagementError, input_error)
+    application.add_exception_handler(SourceStateError, input_error)
+    application.add_exception_handler(DiscoveryTokenError, input_error)
     application.add_exception_handler(ManualCategoryError, input_error)
     application.add_exception_handler(SourceDisabledError, input_error)
     application.add_exception_handler(RequestValidationError, request_validation_error)
     application.add_exception_handler(EntityNotFoundError, not_found)
+    application.add_exception_handler(ManagedSourceNotFoundError, not_found)
+    application.add_exception_handler(SourceAlreadyExistsError, update_conflict)
     application.add_exception_handler(SourceNotFoundError, not_found)
     application.add_exception_handler(UpdateInProgressError, update_conflict)
     application.add_exception_handler(SQLAlchemyError, database_error)
