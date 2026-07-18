@@ -23,7 +23,8 @@ htmlcov/
 data/*.db*
 data/*.sqlite*
 logs/
-output/
+output/*
+!output/.gitkeep
 
 # Packaging and build output
 build/

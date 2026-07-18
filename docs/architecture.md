@@ -1,17 +1,17 @@
-# 阶段五 B 来源添加与预览架构
+# 阶段六 Excel 与 Word 导出架构
 
 ## 范围
 
 当前架构覆盖基础设施、基础采集器、纯逻辑分类子系统，以及更新流水线、分类持久化与运行
-记录、本地 Web UI 与基础人工操作，以及信息源发现、预览、保存和确认式重新检测。导出、定时
-任务、一键启动、Windows 打包、浏览器获取和真实 AI 模块尚未创建。
+记录、本地 Web UI 与基础人工操作、信息源发现与管理，以及 Excel/Word 导出。定时任务、PDF、
+自动邮件、一键启动、Windows 打包、浏览器获取和真实 AI 模块尚未创建。
 
 ## 依赖方向
 
 ```text
 Jinja2 Web / 最小 CLI / 未来任务入口
           ↓
-      WebDataService / UpdatePipeline
+  WebDataService / ExportService / UpdatePipeline
           ↓             ↓                 ↓
    CrawlService   ClassificationService   CrawlRunService
           ↓             ↓                 ↓
@@ -27,6 +27,19 @@ SQLAlchemy 2.x 映射与 SQLite
           ↓
 Alembic 版本化迁移
 ```
+
+`ExportService` 与 `WebDataService` 共享 `ItemFilter`，Repository 的 `_item_filters` 和
+`_item_order` 是列表与导出的唯一 SQL 条件和排序实现。分页列表增加 `LIMIT/OFFSET`；导出先以
+同一条件计数，通过格式上限后再执行一次有界联表查询。过滤不在 Python 中重做，也不会加载
+正式数据库全部资讯。
+
+导出器通过 `Exporter` Protocol 接收脱离 Session 的 `ExportItem` 和 `ExportMetadata`，不创建
+Session、不查询数据库、不处理 Web 响应或 CLI 路径。`ExcelExporter` 与 `WordExporter` 只负责
+Office 文档结构；未来增加格式只需注册新的导出器，核心查询流程不需要修改。
+
+Web 通过 `BytesIO` 结果直接响应，路由不拼装 Office 文件且不能接受输出路径。CLI 通过同一
+`build_export_service()` 构造服务，在生成成功后执行安全的原子文件写入。完整结构和安全边界见
+[`export.md`](export.md)。
 
 Collector 通过 `CollectContext` 接收来源入口和配置，只返回 `CollectedItem`，不持有 Repository
 或 SQLAlchemy Session。`UpdatePipeline` 连接采集、标准化、分类和持久化。调用方只持有应用服务，
@@ -91,7 +104,7 @@ Fetcher 只访问 HTTP(S) 公开资源，不执行脚本、不处理登录或验
 - `AIM_LOG_MAX_BYTES`：默认 10 MB；
 - `AIM_LOG_BACKUP_COUNT`：默认 5。
 
-`.env`、数据库、日志和导出目录均由 `.gitignore` 排除。
+`.env`、数据库、日志和导出文件均由 `.gitignore` 排除；`output/.gitkeep` 保留目录结构。
 
 ## 数据模型
 
@@ -183,6 +196,9 @@ Web 应用启动时只核对当前 Alembic revision 与 head。版本落后会�
 Web、CLI 和未来任务入口都调用现有 `UpdatePipeline`；Fetcher/Collector 不得直接持有
 Session。分类器不得操作数据库，Web/API 层不得包含采集逻辑。
 SourceDiscoverer 与正式 Collector 必须保持分离。新增字段或约束必须随 Alembic migration 一起提交。
+
+Web 与 CLI 导出都调用同一个 `ExportService`。导出层只读现有表，不创建 CrawlRun、
+ItemRevision 或任何导出记录；阶段六没有数据模型变化或 Alembic migration。
 
 ## 来源添加边界
 

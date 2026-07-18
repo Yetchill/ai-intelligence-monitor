@@ -13,6 +13,15 @@
 
 ### Added
 
+- 增加阶段六 `Exporter` Protocol、`ExcelExporter`、`WordExporter` 和 Web/CLI 共享的
+  `ExportService`；
+- 增加复用首页筛选条件、最终分类规则和稳定排序的有界导出查询；
+- 增加 Excel 资讯列表/导出说明工作表、表头冻结、自动筛选、中文分类和可点击原文链接；
+- 增加按最终分类顺序分组、跳过空章节与空简介、带可点击链接的 Word 报告；
+- 增加 Excel 公式注入、XML 非法字符、危险超链接、文件名与下载响应头防护；
+- 增加继承当前筛选的首页下载入口，以及带筛选、数量限制、原子写入和 `--force` 的导出 CLI；
+- 增加 34 项临时数据库导出专项测试和 `docs/export.md`；
+
 - 增加阶段五 B 来源添加、RSS/Atom、GitHub Releases 与简单 HTML 列表自动识别；
 - 增加逐跳 DNS/IP/安全端口校验、有限重定向、超时与 2 MiB 响应限制的来源安全 Fetcher；
 - 增加复用 CollectorRegistry 和规则分类器的最多 10 条无落库预览；
@@ -58,6 +67,9 @@
 
 ### Changed
 
+- 项目进度进入阶段六 Excel 与 Word 导出；
+- `output/` 改为忽略生成文件并保留 `.gitkeep`；
+
 - 项目进度进入阶段五 B 信息源添加、自动识别与抓取预览；
 - 来源页面增加添加与详情入口，但仍不允许来源删除或任意 collector_config 编辑；
 
@@ -77,8 +89,8 @@
 
 ### Not Included
 
-- 正式来源库扩充、已读状态、本次新增筛选、Excel/Word 导出、定时任务、一键启动、Windows 打包、
-  浏览器采集、来源删除、任意 collector_config 编辑、登录权限和真实 AI 调用。
+- 正式来源库扩充、已读状态、本次新增筛选、定时任务、一键启动、Windows 打包、PDF 导出、
+  自动邮件、浏览器采集、来源删除、任意 collector_config 编辑、登录权限和真实 AI 调用。
 
 ## [0.1.0] - 2026-07-17
 

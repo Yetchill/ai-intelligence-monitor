@@ -2,13 +2,19 @@
 
 import argparse
 import asyncio
+import os
 import sys
+import tempfile
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, date, datetime, time, timedelta
+from pathlib import Path
 
-from app.domain.enums import CrawlStatus
+from app.config.settings import PROJECT_ROOT
+from app.domain.enums import Category, CrawlStatus
+from app.domain.exports import ExportFormat, ExportQuery
+from app.domain.queries import ItemFilter
 from app.domain.update import UpdateMode, UpdateResult
-from app.services.application_factory import update_pipeline_context
+from app.services.application_factory import build_export_service, update_pipeline_context
 from app.services.error_sanitization import sanitize_error
 from app.services.source_seed_service import SourceSeedService
 from app.services.update_pipeline import UpdatePipeline
@@ -29,6 +35,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if arguments.command == "sources":
             _seed_sources(database)
+            return 0
+        if arguments.command == "export":
+            _run_export(database, arguments)
             return 0
         return asyncio.run(_run_update(database, arguments))
     except Exception as exc:
@@ -104,6 +113,82 @@ def _parse_datetime(value: str | None) -> datetime | None:
         raise ValueError(f"invalid ISO datetime: {value}") from exc
 
 
+def _run_export(database: Database, arguments: argparse.Namespace) -> None:
+    published_from = _parse_export_date(arguments.published_from)
+    published_to = _parse_export_date(arguments.published_to, exclusive_end=True)
+    discovered_from = _parse_export_date(arguments.discovered_from)
+    discovered_to = _parse_export_date(arguments.discovered_to, exclusive_end=True)
+    if published_from and published_to and published_from >= published_to:
+        raise ValueError("published-from must not be later than published-to")
+    if discovered_from and discovered_to and discovered_from >= discovered_to:
+        raise ValueError("discovered-from must not be later than discovered-to")
+
+    export_format = ExportFormat(arguments.export_format)
+    result = build_export_service(database).export(
+        export_format,
+        ExportQuery(
+            filters=ItemFilter(
+                keyword=arguments.query,
+                category=Category(arguments.category) if arguments.category else None,
+                source_id=arguments.source_id,
+                favorite=arguments.favorite,
+                published_from=published_from,
+                published_to=published_to,
+                discovered_from=discovered_from,
+                discovered_to=discovered_to,
+                unclassified=arguments.unclassified,
+            ),
+            limit=arguments.limit,
+        ),
+    )
+    output = arguments.output or (PROJECT_ROOT / "output" / result.filename)
+    expected_suffix = ".xlsx" if export_format is ExportFormat.EXCEL else ".docx"
+    if output.suffix.lower() != expected_suffix:
+        raise ValueError(f"output path must end with {expected_suffix}")
+    _atomic_write(output, result.content, force=arguments.force)
+    print(f"exported {result.item_count} items to {output}")
+
+
+def _parse_export_date(value: str | None, *, exclusive_end: bool = False) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        parsed = date.fromisoformat(value)
+        if exclusive_end:
+            parsed += timedelta(days=1)
+    except (ValueError, OverflowError) as exc:
+        raise ValueError(f"invalid export date: {value}; expected YYYY-MM-DD") from exc
+    return datetime.combine(parsed, time.min, UTC)
+
+
+def _atomic_write(path: Path, content: bytes, *, force: bool) -> None:
+    path = path.expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            temporary.write(content)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        if force:
+            os.replace(temporary_path, path)
+            temporary_path = None
+        else:
+            os.link(temporary_path, path)
+            temporary_path.unlink()
+            temporary_path = None
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AI intelligence update pipeline debug CLI")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -124,7 +209,30 @@ def _parser() -> argparse.ArgumentParser:
     sources = commands.add_parser("sources", help="manage preset source configuration")
     source_commands = sources.add_subparsers(dest="source_command", required=True)
     source_commands.add_parser("seed", help="idempotently import documented example sources")
+    export = commands.add_parser("export", help="export filtered intelligence")
+    export_formats = export.add_subparsers(dest="export_format", required=True)
+    for export_format in ExportFormat:
+        command = export_formats.add_parser(export_format.value)
+        command.add_argument("--output", type=Path)
+        command.add_argument("--category", choices=[category.value for category in Category])
+        command.add_argument("--source-id", type=_positive_int)
+        command.add_argument("--favorite", action="store_const", const=True, default=None)
+        command.add_argument("--published-from")
+        command.add_argument("--published-to")
+        command.add_argument("--discovered-from")
+        command.add_argument("--discovered-to")
+        command.add_argument("--query")
+        command.add_argument("--unclassified", action="store_const", const=True, default=None)
+        command.add_argument("--limit", type=_positive_int)
+        command.add_argument("--force", action="store_true")
     return parser
+
+
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("value must be a positive integer")
+    return parsed
 
 
 if __name__ == "__main__":

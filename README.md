@@ -1,7 +1,7 @@
 # AI 行业动态与成果申报情报工具
 
 这是一个面向公司内部使用的本地信息聚合工具。当前已完成基础数据库、采集器、规则分类，
-以及 **阶段五 B：信息源添加、自动识别与抓取预览**。
+以及 **阶段六：Excel 与 Word 导出**。
 
 ## 当前已实现
 
@@ -44,10 +44,16 @@
 - 有 TTL 和容量上限的进程内检测 token，保存时不信任浏览器提交的采集器配置；
 - 来源详情编辑、disabled 待处理来源和确认后才替换配置的重新检测流程；
 - “保存”与“保存并立即更新”，后者复用现有 UpdatePipeline 和进程内锁。
+- 可扩展的 `Exporter` Protocol、`ExcelExporter`、`WordExporter` 与共享 `ExportService`；
+- 首页与导出复用同一数据库筛选、最终分类语义和稳定排序，导出不受网页页码限制；
+- 带表头冻结、自动筛选、中文分类和可点击原文链接的 Excel 工作簿；
+- 按最终分类有序分组、跳过空章节和空简介的 Word 报告；
+- Excel 公式注入、非法 XML 字符、危险超链接、文件名和响应头安全处理；
+- Web 内存下载及支持筛选、数量限制、原子写入和显式覆盖的最小导出 CLI。
 
 ## 尚未实现
 
-Excel/Word 导出、定时任务、一键启动、Windows 打包、浏览器采集和真实 AI 功能尚未实现。
+定时任务、一键启动、Windows 打包、浏览器采集、PDF、自动邮件和真实 AI 功能尚未实现。
 当前来源页面不允许删除来源、直接修改入口 URL 或任意编辑 `collector_config`。
 
 ## 开发环境
@@ -123,6 +129,17 @@ uv run python -m app.web
 [`docs/web-ui.md`](docs/web-ui.md)。
 来源识别范围、SSRF 边界、token 和重新检测流程见
 [`docs/source-onboarding.md`](docs/source-onboarding.md)。
+
+资讯页会显示当前筛选匹配条数，可直接导出全部匹配结果为 Excel 或 Word，不受当前分页限制。
+也可以使用 CLI：
+
+```bash
+uv run python -m app.cli export excel --output output/report.xlsx
+uv run python -m app.cli export word --output output/report.docx
+```
+
+筛选参数、文件结构、10,000/2,000 条上限、`output/` 和安全边界见
+[`docs/export.md`](docs/export.md)。
 
 服务默认且应当只监听 `127.0.0.1`，不应直接暴露到公网。当前没有登录和 CSRF 防护；如果未来
 部署到局域网或服务器，必须先增加认证、授权、CSRF 防护和合适的反向代理安全配置。

@@ -6,7 +6,7 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app.domain.enums import Category
-from app.domain.queries import ItemQuery
+from app.domain.queries import ItemFilter, ItemQuery
 
 MAX_DATABASE_ID = 9_223_372_036_854_775_807
 
@@ -74,9 +74,23 @@ class ItemQueryParams(PageParams):
         return parsed
 
     def to_domain(self) -> ItemQuery:
+        item_filter = self.to_filter()
         return ItemQuery(
+            keyword=item_filter.keyword,
+            category=item_filter.category,
+            source_id=item_filter.source_id,
+            favorite=item_filter.favorite,
+            published_from=item_filter.published_from,
+            published_to=item_filter.published_to,
+            discovered_from=item_filter.discovered_from,
+            discovered_to=item_filter.discovered_to,
+            unclassified=item_filter.unclassified,
             page=self.page,
             per_page=self.per_page,
+        )
+
+    def to_filter(self) -> ItemFilter:
+        return ItemFilter(
             keyword=self.keyword,
             category=self.category,
             source_id=self.source_id,
@@ -105,6 +119,11 @@ class ItemQueryParams(PageParams):
             if value is None or value == "all":
                 continue
             values[key] = value.value if isinstance(value, Category) else str(value)
+        return values
+
+    def export_values(self) -> dict[str, str]:
+        values = self.query_values()
+        values.pop("per_page", None)
         return values
 
 

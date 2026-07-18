@@ -26,6 +26,9 @@ input:focus, select:focus, textarea:focus { outline: 3px solid #cce7e5; border-c
 .button.small { min-height: 32px; padding: 6px 10px; font-size: 13px; }
 .button.disabled, button:disabled { cursor: not-allowed; opacity: .48; }
 .result-meta { margin: 0 0 10px; color: var(--muted); }
+.export-panel { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 18px; margin-bottom: 22px; border: 1px solid #c9dddc; border-radius: 14px; background: #f5fbfa; }
+.export-panel p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+.export-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .item-list { display: grid; gap: 14px; }
 .item-card { padding: 21px 23px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: 0 3px 15px rgba(28,49,55,.035); }
 .item-card h2 { margin: 10px 0 9px; font-size: 20px; line-height: 1.4; }
@@ -81,4 +84,4 @@ tbody tr:last-child td { border-bottom: 0; }
 .facts-grid span { color: var(--muted); font-size: 12px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @media (max-width: 1050px) { .filter-panel { grid-template-columns: repeat(3, minmax(150px, 1fr)); } .stats-grid { grid-template-columns: repeat(4, 1fr); } }
-@media (max-width: 680px) { .site-header, .page-heading, .pagination { align-items: flex-start; flex-direction: column; } .site-header { position: static; padding: 14px 4vw; } .filter-panel, .facts-grid { grid-template-columns: 1fr; } label.wide { grid-column: auto; } .category-form { width: 100%; margin-left: 0; } .stats-grid { grid-template-columns: repeat(2, 1fr); } .empty-state, .result-panel { padding: 26px; } }
+@media (max-width: 680px) { .site-header, .page-heading, .pagination, .export-panel { align-items: flex-start; flex-direction: column; } .site-header { position: static; padding: 14px 4vw; } .filter-panel, .facts-grid { grid-template-columns: 1fr; } label.wide { grid-column: auto; } .category-form { width: 100%; margin-left: 0; } .stats-grid { grid-template-columns: repeat(2, 1fr); } .empty-state, .result-panel { padding: 26px; } }
