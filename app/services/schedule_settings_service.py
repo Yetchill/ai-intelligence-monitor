@@ -35,17 +35,7 @@ class ScheduleSettingsService:
         with self._write_lock, self._uow_factory() as uow:
             row = uow.schedule_settings.get_singleton()
             if row is None:
-                row = uow.schedule_settings.add(
-                    ScheduleSettings(
-                        id=1,
-                        schedule_enabled=False,
-                        schedule_hour=9,
-                        schedule_minute=0,
-                        schedule_days_mask=127,
-                        timezone=system_timezone_name(),
-                        updated_at=_utc(self._now()),
-                    )
-                )
+                return _default_value()
             return _to_value(row)
 
     def save(
@@ -61,28 +51,34 @@ class ScheduleSettingsService:
         validate_time(hour, minute)
         validate_timezone(timezone)
         with self._write_lock, self._uow_factory() as uow:
-            row = uow.schedule_settings.get_singleton()
-            if row is None:
-                row = uow.schedule_settings.add(
-                    ScheduleSettings(id=1, timezone=timezone, updated_at=_utc(self._now()))
+            row = uow.schedule_settings.add_singleton_if_missing(
+                ScheduleSettings(
+                    id=1,
+                    schedule_enabled=enabled,
+                    schedule_hour=hour,
+                    schedule_minute=minute,
+                    schedule_days_mask=weekdays_to_mask(parsed_days),
+                    timezone=timezone,
+                    updated_at=_aware_utc(self._now()),
                 )
+            )
             row.schedule_enabled = enabled
             row.schedule_hour = hour
             row.schedule_minute = minute
             row.schedule_days_mask = weekdays_to_mask(parsed_days)
             row.timezone = timezone
-            row.updated_at = _utc(self._now())
+            row.updated_at = _aware_utc(self._now())
             return _to_value(row)
 
     def mark_scheduled_trigger(self, triggered_at: datetime) -> ScheduleSettingsValue:
-        triggered_at = _utc(triggered_at)
+        triggered_at = _aware_utc(triggered_at)
         with self._write_lock, self._uow_factory() as uow:
             row = uow.schedule_settings.get_singleton()
             if row is None:
                 raise RuntimeError("schedule settings do not exist")
             if (
                 row.last_scheduled_trigger_at is None
-                or _utc(row.last_scheduled_trigger_at) < triggered_at
+                or _database_utc(row.last_scheduled_trigger_at) < triggered_at
             ):
                 row.last_scheduled_trigger_at = triggered_at
             return _to_value(row)
@@ -93,7 +89,7 @@ def next_scheduled_run(settings: ScheduleSettingsValue, after: datetime) -> date
 
     if not settings.enabled:
         return None
-    after = _utc(after)
+    after = _aware_utc(after)
     zone = validate_timezone(settings.timezone)
     local_after = after.astimezone(zone)
     selected = {day_index(day) for day in settings.days}
@@ -155,9 +151,13 @@ def validate_timezone(name: str) -> ZoneInfo:
 def system_timezone_name() -> str:
     """Return the system local timezone as a validated IANA name."""
 
-    candidates = (os.environ.get("TZ"), get_localzone_name(), "UTC")
+    try:
+        localzone_name = get_localzone_name()
+    except Exception:
+        localzone_name = None
+    candidates = (os.environ.get("TZ"), localzone_name, "UTC")
     for candidate in candidates:
-        if candidate:
+        if candidate and (candidate == "UTC" or "/" in candidate):
             try:
                 validate_timezone(candidate)
             except ScheduleValidationError:
@@ -199,14 +199,32 @@ def _to_value(row: ScheduleSettings) -> ScheduleSettingsValue:
         minute=row.schedule_minute,
         days=mask_to_weekdays(row.schedule_days_mask),
         timezone=row.timezone,
-        updated_at=_utc(row.updated_at),
+        updated_at=_database_utc(row.updated_at),
         last_scheduled_trigger_at=(
-            _utc(row.last_scheduled_trigger_at) if row.last_scheduled_trigger_at else None
+            _database_utc(row.last_scheduled_trigger_at) if row.last_scheduled_trigger_at else None
         ),
     )
 
 
-def _utc(value: datetime) -> datetime:
+def _default_value() -> ScheduleSettingsValue:
+    return ScheduleSettingsValue(
+        enabled=False,
+        hour=9,
+        minute=0,
+        days=tuple(Weekday),
+        timezone=system_timezone_name(),
+        updated_at=None,
+        last_scheduled_trigger_at=None,
+    )
+
+
+def _aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ScheduleValidationError("调度时间必须包含明确时区。")
+    return value.astimezone(UTC)
+
+
+def _database_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)

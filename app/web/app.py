@@ -25,7 +25,7 @@ from app.domain.scheduling import SchedulerStatus
 from app.services.application_factory import update_pipeline_context
 from app.services.error_sanitization import sanitize_error
 from app.services.schedule_settings_service import ScheduleValidationError
-from app.services.scheduler_service import SchedulerClock
+from app.services.scheduler_service import SchedulerClock, SchedulerReloadError
 from app.services.source_discovery import DiscoveryTokenError, DiscoveryTokenStore
 from app.services.source_management import (
     ManagedSourceNotFoundError,
@@ -115,16 +115,18 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
-        configure_logging(resolved_settings)
-        if enforce_migrations:
-            require_current_migration(resolved_database)
-        await services.scheduler.start()
         try:
+            configure_logging(resolved_settings)
+            if enforce_migrations:
+                require_current_migration(resolved_database)
+            await services.scheduler.start()
             yield
         finally:
-            await services.aclose()
-            if owns_database:
-                resolved_database.dispose()
+            try:
+                await services.aclose()
+            finally:
+                if owns_database:
+                    resolved_database.dispose()
 
     application = FastAPI(
         title=resolved_settings.app_name,
@@ -254,6 +256,9 @@ def _register_error_handlers(application: FastAPI, templates: Jinja2Templates) -
     async def database_error(request: Request, _exc: Exception) -> HTMLResponse:
         return await render_error(request, 500, "本地数据库暂时不可用, 请稍后重试并检查日志。")
 
+    async def scheduler_reload_error(request: Request, exc: Exception) -> HTMLResponse:
+        return await render_error(request, 503, sanitize_error(exc, limit=200))
+
     async def unexpected_error(request: Request, _exc: Exception) -> HTMLResponse:
         return await render_error(request, 500, "操作未能完成, 请稍后重试并检查应用日志。")
 
@@ -267,6 +272,7 @@ def _register_error_handlers(application: FastAPI, templates: Jinja2Templates) -
     application.add_exception_handler(ExportGenerationError, unexpected_error)
     application.add_exception_handler(SourceDisabledError, input_error)
     application.add_exception_handler(ScheduleValidationError, input_error)
+    application.add_exception_handler(SchedulerReloadError, scheduler_reload_error)
     application.add_exception_handler(RequestValidationError, request_validation_error)
     application.add_exception_handler(EntityNotFoundError, not_found)
     application.add_exception_handler(ManagedSourceNotFoundError, not_found)

@@ -21,7 +21,7 @@ class ScheduleSettingsValue:
     minute: int
     days: tuple[Weekday, ...]
     timezone: str
-    updated_at: datetime
+    updated_at: datetime | None
     last_scheduled_trigger_at: datetime | None
 
 
@@ -30,3 +30,4 @@ class ScheduleView:
     settings: ScheduleSettingsValue
     next_run_at: datetime | None
     status: SchedulerStatus
+    error: str | None = None

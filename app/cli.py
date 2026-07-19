@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
 from app.config.settings import PROJECT_ROOT
-from app.domain.enums import Category, CrawlStatus
+from app.domain.enums import Category, CrawlStatus, RunTrigger
 from app.domain.exports import ExportFormat, ExportQuery
 from app.domain.queries import ItemFilter
 from app.domain.update import UpdateMode, UpdateResult
@@ -62,16 +62,21 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 async def _run_update(database: Database, arguments: argparse.Namespace) -> int:
-    async with update_pipeline_context(database, UpdatePipeline) as pipeline:
-        result = await pipeline.update(
-            source_id=arguments.source_id,
-            allow_disabled=arguments.allow_disabled,
-            mode=UpdateMode(arguments.mode),
-            max_pages=arguments.max_pages,
-            max_items=arguments.max_items,
-            published_from=_parse_datetime(arguments.published_from),
-            published_to=_parse_datetime(arguments.published_to),
-        )
+    execution = UpdateExecutionService(
+        database,
+        lambda target: update_pipeline_context(target, UpdatePipeline),
+        UpdateLock(),
+    )
+    result = await execution.update(
+        trigger=RunTrigger.MANUAL_CLI,
+        source_id=arguments.source_id,
+        allow_disabled=arguments.allow_disabled,
+        mode=UpdateMode(arguments.mode),
+        max_pages=arguments.max_pages,
+        max_items=arguments.max_items,
+        published_from=_parse_datetime(arguments.published_from),
+        published_to=_parse_datetime(arguments.published_to),
+    )
     _print_result(result)
     return 1 if result.status is CrawlStatus.FAILED else 0
 

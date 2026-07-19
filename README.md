@@ -139,6 +139,7 @@ uv run python -m app.web
 
 网页“设置”页面可开启计划、选择时间/星期和 IANA 时区。应用必须保持运行，内置计划才会执行；
 关机或应用退出期间错过的任务会跳过，重启不会补跑。手动与定时更新共用进程内锁，互不并发。
+独立 CLI 进程与 Web 进程之间不提供跨进程互斥；不要并行运行两个调度器。
 
 ```bash
 uv run python -m app.cli schedule show

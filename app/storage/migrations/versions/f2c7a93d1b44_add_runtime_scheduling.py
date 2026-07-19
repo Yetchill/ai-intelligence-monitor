@@ -17,6 +17,19 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    connection = op.get_bind()
+    unknown_statuses = list(
+        connection.execute(
+            sa.text(
+                "SELECT DISTINCT status FROM crawl_runs "
+                "WHERE status NOT IN ('running', 'success', 'partial_success', 'failed')"
+            )
+        ).scalars()
+    )
+    if unknown_statuses:
+        values = ", ".join(sorted(str(status) for status in unknown_statuses))
+        raise RuntimeError(f"crawl_runs contains unknown status values: {values}")
+
     with op.batch_alter_table("crawl_runs") as batch_op:
         batch_op.add_column(
             sa.Column(

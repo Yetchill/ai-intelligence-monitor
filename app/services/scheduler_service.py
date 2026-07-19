@@ -2,14 +2,24 @@
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from app.domain.scheduling import SchedulerStatus, ScheduleSettingsValue, ScheduleView
 from app.domain.update import UpdateResult
-from app.services.schedule_settings_service import ScheduleSettingsService, next_scheduled_run
+from app.services.schedule_settings_service import (
+    ScheduleSettingsService,
+    ScheduleValidationError,
+    next_scheduled_run,
+    validate_timezone,
+)
 
 LOGGER = logging.getLogger("app.scheduler")
+
+
+class SchedulerReloadError(RuntimeError):
+    """Raised after settings commit when the in-process scheduler could not reload."""
 
 
 class SchedulerClock(Protocol):
@@ -19,7 +29,9 @@ class SchedulerClock(Protocol):
 
 
 class ScheduledUpdateRunner(Protocol):
-    async def try_scheduled_update(self) -> UpdateResult | None: ...
+    async def try_scheduled_update(
+        self, *, before_update: Callable[[], None] | None = None
+    ) -> UpdateResult | None: ...
 
 
 class AsyncioSchedulerClock:
@@ -88,7 +100,16 @@ class SchedulerService:
 
     def view(self) -> ScheduleView:
         settings = self._settings.get()
-        next_run = next_scheduled_run(settings, self._clock.now()) if settings.enabled else None
+        try:
+            validate_timezone(settings.timezone)
+            next_run = next_scheduled_run(settings, self._clock.now()) if settings.enabled else None
+        except ScheduleValidationError as exc:
+            return ScheduleView(
+                settings=settings,
+                next_run_at=None,
+                status=SchedulerStatus.STOPPED,
+                error=str(exc),
+            )
         status = self._status if settings.enabled else SchedulerStatus.DISABLED
         return ScheduleView(settings=settings, next_run_at=next_run, status=status)
 
@@ -109,6 +130,13 @@ class SchedulerService:
                 if await self._clock.wait_until(target, self._wake_event):
                     continue
 
+                now = self._clock.now()
+                if now < target:
+                    continue
+                if now >= target + timedelta(minutes=1):
+                    LOGGER.info("Skipped missed scheduled update at %s", target.isoformat())
+                    continue
+
                 current = self._settings.get()
                 if not current.enabled or _schedule_signature(current) != _schedule_signature(
                     settings
@@ -119,10 +147,13 @@ class SchedulerService:
                     and current.last_scheduled_trigger_at >= target
                 ):
                     continue
-                self._settings.mark_scheduled_trigger(target)
                 self._status = SchedulerStatus.RUNNING
+
+                def mark_trigger(scheduled_target: datetime = target) -> None:
+                    self._settings.mark_scheduled_trigger(scheduled_target)
+
                 try:
-                    result = await self._updates.try_scheduled_update()
+                    result = await self._updates.try_scheduled_update(before_update=mark_trigger)
                     if result is None:
                         LOGGER.info("Scheduled update skipped because another update is running")
                 except asyncio.CancelledError:

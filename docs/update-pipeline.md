@@ -35,12 +35,16 @@ Collector 都实现多年翻页，也不能突破 Collector 自身硬上限。
 不创建第二个或虚假的 CrawlRun。流水线正常返回、网络异常、取消或未捕获异常都通过 `finally`
 释放锁，不使用后台队列、Celery 或 WebSocket。
 
+调度器只在成功取得该锁后写 `last_scheduled_trigger_at`；锁占用跳过时不写该字段且直接等待下一
+个未来日历时刻。应用关闭取消已开始的流水线时，会尽力把已创建的 CrawlRun 收尾为 `failed`，
+避免永久遗留 `running`。
+
 定时调用不传 `source_id` 和 `allow_disabled`，仍由流水线只选择 enabled 来源。每次有效运行把
 `manual_web`、`manual_cli` 或 `scheduled` 交给 `CrawlRunService`；锁占用导致的跳过不进入
 CrawlRun。Pipeline 失败仍按原规则落为 failed/partial_success，调度循环捕获异常后继续。
 
-锁只保证单个 Uvicorn 进程内互斥；当前开发启动方式应使用单进程。未来多进程部署需要持久化
-或跨进程协调机制，但这不属于本阶段。
+锁只保证单个进程内互斥；独立 CLI 进程与 Uvicorn 进程之间不共享锁，当前开发启动方式应使用
+单进程且不得并行运行两个调度器。未来多进程部署需要持久化或跨进程协调机制，但这不属于本阶段。
 
 ## 标准化与分类
 

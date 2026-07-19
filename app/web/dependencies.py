@@ -1,5 +1,6 @@
 """Application dependencies and process-local update exclusion."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.classifiers.rule_based import RuleBasedClassifier
@@ -43,8 +44,10 @@ class WebUpdateService:
     async def update(self, *, source_id: int | None = None) -> UpdateResult:
         return await self._execution.update(trigger=RunTrigger.MANUAL_WEB, source_id=source_id)
 
-    async def try_scheduled_update(self) -> UpdateResult | None:
-        return await self._execution.try_scheduled_update()
+    async def try_scheduled_update(
+        self, *, before_update: Callable[[], None] | None = None
+    ) -> UpdateResult | None:
+        return await self._execution.try_scheduled_update(before_update=before_update)
 
 
 @dataclass(slots=True)

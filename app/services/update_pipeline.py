@@ -1,5 +1,6 @@
 """Shared update pipeline used by CLI and future UI or scheduling adapters."""
 
+import asyncio
 import logging
 import traceback
 from collections.abc import Callable
@@ -82,6 +83,19 @@ class UpdatePipeline:
                 )
                 source_results.append(result)
             return self._crawl_run_service.finish(crawl_run_id, source_results)
+        except asyncio.CancelledError as exc:
+            _log_exception("Update pipeline cancelled", exc)
+            try:
+                self._crawl_run_service.finish(
+                    crawl_run_id,
+                    source_results,
+                    fatal_error="update cancelled during application shutdown",
+                )
+            except Exception as finish_error:
+                _log_exception(
+                    "Failed to move cancelled CrawlRun out of running state", finish_error
+                )
+            raise
         except Exception as exc:
             _log_exception("Uncaught update pipeline failure", exc)
             try:
