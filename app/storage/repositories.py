@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.domain.models import Base, CrawlRun, IntelligenceItem, ItemRevision, Source
-from app.domain.queries import ItemQuery
+from app.domain.queries import ItemFilter, ItemQuery
 from app.storage.database import Database
 
 
@@ -136,28 +136,40 @@ class IntelligenceItemRepository(BaseRepository[IntelligenceItem]):
     def paginate_with_sources(
         self, query: ItemQuery
     ) -> tuple[list[tuple[IntelligenceItem, str]], int]:
-        filters = _item_filters(query)
+        total = self.count_filtered(query)
+        rows = self.list_filtered_with_sources(
+            query,
+            limit=query.per_page,
+            offset=(query.page - 1) * query.per_page,
+        )
+        return rows, total
+
+    def count_filtered(self, item_filter: ItemFilter) -> int:
+        filters = _item_filters(item_filter)
         total_statement = (
             select(func.count(IntelligenceItem.id))
             .join(Source, IntelligenceItem.source_id == Source.id)
             .where(*filters)
         )
-        total = self._session.scalar(total_statement) or 0
-        effective_date = func.coalesce(
-            IntelligenceItem.published_at,
-            IntelligenceItem.discovered_at,
-            IntelligenceItem.updated_at,
-        )
+        return self._session.scalar(total_statement) or 0
+
+    def list_filtered_with_sources(
+        self,
+        item_filter: ItemFilter,
+        *,
+        limit: int,
+        offset: int = 0,
+    ) -> list[tuple[IntelligenceItem, str]]:
+        filters = _item_filters(item_filter)
         statement = (
             select(IntelligenceItem, Source.name)
             .join(Source, IntelligenceItem.source_id == Source.id)
             .where(*filters)
-            .order_by(effective_date.desc(), IntelligenceItem.id.desc())
-            .offset((query.page - 1) * query.per_page)
-            .limit(query.per_page)
+            .order_by(*_item_order())
+            .offset(offset)
+            .limit(limit)
         )
-        rows = [(item, source_name) for item, source_name in self._session.execute(statement)]
-        return rows, total
+        return [(item, source_name) for item, source_name in self._session.execute(statement)]
 
 
 class CrawlRunRepository(BaseRepository[CrawlRun]):
@@ -246,7 +258,7 @@ class RepositoryUnitOfWork:
         self._session.rollback()
 
 
-def _item_filters(query: ItemQuery) -> list[ColumnElement[bool]]:
+def _item_filters(query: ItemFilter) -> list[ColumnElement[bool]]:
     filters: list[ColumnElement[bool]] = [IntelligenceItem.is_active.is_(True)]
     if query.keyword:
         escaped = _escape_like(query.keyword)
@@ -289,6 +301,15 @@ def _item_filters(query: ItemQuery) -> list[ColumnElement[bool]]:
         )
         filters.append(is_unclassified if query.unclassified else ~is_unclassified)
     return filters
+
+
+def _item_order() -> tuple[ColumnElement[Any], ...]:
+    effective_date = func.coalesce(
+        IntelligenceItem.published_at,
+        IntelligenceItem.discovered_at,
+        IntelligenceItem.updated_at,
+    )
+    return effective_date.desc(), IntelligenceItem.id.desc()
 
 
 def _escape_like(value: str) -> str:

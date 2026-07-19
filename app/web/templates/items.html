@@ -69,6 +69,21 @@
     </div>
   </form>
 
+  <section class="export-panel" aria-label="导出当前结果">
+    <div>
+      <strong>导出当前筛选结果</strong>
+      <p>当前条件共 {{ page.total }} 条；导出包含全部匹配记录，不受当前第 {{ page.page }} 页限制。</p>
+    </div>
+    <div class="export-actions">
+      {% for format, label in (("excel", "导出 Excel"), ("word", "导出 Word")) %}
+        <form action="/exports/{{ format }}" method="post">
+          {% for key, value in export_values.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+          <button class="button {{ 'primary' if format == 'excel' else 'subtle' }}" type="submit" {% if page.total == 0 %}disabled{% endif %}>{{ label }}</button>
+        </form>
+      {% endfor %}
+    </div>
+  </section>
+
   {% if page.entries %}
     <div class="result-meta">共 {{ page.total }} 条资讯</div>
     <section class="item-list" aria-label="资讯列表">

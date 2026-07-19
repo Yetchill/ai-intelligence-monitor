@@ -1,18 +1,21 @@
 """Server-rendered HTML pages and POST-only manual operations."""
 
+import re
 from typing import Annotated
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
 
 from fastapi import APIRouter, Form, Path, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.domain.enums import Category
+from app.domain.exports import ExportFormat, ExportQuery
 from app.domain.onboarding import DiscoverySession
 from app.domain.update import UpdateResult
 from app.services.error_sanitization import sanitize_error
 from app.web.schemas import MAX_DATABASE_ID, ItemQueryParams, PageParams, WebInputError
 
 router = APIRouter()
+_ASCII_DOWNLOAD_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -36,6 +39,30 @@ async def items_page(request: Request) -> HTMLResponse:
             if page.page < page.total_pages
             else None,
             "return_to": _current_path(request),
+            "export_values": params.export_values(),
+        },
+    )
+
+
+@router.post("/exports/{export_format}")
+async def export_items(request: Request, export_format: ExportFormat) -> Response:
+    form = await request.form()
+    values: dict[str, str] = {}
+    for key, value in form.multi_items():
+        if not isinstance(value, str) or key in values:
+            raise WebInputError("导出筛选参数无效, 请返回资讯页后重试。")
+        values[key] = value
+    params = ItemQueryParams.parse(values)
+    result = request.app.state.services.exports.export(
+        export_format,
+        ExportQuery(filters=params.to_filter()),
+    )
+    return Response(
+        content=result.content,
+        media_type=result.media_type,
+        headers={
+            "Content-Disposition": _content_disposition(result.filename, result.ascii_filename),
+            "X-Content-Type-Options": "nosniff",
         },
     )
 
@@ -294,3 +321,13 @@ def _safe_return_to(value: str, *, default: str) -> str:
 def _require_existing_page(page: int, total_pages: int) -> None:
     if page > total_pages:
         raise WebInputError(f"页码超出范围; 当前结果共 {total_pages} 页。")
+
+
+def _content_disposition(filename: str, ascii_filename: str) -> str:
+    if (
+        any(ord(character) < 32 or ord(character) == 127 for character in filename)
+        or '"' in filename
+        or _ASCII_DOWNLOAD_NAME.fullmatch(ascii_filename) is None
+    ):
+        raise WebInputError("导出文件名无效。")
+    return f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{quote(filename, safe='')}"

@@ -85,18 +85,28 @@ async def test_three_public_sources_complete_pipeline_in_temporary_database(
             first = await pipeline.update()
             with RepositoryUnitOfWork(database) as uow:
                 first_items = uow.items.list()
+            first_ids_by_url = {item.canonical_url: item.id for item in first_items}
             second = await pipeline.update()
             with RepositoryUnitOfWork(database) as uow:
                 second_items = uow.items.list()
                 runs = uow.crawl_runs.list()
+            second_ids_by_url = {item.canonical_url: item.id for item in second_items}
 
-        assert first.status is not CrawlStatus.RUNNING
+        assert first.status in {CrawlStatus.SUCCESS, CrawlStatus.PARTIAL_SUCCESS}
+        assert second.status in {CrawlStatus.SUCCESS, CrawlStatus.PARTIAL_SUCCESS}
         assert first.source_success >= 1
+        assert second.source_success >= 1
         assert first_items
         assert all(item.title and item.canonical_url and item.source_id for item in first_items)
         assert all(item.category is not None for item in first_items)
-        assert len(second_items) == len(first_items)
-        assert second.new_count == 0
+        assert len(first_items) == len(first_ids_by_url)
+        assert len(second_items) == len(second_ids_by_url)
+        assert first_ids_by_url.keys() <= second_ids_by_url.keys()
+        assert all(
+            second_ids_by_url[canonical_url] == item_id
+            for canonical_url, item_id in first_ids_by_url.items()
+        )
+        assert second.new_count == len(second_ids_by_url.keys() - first_ids_by_url.keys())
         assert len(runs) == 2
         assert all(
             run.finished_at is not None and run.status is not CrawlStatus.RUNNING for run in runs

@@ -20,6 +20,7 @@ from app.config import Settings, get_settings
 from app.config.settings import PROJECT_ROOT
 from app.domain.collection import Fetcher
 from app.domain.enums import Category, CrawlStatus, DiscoveryStatus, SourceType
+from app.domain.exports import ExportError, ExportGenerationError
 from app.services.application_factory import update_pipeline_context
 from app.services.error_sanitization import sanitize_error
 from app.services.source_discovery import DiscoveryTokenError, DiscoveryTokenStore
@@ -217,6 +218,8 @@ def _register_error_handlers(application: FastAPI, templates: Jinja2Templates) -
     application.add_exception_handler(SourceStateError, input_error)
     application.add_exception_handler(DiscoveryTokenError, input_error)
     application.add_exception_handler(ManualCategoryError, input_error)
+    application.add_exception_handler(ExportError, input_error)
+    application.add_exception_handler(ExportGenerationError, unexpected_error)
     application.add_exception_handler(SourceDisabledError, input_error)
     application.add_exception_handler(RequestValidationError, request_validation_error)
     application.add_exception_handler(EntityNotFoundError, not_found)

@@ -9,7 +9,8 @@ from app.classifiers.rule_based import RuleBasedClassifier
 from app.collectors.registry import default_collector_registry
 from app.domain.collection import Fetcher
 from app.domain.update import UpdateResult
-from app.services.application_factory import update_pipeline_context
+from app.services.application_factory import build_export_service, update_pipeline_context
+from app.services.export_service import ExportService
 from app.services.source_discovery import (
     DiscoveryTokenStore,
     SourceDiscoveryService,
@@ -53,6 +54,7 @@ class WebUpdateService:
 class WebServices:
     database: Database
     data: WebDataService
+    exports: ExportService
     updates: WebUpdateService
     onboarding: SourceOnboardingService
     sources: SourceManagementService
@@ -83,6 +85,7 @@ class WebServices:
         return cls(
             database=database,
             data=WebDataService(uow_factory),
+            exports=build_export_service(database),
             updates=WebUpdateService(database, pipeline_context_factory),
             onboarding=SourceOnboardingService(discovery, preview, store),
             sources=SourceManagementService(uow_factory, store),

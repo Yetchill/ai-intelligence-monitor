@@ -19,9 +19,9 @@ class Page[EntryT]:
 
 
 @dataclass(frozen=True, slots=True)
-class ItemQuery:
-    page: int = 1
-    per_page: int = 20
+class ItemFilter:
+    """Filters shared by paginated lists and complete bounded exports."""
+
     keyword: str | None = None
     category: Category | None = None
     source_id: int | None = None
@@ -31,6 +31,12 @@ class ItemQuery:
     discovered_from: datetime | None = None
     discovered_to: datetime | None = None
     unclassified: bool | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ItemQuery(ItemFilter):
+    page: int = 1
+    per_page: int = 20
 
 
 @dataclass(frozen=True, slots=True)
