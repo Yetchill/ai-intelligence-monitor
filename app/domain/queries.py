@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.domain.enums import Category, CrawlStatus, SourceType
+from app.domain.enums import Category, CrawlStatus, RunTrigger, SourceType
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +90,7 @@ class SourceListEntry:
 class CrawlRunListEntry:
     id: int
     status: CrawlStatus
+    trigger: RunTrigger
     started_at: datetime
     finished_at: datetime | None
     source_total: int

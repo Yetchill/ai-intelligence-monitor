@@ -3,7 +3,7 @@
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
-from app.domain.enums import CrawlStatus
+from app.domain.enums import CrawlStatus, RunTrigger
 from app.domain.models import CrawlRun
 from app.domain.update import SourceUpdateResult, SourceUpdateStatus, UpdateResult
 from app.services.error_sanitization import sanitize_error
@@ -16,12 +16,13 @@ class CrawlRunService:
     def __init__(self, uow_factory: UnitOfWorkFactory) -> None:
         self._uow_factory = uow_factory
 
-    def start(self, *, source_total: int) -> int:
+    def start(self, *, source_total: int, trigger: RunTrigger = RunTrigger.MANUAL_CLI) -> int:
         with self._uow_factory() as uow:
             run = uow.crawl_runs.add(
                 CrawlRun(
                     status=CrawlStatus.RUNNING,
                     started_at=datetime.now(UTC),
+                    trigger=trigger,
                     source_total=source_total,
                 )
             )
@@ -97,6 +98,7 @@ def _to_result(
     return UpdateResult(
         crawl_run_id=run.id,
         status=run.status,
+        trigger=run.trigger,
         started_at=_utc(run.started_at),
         finished_at=_utc(run.finished_at),
         source_total=run.source_total,

@@ -14,6 +14,7 @@
         <a href="/" {% if request.url.path == '/' %}aria-current="page"{% endif %}>资讯</a>
         <a href="/sources" {% if request.url.path.startswith('/sources') %}aria-current="page"{% endif %}>来源</a>
         <a href="/runs" {% if request.url.path == '/runs' %}aria-current="page"{% endif %}>更新记录</a>
+        <a href="/settings" {% if request.url.path == '/settings' %}aria-current="page"{% endif %}>设置</a>
       </nav>
     </header>
     <main class="page-shell">

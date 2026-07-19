@@ -1,8 +1,8 @@
-# 本地网页 UI
+# 阶段七本地网页 UI
 
 ## 当前范围
 
-阶段六提供本地服务端渲染页面和 Office 导出：
+阶段七提供本地服务端渲染页面、Office 导出和运行设置：
 
 - `/`：资讯卡片、搜索筛选、收藏、人工分类和当前结果导出；
 - `POST /exports/excel`、`POST /exports/word`：返回当前筛选的 Excel 或 Word 文件；
@@ -10,8 +10,9 @@
 - `/sources/new` 与 `/sources/discover/{token}`：安全检测、类型说明和最多 10 条抓取预览；
 - `/sources/{id}`：允许字段编辑、状态说明和重新检测入口；
 - `/runs`：更新运行记录和净化后的错误摘要。
+- `/settings`：定时开关、时间、星期、IANA 时区、下一次运行和最近触发。
 
-当前不包含来源删除或任意 `collector_config` 编辑、PDF、自动邮件、定时任务、Windows 打包、
+当前不包含来源删除或任意 `collector_config` 编辑、PDF、自动邮件、Windows 计划任务/打包、
 浏览器自动化、真实 AI、登录权限、后台队列或 WebSocket。
 
 ## 准备与启动
@@ -44,9 +45,9 @@ uv run uvicorn app.web.app:app --host 127.0.0.1 --port 8000
 uv run python -m app.web
 ```
 
-访问 `http://127.0.0.1:8000/`。启动会加载项目配置和日志并检查 Alembic 版本。数据库未升级时
-会停止并提示运行 `uv run alembic upgrade head`；应用不会自动删除、重建或迁移数据库，也不会
-在启动时访问公网。
+访问 `http://127.0.0.1:8000/`。启动会加载项目配置和日志、检查 Alembic 版本并读取运行设置。
+数据库未升级时会停止并提示运行 `uv run alembic upgrade head`；应用不会自动删除、重建或迁移
+数据库。计划关闭时不访问公网；计划开启时只等待下一次未来时间，不补跑停机期间任务。
 
 ## 使用
 
@@ -71,6 +72,11 @@ discovered、new、updated、skipped 和待分类数量，并可跳转运行记�
 直接启用。保存表单不包含 collector JSON；来源详情也只编辑名称、enabled、默认分类和说明。
 重新检测先显示独立预览，确认前不改旧配置。完整说明见
 [`source-onboarding.md`](source-onboarding.md)。
+
+设置页面只接受 `HH:MM`、明确星期复选框和 IANA 时区，不接受 cron。保存成功立即唤醒调度器并
+重算；保存失败不改变原设置。应用必须保持运行，内置计划才会执行。手动更新与定时更新共享锁，
+网页冲突返回 409，计划冲突安全跳过。完整语义见 [`scheduling.md`](scheduling.md)。更新记录页会
+显示网页手动、CLI 手动、历史手动或定时来源。
 
 ## 本地安全边界
 

@@ -2,7 +2,7 @@
 
 ## 入口与执行过程
 
-`UpdatePipeline` 是 UI、最小 CLI 和未来任务调度唯一应调用的更新入口。它不硬编码来源或具体
+`UpdatePipeline` 是 UI、最小 CLI 和内置任务调度唯一调用的更新入口。它不硬编码来源或具体
 Collector，执行顺序为：
 
 ```text
@@ -28,12 +28,16 @@ Collector 都实现多年翻页，也不能突破 Collector 自身硬上限。
 全量更新不传 `allow_disabled`，因此只处理 enabled 来源；来源页面也只为 enabled 来源展示立即
 更新按钮。
 
-## Web 同步执行与互斥
+## 手动与定时执行互斥
 
-阶段五 A 允许 HTTP POST 同步等待完整更新。`WebUpdateService` 在进入流水线前获取进程内
-非阻塞锁；同一进程已有更新时返回 409 友好页面，不创建第二个 CrawlRun。按钮提交后由本地
-JavaScript 立即禁用并显示处理中。流水线正常返回、网络异常或未捕获异常都通过 `finally` 释放
-锁，不使用后台队列、Celery 或 WebSocket。
+`WebUpdateService` 和 `SchedulerService` 通过共享 `UpdateExecutionService` 在进入流水线前获取
+同一个进程内非阻塞锁；网页遇到已有更新时返回 409，定时触发遇到已有更新时安全跳过，两者都
+不创建第二个或虚假的 CrawlRun。流水线正常返回、网络异常、取消或未捕获异常都通过 `finally`
+释放锁，不使用后台队列、Celery 或 WebSocket。
+
+定时调用不传 `source_id` 和 `allow_disabled`，仍由流水线只选择 enabled 来源。每次有效运行把
+`manual_web`、`manual_cli` 或 `scheduled` 交给 `CrawlRunService`；锁占用导致的跳过不进入
+CrawlRun。Pipeline 失败仍按原规则落为 failed/partial_success，调度循环捕获异常后继续。
 
 锁只保证单个 Uvicorn 进程内互斥；当前开发启动方式应使用单进程。未来多进程部署需要持久化
 或跨进程协调机制，但这不属于本阶段。

@@ -37,6 +37,7 @@ def test_alembic_initializes_database(tmp_path: Path) -> None:
             "crawl_runs",
             "intelligence_items",
             "item_revisions",
+            "schedule_settings",
             "sources",
         }
     finally:

@@ -19,10 +19,13 @@ from app.classifiers.manual import ManualCategoryError
 from app.config import Settings, get_settings
 from app.config.settings import PROJECT_ROOT
 from app.domain.collection import Fetcher
-from app.domain.enums import Category, CrawlStatus, DiscoveryStatus, SourceType
+from app.domain.enums import Category, CrawlStatus, DiscoveryStatus, RunTrigger, SourceType, Weekday
 from app.domain.exports import ExportError, ExportGenerationError
+from app.domain.scheduling import SchedulerStatus
 from app.services.application_factory import update_pipeline_context
 from app.services.error_sanitization import sanitize_error
+from app.services.schedule_settings_service import ScheduleValidationError
+from app.services.scheduler_service import SchedulerClock
 from app.services.source_discovery import DiscoveryTokenError, DiscoveryTokenStore
 from app.services.source_management import (
     ManagedSourceNotFoundError,
@@ -69,6 +72,21 @@ SOURCE_TYPE_LABELS = {
     SourceType.JSON_API: "JSON 接口",
     SourceType.CUSTOM: "自定义采集器",
 }
+TRIGGER_LABELS = {
+    RunTrigger.LEGACY_MANUAL: "历史手动",
+    RunTrigger.MANUAL_WEB: "网页手动",
+    RunTrigger.MANUAL_CLI: "CLI 手动",
+    RunTrigger.SCHEDULED: "定时",
+}
+WEEKDAY_LABELS = dict(
+    zip(tuple(Weekday), ("周一", "周二", "周三", "周四", "周五", "周六", "周日"), strict=True)
+)
+SCHEDULER_STATUS_LABELS = {
+    SchedulerStatus.DISABLED: "已关闭",
+    SchedulerStatus.WAITING: "等待下一次运行",
+    SchedulerStatus.RUNNING: "正在执行定时更新",
+    SchedulerStatus.STOPPED: "未运行",
+}
 
 
 def create_app(
@@ -80,6 +98,7 @@ def create_app(
     source_fetcher: Fetcher | None = None,
     source_url_guard: SourceUrlGuard | None = None,
     token_store: DiscoveryTokenStore | None = None,
+    scheduler_clock: SchedulerClock | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     resolved_database = database or Database.from_settings(resolved_settings)
@@ -91,6 +110,7 @@ def create_app(
         source_fetcher=source_fetcher,
         source_url_guard=source_url_guard,
         token_store=token_store,
+        scheduler_clock=scheduler_clock,
     )
 
     @asynccontextmanager
@@ -98,6 +118,7 @@ def create_app(
         configure_logging(resolved_settings)
         if enforce_migrations:
             require_current_migration(resolved_database)
+        await services.scheduler.start()
         try:
             yield
         finally:
@@ -152,6 +173,9 @@ def _templates() -> Jinja2Templates:
     globals_mapping["format_time"] = _format_time
     globals_mapping["discovery_status_label"] = _discovery_status_label
     globals_mapping["discovery_type_label"] = _discovery_type_label
+    globals_mapping["trigger_label"] = _trigger_label
+    globals_mapping["weekday_label"] = _weekday_label
+    globals_mapping["scheduler_status_label"] = _scheduler_status_label
     return Jinja2Templates(env=environment)
 
 
@@ -181,6 +205,27 @@ def _discovery_status_label(value: DiscoveryStatus | str | None) -> str:
 def _discovery_type_label(value: SourceType | str) -> str:
     try:
         return SOURCE_TYPE_LABELS.get(SourceType(value), "未知")
+    except ValueError:
+        return "未知"
+
+
+def _trigger_label(value: RunTrigger | str) -> str:
+    try:
+        return TRIGGER_LABELS.get(RunTrigger(value), "未知")
+    except ValueError:
+        return "未知"
+
+
+def _weekday_label(value: Weekday | str) -> str:
+    try:
+        return WEEKDAY_LABELS.get(Weekday(value), "未知")
+    except ValueError:
+        return "未知"
+
+
+def _scheduler_status_label(value: SchedulerStatus | str) -> str:
+    try:
+        return SCHEDULER_STATUS_LABELS.get(SchedulerStatus(value), "未知")
     except ValueError:
         return "未知"
 
@@ -221,6 +266,7 @@ def _register_error_handlers(application: FastAPI, templates: Jinja2Templates) -
     application.add_exception_handler(ExportError, input_error)
     application.add_exception_handler(ExportGenerationError, unexpected_error)
     application.add_exception_handler(SourceDisabledError, input_error)
+    application.add_exception_handler(ScheduleValidationError, input_error)
     application.add_exception_handler(RequestValidationError, request_validation_error)
     application.add_exception_handler(EntityNotFoundError, not_found)
     application.add_exception_handler(ManagedSourceNotFoundError, not_found)

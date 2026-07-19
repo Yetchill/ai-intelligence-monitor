@@ -15,6 +15,12 @@
 
 ### Added
 
+- 增加阶段七强类型单例运行设置、明确星期位图、IANA 时区校验和 Alembic 迁移；
+- 增加 FastAPI 生命周期管理的轻量单进程 `SchedulerService`、未来时间计算和安全重载；
+- 增加 Web/CLI/定时更新共享锁、CrawlRun 触发来源及运行记录来源展示；
+- 增加运行设置页面和 `schedule show/enable/disable/run` 前台 CLI；
+- 增加可控时钟、DST、互斥、恢复、Web/CLI 和生命周期离线测试与调度文档；
+
 - 增加阶段六 `Exporter` Protocol、`ExcelExporter`、`WordExporter` 和 Web/CLI 共享的
   `ExportService`；
 - 增加复用首页筛选条件、最终分类规则和稳定排序的有界导出查询；
@@ -69,6 +75,8 @@
 
 ### Changed
 
+- 项目进度进入阶段七运行设置与轻量定时更新；
+
 - 项目进度进入阶段六 Excel 与 Word 导出；
 - `output/` 改为忽略生成文件并保留 `.gitkeep`；
 
@@ -91,7 +99,7 @@
 
 ### Not Included
 
-- 正式来源库扩充、已读状态、本次新增筛选、定时任务、一键启动、Windows 打包、PDF 导出、
+- 正式来源库扩充、已读状态、本次新增筛选、一键启动、Windows 计划任务、系统托盘、Windows 打包、PDF 导出、
   自动邮件、浏览器采集、来源删除、任意 collector_config 编辑、登录权限和真实 AI 调用。
 
 ## [0.1.0] - 2026-07-17

@@ -16,7 +16,15 @@ from app.domain.queries import ItemFilter
 from app.domain.update import UpdateMode, UpdateResult
 from app.services.application_factory import build_export_service, update_pipeline_context
 from app.services.error_sanitization import sanitize_error
+from app.services.schedule_settings_service import (
+    ScheduleSettingsService,
+    next_scheduled_run,
+    parse_time,
+    parse_weekdays,
+)
+from app.services.scheduler_service import SchedulerService
 from app.services.source_seed_service import SourceSeedService
+from app.services.update_execution_service import UpdateExecutionService, UpdateLock
 from app.services.update_pipeline import UpdatePipeline
 from app.storage.database import Database
 from app.storage.repositories import RepositoryUnitOfWork
@@ -39,7 +47,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if arguments.command == "export":
             _run_export(database, arguments)
             return 0
+        if arguments.command == "schedule":
+            return _run_schedule_command(database, arguments)
         return asyncio.run(_run_update(database, arguments))
+    except KeyboardInterrupt:
+        print("scheduler stopped")
+        return 0
     except Exception as exc:
         print(f"error: {sanitize_error(exc)}", file=sys.stderr)
         return 2
@@ -97,11 +110,78 @@ def _print_runs(database: Database, limit: int) -> None:
         return
     for run in runs:
         print(
-            f"run={run.id} status={run.status.value} started={run.started_at.isoformat()} "
+            f"run={run.id} status={run.status.value} trigger={run.trigger.value} "
+            f"started={run.started_at.isoformat()} "
             f"finished={run.finished_at.isoformat() if run.finished_at else '-'} "
             f"sources={run.source_success}/{run.source_total} new={run.new_count} "
             f"updated={run.updated_count} skipped={run.skipped_count}"
         )
+
+
+def _run_schedule_command(database: Database, arguments: argparse.Namespace) -> int:
+    service = ScheduleSettingsService(lambda: RepositoryUnitOfWork(database))
+    action = arguments.schedule_command
+    if action == "show":
+        _print_schedule(service)
+        return 0
+    current = service.get()
+    if action == "disable":
+        service.save(
+            enabled=False,
+            hour=current.hour,
+            minute=current.minute,
+            days=current.days,
+            timezone=current.timezone,
+        )
+        _print_schedule(service)
+        return 0
+    if action == "enable":
+        hour, minute = parse_time(arguments.schedule_time)
+        service.save(
+            enabled=True,
+            hour=hour,
+            minute=minute,
+            days=parse_weekdays(arguments.days.split(",")),
+            timezone=arguments.timezone or current.timezone,
+        )
+        _print_schedule(service)
+        return 0
+    if action == "run":
+        if not current.enabled:
+            raise ValueError(
+                "schedule is disabled; enable it before running the foreground scheduler"
+            )
+        return asyncio.run(_run_foreground_scheduler(database, service))
+    raise ValueError(f"unknown schedule command: {action}")
+
+
+def _print_schedule(service: ScheduleSettingsService) -> None:
+    settings = service.get()
+    next_run = next_scheduled_run(settings, datetime.now(UTC))
+    print(
+        f"enabled={'true' if settings.enabled else 'false'} "
+        f"time={settings.hour:02d}:{settings.minute:02d} "
+        f"days={','.join(day.value for day in settings.days)} timezone={settings.timezone}"
+    )
+    print(f"next={next_run.isoformat() if next_run else '-'}")
+    last_trigger = (
+        settings.last_scheduled_trigger_at.isoformat()
+        if settings.last_scheduled_trigger_at
+        else "-"
+    )
+    print(f"last_scheduled_trigger={last_trigger}")
+
+
+async def _run_foreground_scheduler(database: Database, settings: ScheduleSettingsService) -> int:
+    updates = UpdateExecutionService(database, update_pipeline_context, UpdateLock())
+    scheduler = SchedulerService(settings, updates)
+    await scheduler.start()
+    print("foreground scheduler running; press Ctrl+C to stop")
+    try:
+        await asyncio.Event().wait()
+    finally:
+        await scheduler.stop()
+    return 0
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -236,6 +316,15 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--unclassified", action="store_const", const=True, default=None)
         command.add_argument("--limit", type=_positive_int)
         command.add_argument("--force", action="store_true")
+    schedule = commands.add_parser("schedule", help="view or manage runtime scheduling")
+    schedule_commands = schedule.add_subparsers(dest="schedule_command", required=True)
+    schedule_commands.add_parser("show", help="show current schedule settings")
+    enable = schedule_commands.add_parser("enable", help="enable and configure scheduling")
+    enable.add_argument("--time", dest="schedule_time", required=True, metavar="HH:MM")
+    enable.add_argument("--days", required=True, help="comma-separated mon,tue,...,sun")
+    enable.add_argument("--timezone", help="IANA timezone; preserves current value when omitted")
+    schedule_commands.add_parser("disable", help="disable scheduling")
+    schedule_commands.add_parser("run", help="run the scheduler in the foreground")
     return parser
 
 
