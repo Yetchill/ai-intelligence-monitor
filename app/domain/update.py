@@ -41,6 +41,15 @@ class SourceUpdateResult:
     duplicate: int = 0
     failed: int = 0
     rejection_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+    failure_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+
+    @property
+    def primary_rejection_reason(self) -> str | None:
+        return _primary_reason(self.rejection_reason_counts)
+
+    @property
+    def primary_failure_reason(self) -> str | None:
+        return _primary_reason(self.failure_reason_counts)
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,3 +76,43 @@ class UpdateResult:
     duplicate_count: int = 0
     failed_count: int = 0
     rejection_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+    failure_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+
+
+@dataclass(frozen=True, slots=True)
+class SourcePreviewItem:
+    title: str
+    original_url: str
+    accepted: bool
+    reason: str
+    quality_score: int
+
+
+@dataclass(frozen=True, slots=True)
+class SourcePreviewResult:
+    source_id: int
+    source_name: str
+    status: SourceUpdateStatus
+    fetched: int = 0
+    normalized: int = 0
+    accepted: int = 0
+    rejected: int = 0
+    failed: int = 0
+    rejection_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+    failure_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+    items: tuple[SourcePreviewItem, ...] = ()
+    error: str | None = None
+
+    @property
+    def primary_rejection_reason(self) -> str | None:
+        return _primary_reason(self.rejection_reason_counts)
+
+    @property
+    def primary_failure_reason(self) -> str | None:
+        return _primary_reason(self.failure_reason_counts)
+
+
+def _primary_reason(counts: dict[str, int]) -> str | None:
+    if not counts:
+        return None
+    return min(counts, key=lambda reason: (-counts[reason], reason))

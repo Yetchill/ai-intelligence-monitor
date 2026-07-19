@@ -1,6 +1,8 @@
 """Explicit, idempotent import of documented example sources."""
 
 from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -21,29 +23,119 @@ from app.utils.url import canonicalize_url
 
 UnitOfWorkFactory = Callable[[], RepositoryUnitOfWork]
 DEFAULT_PRESET_PATH = PROJECT_ROOT / "app" / "config" / "preset_sources.yaml"
+LEGACY_AIIA_URL = "https://www.aiiaorg.cn/"
+
+
+@dataclass(frozen=True, slots=True)
+class SourceSeedResult:
+    created: int
+    promoted: int
+    existing: int
+    conflicts: int
+    expected: int
+
+    @property
+    def initialized(self) -> int:
+        return self.created + self.promoted
 
 
 class SourceSeedService:
     def __init__(self, uow_factory: UnitOfWorkFactory) -> None:
         self._uow_factory = uow_factory
 
-    def seed(self, path: Path = DEFAULT_PRESET_PATH) -> tuple[int, int]:
+    def seed(self, path: Path = DEFAULT_PRESET_PATH) -> SourceSeedResult:
         presets = _load_presets(path)
         created = 0
+        promoted = 0
         existing = 0
+        conflicts = 0
         with self._uow_factory() as uow:
-            existing_urls = {
-                canonicalize_url(source.start_url) or source.start_url
+            existing_by_url = {
+                canonicalize_url(source.start_url) or source.start_url: source
                 for source in uow.sources.list()
             }
             for preset in presets:
-                if preset.start_url in existing_urls:
-                    existing += 1
+                current = existing_by_url.get(preset.start_url)
+                if current is not None:
+                    if _is_legacy_aiia(current, preset):
+                        _promote_legacy_source(current, preset)
+                        promoted += 1
+                    elif current.source_kind is SourceKind.FORMAL:
+                        existing += 1
+                    else:
+                        conflicts += 1
                     continue
                 uow.sources.add(preset)
-                existing_urls.add(preset.start_url)
+                existing_by_url[preset.start_url] = preset
                 created += 1
-        return created, existing
+        return SourceSeedResult(created, promoted, existing, conflicts, len(presets))
+
+
+def _is_legacy_aiia(current: Source, preset: Source) -> bool:
+    if preset.start_url != LEGACY_AIIA_URL or current.start_url != LEGACY_AIIA_URL:
+        return False
+    return (
+        current.name == "AIIA"
+        and current.description is None
+        and current.source_type is SourceType.HTML_LIST
+        and current.collector_name == "html_list"
+        and current.default_category is Category.POLICY_INDUSTRY
+        and current.origin is SourceOrigin.PRESET
+        and current.source_kind is SourceKind.TEST
+        and current.source_tier is SourceTier.FALLBACK
+        and current.audience is SourceAudience.ALL
+        and current.homepage_visible is False
+        and current.export_visible is False
+        and current.content_scope == []
+        and current.include_terms == []
+        and current.exclude_terms == []
+        and current.minimum_quality_score == 50.0
+        and current.accept_title_only is True
+        and current.allow_external_links is False
+        and current.allow_technical_updates is False
+        and current.collector_config == _legacy_aiia_collector_config()
+    )
+
+
+def _promote_legacy_source(current: Source, preset: Source) -> None:
+    """Promote only the exact managed stage-seven record and preserve enabled."""
+
+    for name in (
+        "name",
+        "description",
+        "source_type",
+        "default_category",
+        "collector_name",
+        "collector_config",
+        "origin",
+        "source_kind",
+        "source_tier",
+        "audience",
+        "homepage_visible",
+        "export_visible",
+        "content_scope",
+        "include_terms",
+        "exclude_terms",
+        "minimum_quality_score",
+        "accept_title_only",
+        "allow_external_links",
+        "allow_technical_updates",
+    ):
+        setattr(current, name, deepcopy(getattr(preset, name)))
+
+
+def _legacy_aiia_collector_config() -> dict[str, object]:
+    return {
+        "allowed_domains": ["www.aiiaorg.cn", "mp.weixin.qq.com"],
+        "discovery": {"mode": "selectors", "max_pages": 1, "max_depth": 0, "max_items": 100},
+        "extraction": {
+            "item_selector": ".news-scroll-area div.cursor-pointer",
+            "title_selector": "h3",
+            "date_selector": "span",
+            "embedded_title_key": "title",
+            "embedded_link_key": "external_url",
+        },
+    }
 
 
 def _load_presets(path: Path) -> tuple[Source, ...]:

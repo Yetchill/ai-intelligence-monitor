@@ -13,7 +13,7 @@
               <td>{{ format_time(run.started_at) }}<br><span class="muted">{{ format_time(run.finished_at) if run.finished_at else '尚未完成' }}</span></td>
               <td>{{ run.source_success }} 成功 / {{ run.source_failed }} 失败<br><span class="muted">共 {{ run.source_total }}</span></td>
               <td>{{ run.discovered_count }} / {{ run.normalized_count }}</td><td>{{ run.accepted_count }} / {{ run.rejected_count }}</td><td>{{ run.classified_count }}</td><td>{{ run.new_count }} / {{ run.updated_count }}</td><td>{{ run.duplicate_count }} / {{ run.failed_count }}</td>
-              <td class="error-cell">{% if run.rejection_reason_counts %}{% for reason, count in run.rejection_reason_counts.items() %}{{ reason }}={{ count }}{% if not loop.last %}<br>{% endif %}{% endfor %}{% endif %}{% if run.error_summary %}<br>{{ run.error_summary }}{% elif not run.rejection_reason_counts %}—{% endif %}</td>
+              <td class="error-cell">{% if run.failure_reason_counts %}<strong>失败</strong><br>{% for reason, count in run.failure_reason_counts.items() %}{{ process_reason_label(reason) }}={{ count }}<br>{% endfor %}{% endif %}{% if run.rejection_reason_counts %}<strong>准入拒绝</strong><br>{% for reason, count in run.rejection_reason_counts.items() %}{{ process_reason_label(reason) }}={{ count }}{% if not loop.last %}<br>{% endif %}{% endfor %}{% endif %}{% if run.error_summary %}<br>{{ run.error_summary }}{% elif not run.rejection_reason_counts and not run.failure_reason_counts %}—{% endif %}</td>
             </tr>
           {% endfor %}
         </tbody>

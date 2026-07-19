@@ -1,8 +1,10 @@
 # 正式信息源体系
 
 本文记录阶段八 A 的首批正式来源。最近一次人工可访问性验证日期为 **2026-07-19**。
-正式来源配置位于 `app/config/preset_sources.yaml`，通过现有 `sources seed` 命令幂等导入；
-URL 已存在时只计为 existing，不覆盖名称、启停状态或用户修改。
+正式来源配置位于 `app/config/preset_sources.yaml`，通过 `sources seed-formal` 命令或来源页按钮
+幂等导入；URL 已存在时不覆盖名称、启停状态或用户修改。唯一兼容提升是阶段七原始 AIIA
+受管预设：仅当名称、采集配置、来源属性和新增准入字段都仍与旧版精确一致时，seed 才将其提升
+为当前正式配置，同时原样保留 enabled；任一字段被用户修改就报告 conflict，不做覆盖。
 
 ## 首批正式来源
 

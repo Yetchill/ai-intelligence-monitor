@@ -77,6 +77,11 @@ _SEMVER = re.compile(r"(?:^|\s|v)(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?")
 class ContentAdmissionPolicy:
     """Make auditable editorial admission decisions without classifying items."""
 
+    def validate_source(self, source: Source) -> None:
+        """Fail before collection when persisted admission configuration is invalid."""
+
+        _validated_config(source)
+
     def admit(self, item: CollectedItem, source: Source) -> AdmissionResult:
         try:
             config = _validated_config(source)

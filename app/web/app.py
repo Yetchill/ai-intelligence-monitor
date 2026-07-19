@@ -87,6 +87,18 @@ SCHEDULER_STATUS_LABELS = {
     SchedulerStatus.RUNNING: "正在执行定时更新",
     SchedulerStatus.STOPPED: "未运行",
 }
+PROCESS_REASON_LABELS = {
+    "source.configuration_invalid": "来源配置无效",
+    "fetch.failed": "网络抓取失败",
+    "parse_or_collection.failed": "页面解析或采集器失败",
+    "normalization.failed": "内容规范化失败",
+    "classification.failed": "分类失败 / 已按待分类保留",
+    "persistence.failed": "数据库写入失败",
+    "quality.below_minimum": "质量分低于来源门槛",
+    "content.external_link_not_allowed": "来源不允许外部链接",
+    "source.include_term_missing": "未命中来源准入关键词",
+    "source.content_scope_mismatch": "内容范围不匹配",
+}
 
 
 def create_app(
@@ -178,6 +190,7 @@ def _templates() -> Jinja2Templates:
     globals_mapping["trigger_label"] = _trigger_label
     globals_mapping["weekday_label"] = _weekday_label
     globals_mapping["scheduler_status_label"] = _scheduler_status_label
+    globals_mapping["process_reason_label"] = _process_reason_label
     return Jinja2Templates(env=environment)
 
 
@@ -193,6 +206,10 @@ def _category_label(value: Category | str) -> str:
 
 def _status_label(value: CrawlStatus | str) -> str:
     return STATUS_LABELS.get(CrawlStatus(value), "未知")
+
+
+def _process_reason_label(value: str) -> str:
+    return PROCESS_REASON_LABELS.get(value, value)
 
 
 def _discovery_status_label(value: DiscoveryStatus | str | None) -> str:

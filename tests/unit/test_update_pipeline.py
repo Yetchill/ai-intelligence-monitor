@@ -10,9 +10,10 @@ import pytest
 from app.classifiers.rule_based import RuleBasedClassifier
 from app.collectors.registry import CollectorRegistry
 from app.domain.collection import CollectContext, CollectedItem, Fetcher, FetchResult
-from app.domain.enums import Category, CrawlStatus, RunTrigger, SourceOrigin, SourceType
+from app.domain.enums import Category, CrawlStatus, RunTrigger, SourceKind, SourceOrigin, SourceType
 from app.domain.models import IntelligenceItem, Source
 from app.domain.update import SourceUpdateStatus, UpdateMode
+from app.fetchers.errors import NetworkFetchError
 from app.services.classification_service import ClassificationService
 from app.services.crawl_run_service import CrawlRunService
 from app.services.crawl_service import CrawlService
@@ -228,7 +229,9 @@ async def test_admission_rejection_is_audited_and_never_counted_as_new(
     assert result.new_count == 1
     assert result.rejection_reason_counts == {"content.recruitment": 1}
     with RepositoryUnitOfWork(database) as uow:
-        assert [item.title for item in uow.items.list()] == ["新一代大模型正式发布"]
+        stored_items = uow.items.list()
+        assert [item.title for item in stored_items] == ["新一代大模型正式发布"]
+        assert stored_items[0].admission_accepted is True
         run = uow.crawl_runs.get(result.crawl_run_id)
         assert run is not None
         assert run.rejection_reason_counts == {"content.recruitment": 1}
@@ -494,6 +497,7 @@ async def test_source_failure_is_isolated_and_produces_partial_success(database:
         SourceUpdateStatus.FAILED,
         SourceUpdateStatus.SUCCESS,
     ]
+    assert result.failure_reason_counts == {"parse_or_collection.failed": 1}
     failed_error = result.source_results[0].error or ""
     assert "super-secret" not in failed_error
     assert "<html>" not in failed_error
@@ -550,6 +554,98 @@ async def test_disabled_sources_are_skipped_by_default_and_can_be_explicitly_run
     explicit_result = await pipeline.update(source_id=disabled.id, allow_disabled=True)
     assert explicit_result.source_total == 1
     assert backend.contexts[-1].source_url == disabled.start_url
+
+
+@pytest.mark.asyncio
+async def test_formal_bulk_update_skips_test_fallback_and_disabled_sources(
+    database: Database,
+) -> None:
+    formal = _source("Formal", "https://example.com/formal")
+    formal.source_kind = SourceKind.FORMAL
+    test = _source("Test", "https://example.com/test")
+    fallback = _source("Fallback", "https://example.com/fallback")
+    fallback.source_kind = SourceKind.FALLBACK
+    disabled = _source("Disabled formal", "https://example.com/disabled", enabled=False)
+    disabled.source_kind = SourceKind.FORMAL
+    _add_sources(database, formal, test, fallback, disabled)
+    backend = ScenarioFetcher()
+    backend.responses[formal.start_url] = [[]]
+    backend.responses[test.start_url] = [[]]
+
+    bulk = await _pipeline(database, backend).update(formal_only=True)
+    explicit_test = await _pipeline(database, backend).update(source_id=test.id)
+
+    assert bulk.source_total == 1
+    assert explicit_test.source_total == 1
+    assert [context.source_url for context in backend.contexts] == [
+        formal.start_url,
+        test.start_url,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_failures_are_separate_from_admission_rejections(database: Database) -> None:
+    fetch_failure = _source("Fetch failure", "https://example.com/fetch")
+    rejected = _source("Rejected", "https://example.com/rejected")
+    rejected.minimum_quality_score = 100
+    _add_sources(database, fetch_failure, rejected)
+    backend = ScenarioFetcher()
+    backend.responses[fetch_failure.start_url] = [
+        NetworkFetchError(fetch_failure.start_url, "network unavailable")
+    ]
+    backend.responses[rejected.start_url] = [[_item("https://example.com/rejected/item")]]
+
+    result = await _pipeline(database, backend).update()
+
+    assert result.failed_count == 1
+    assert result.failure_reason_counts == {"fetch.failed": 1}
+    assert result.rejected_count == 1
+    assert result.rejection_reason_counts == {"quality.below_minimum": 1}
+    assert result.source_results[0].rejected == 0
+    assert result.source_results[1].failed == 0
+
+
+@pytest.mark.asyncio
+async def test_invalid_source_configuration_fails_before_collection(database: Database) -> None:
+    source = _source("Invalid", "https://example.com/invalid")
+    source.content_scope = cast(list[str], None)
+    _add_sources(database, source)
+    backend = ScenarioFetcher()
+
+    result = await _pipeline(database, backend).update()
+
+    assert result.source_failed == 1
+    assert result.discovered_count == 0
+    assert result.rejected_count == 0
+    assert result.failure_reason_counts == {"source.configuration_invalid": 1}
+    assert backend.contexts == []
+
+
+@pytest.mark.asyncio
+async def test_saved_source_preview_reports_primary_rejection_without_writes(
+    database: Database,
+) -> None:
+    source = _source("Preview", "https://example.com/preview")
+    source.minimum_quality_score = 50
+    _add_sources(database, source)
+    backend = ScenarioFetcher()
+    backend.responses[source.start_url] = [
+        [
+            _item(
+                "https://example.com/preview/recruitment",
+                title="人工智能企业校园招聘公告",
+            ),
+            _item("https://example.com/preview/release", title="新一代大模型正式发布"),
+        ]
+    ]
+
+    result = await _pipeline(database, backend).preview(source.id)
+
+    assert (result.fetched, result.normalized, result.accepted, result.rejected) == (2, 2, 1, 1)
+    assert result.primary_rejection_reason == "content.recruitment"
+    with RepositoryUnitOfWork(database) as uow:
+        assert uow.items.list() == []
+        assert uow.crawl_runs.list() == []
 
 
 @pytest.mark.asyncio
@@ -983,6 +1079,7 @@ async def test_source_commit_failure_rolls_back_counts_and_later_source_continue
         SourceUpdateStatus.FAILED,
         SourceUpdateStatus.SUCCESS,
     ]
+    assert result.failure_reason_counts == {"persistence.failed": 1}
     with RepositoryUnitOfWork(database) as uow:
         items = uow.items.list()
         failed_source = uow.sources.get(failing.id)

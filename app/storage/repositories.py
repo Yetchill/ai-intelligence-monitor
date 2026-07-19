@@ -80,6 +80,14 @@ class SourceRepository(BaseRepository[Source]):
         statement = select(Source).where(Source.enabled.is_(True)).order_by(Source.id)
         return list(self._session.scalars(statement))
 
+    def list_enabled_formal(self) -> list[Source]:
+        statement = (
+            select(Source)
+            .where(Source.enabled.is_(True), Source.source_kind == SourceKind.FORMAL)
+            .order_by(Source.id)
+        )
+        return list(self._session.scalars(statement))
+
     def list_options(self) -> list[tuple[int, str, SourceKind, bool]]:
         statement = select(Source.id, Source.name, Source.source_kind, Source.enabled).order_by(
             Source.name, Source.id
@@ -316,6 +324,7 @@ def _item_filters(query: ItemFilter) -> list[ColumnElement[bool]]:
                 Source.source_kind == SourceKind.FORMAL,
                 Source.homepage_visible.is_(True),
                 Source.audience.in_((SourceAudience.LEADERSHIP, SourceAudience.ALL)),
+                IntelligenceItem.admission_accepted.is_(True),
             )
         )
     elif query.source_scope is SourceScope.FORMAL_EXPORT:
@@ -324,6 +333,7 @@ def _item_filters(query: ItemFilter) -> list[ColumnElement[bool]]:
                 Source.enabled.is_(True),
                 Source.source_kind == SourceKind.FORMAL,
                 Source.export_visible.is_(True),
+                IntelligenceItem.admission_accepted.is_(True),
             )
         )
     elif query.source_scope is SourceScope.NON_FORMAL:

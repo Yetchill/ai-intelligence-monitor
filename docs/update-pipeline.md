@@ -19,15 +19,17 @@ Collector，执行顺序为：
 → 汇总并完成 CrawlRun
 ```
 
-默认更新全部 enabled 来源。指定 `source_id` 时只更新该来源；不存在会抛出清晰错误，disabled
+流水线底层默认可更新全部 enabled 来源；Web、定时任务和 CLI 的批量入口传入 `formal_only`，
+因此用户看到的“更新全部”只更新 enabled formal。CLI 只有显式 `--all-enabled` 才包含 test /
+fallback。指定 `source_id` 时只更新该来源；不存在会抛出清晰错误，disabled
 来源会拒绝执行，只有显式 `allow_disabled=True` 才允许。`UpdateMode.incremental` 与
 `UpdateMode.history` 共用同一流水线；历史模式只传递受限的页数、条数和时间范围，不承诺所有
 Collector 都实现多年翻页，也不能突破 Collector 自身硬上限。
 
-本地网页的“更新全部来源”和单来源“立即更新”都通过
+本地网页的“更新全部正式来源”和单来源“立即更新”都通过
 `app/services/application_factory.py` 构造该流水线，与 CLI 没有第二份采集或持久化实现。网页
-全量更新不传 `allow_disabled`，因此只处理 enabled 来源；来源页面也只为 enabled 来源展示立即
-更新按钮。
+全量更新不传 `allow_disabled`，并传 `formal_only`；来源页面只为 enabled 来源展示立即更新
+按钮，test/fallback 必须显式选择。
 
 ## 手动与定时执行互斥
 
@@ -40,7 +42,8 @@ Collector 都实现多年翻页，也不能突破 Collector 自身硬上限。
 个未来日历时刻。应用关闭取消已开始的流水线时，会尽力把已创建的 CrawlRun 收尾为 `failed`，
 避免永久遗留 `running`。
 
-定时调用不传 `source_id` 和 `allow_disabled`，仍由流水线只选择 enabled 来源。每次有效运行把
+定时调用不传 `source_id` 和 `allow_disabled`，并明确选择 formal，因此只选择 enabled formal。
+每次有效运行把
 `manual_web`、`manual_cli` 或 `scheduled` 交给 `CrawlRunService`；锁占用导致的跳过不进入
 CrawlRun。Pipeline 失败仍按原规则落为 failed/partial_success，调度循环捕获异常后继续。
 
@@ -51,7 +54,8 @@ CrawlRun。Pipeline 失败仍按原规则落为 failed/partial_success，调度�
 
 入库前重新压缩标题/简介空白，以采集结果的 `original_url` 重新生成 canonical HTTP(S) URL，
 将时间统一解释为 UTC，并通过 JSON 编解码验证 `extra`。空标题、非法 URL 或不可序列化 extra
-只跳过当前记录。来源返回多条记录时单条失败不影响其他记录；非空结果全部无效时该来源失败。
+只跳过当前记录并计入 `normalization.failed`，不计为 admission rejected。来源返回多条记录时
+单条失败不影响其他记录；非空结果全部无效时该来源失败。
 `source_id` 始终取当前数据库 Source，Collector 返回结构没有覆盖它的入口。
 
 `extra._source_discoveries` 是系统保留键。Collector 提交的同名字段一律丢弃，不能伪造或覆盖
@@ -63,7 +67,8 @@ CrawlRun。Pipeline 失败仍按原规则落为 failed/partial_success，调度�
 为 `manual_category or category`。最终有效分类为 `unclassified` 的发现会进入运行统计。
 
 标准化成功后先调用 `ContentAdmissionPolicy`。rejected 不进入分类和保存、不计 new；accepted
-才进入规则分类器。配置异常以 `source.configuration_invalid` 失败关闭，日志只记录来源 id、阶段、
+才进入规则分类器。配置在网络采集前验证；异常以 `source.configuration_invalid` 失败关闭，不会
+按抓取条数制造一批 rejection。日志只记录来源 id、阶段、
 主 reason、分数和 rule ids，不输出正文。Preview、Web/CLI 手动更新和调度更新使用同一 policy。
 
 ## 幂等、去重与跨来源 URL
@@ -81,7 +86,7 @@ updated。last_seen 或自动分类字段单独变化不计 updated。新插入�
 不会破坏整个来源事务。
 
 `discovered` 是 Collector 返回的原始记录数，包含之后被拒绝或批内折叠的记录。标准化失败的
-每条原始记录计入 skipped；同一批次中映射到同一持久化条目的多个有效结果只处理首个，不重复
+每条原始记录计入 skipped 和 failed；同一批次中映射到同一持久化条目的多个有效结果只处理首个，不重复
 进入 new、updated、skipped 或 unclassified。因此这四个结果计数是互斥的持久化决策，不要求
 与原始 discovered 相加相等。该首个有效结果优先规则避免同一条目在一次运行中既 new 又 updated，
 也避免同批重复产生多条 Revision。
@@ -118,6 +123,16 @@ extra。Revision 关联产生它的 CrawlRun。last_seen 和自动分类变化�
 失败会进入一次 failed 收尾尝试，第二次失败只记录日志并重新抛出原始异常，避免递归。
 若数据库在两次收尾时都持续不可写，系统无法物理更新该行，可能保留 running；调用方会收到
 首次异常，后续可据日志和 running 记录人工恢复。这是持久存储完全不可用时的已知边界。
+
+`rejection_reason_counts` 只记录 ContentAdmissionPolicy 的业务准入拒绝；
+`failure_reason_counts` 独立记录 `source.configuration_invalid`、`fetch.failed`、
+`parse_or_collection.failed`、`normalization.failed`、`classification.failed` 和
+`persistence.failed`。`failed_count` 是处理失败数，不能与 rejected 混用。更新完成页按来源显示
+两组主因，CrawlRun 页面显示两组聚合计数。
+
+成功持久化 accepted 条目时写入 `admission_accepted=true`。阶段八以前的历史条目迁移为 false，
+默认领导首页与正式导出同时要求该标记；全部来源、非正式、fallback 和停用历史查询不加此条件，
+因此历史数据保留且可查，但不能绕过准入。
 
 用户可见错误会去掉 HTML、URL 查询串和常见密钥值并限制长度。crawler 日志保留异常类型、
 净化消息和 traceback 文件/行号，不写完整响应 HTML 或秘密值。Repository/UoW 对服务隐藏

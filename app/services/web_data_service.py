@@ -4,6 +4,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from app.classifiers.manual import ManualCategoryError, ManualClassifier
+from app.domain.enums import SourceKind
 from app.domain.queries import (
     CrawlRunListEntry,
     ItemListEntry,
@@ -95,6 +96,10 @@ class WebDataService:
             )
         return Page(entries, page, per_page, total)
 
+    def formal_source_count(self) -> int:
+        with self._uow_factory() as uow:
+            return sum(source.source_kind is SourceKind.FORMAL for source in uow.sources.list())
+
     def list_crawl_runs(self, *, page: int, per_page: int) -> Page[CrawlRunListEntry]:
         with self._uow_factory() as uow:
             runs, total = uow.crawl_runs.paginate(page=page, per_page=per_page)
@@ -123,6 +128,7 @@ class WebDataService:
                     duplicate_count=run.duplicate_count,
                     failed_count=run.failed_count,
                     rejection_reason_counts=dict(run.rejection_reason_counts),
+                    failure_reason_counts=dict(run.failure_reason_counts),
                 )
                 for run in runs
             )

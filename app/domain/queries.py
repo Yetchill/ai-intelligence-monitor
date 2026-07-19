@@ -125,3 +125,4 @@ class CrawlRunListEntry:
     duplicate_count: int
     failed_count: int
     rejection_reason_counts: dict[str, int]
+    failure_reason_counts: dict[str, int]

@@ -83,6 +83,7 @@ class ItemPersistenceService:
                         automatic_category_provider=classified.classification.provider,
                         manual_category=None,
                         fingerprint=fingerprint,
+                        admission_accepted=True,
                         extra=dict(normalized.extra),
                     )
                     existing, inserted = uow.items.add_or_get_existing(candidate)
@@ -149,6 +150,7 @@ class ItemPersistenceService:
         now: datetime,
     ) -> str:
         existing.last_seen_at = now
+        existing.admission_accepted = True
         if existing.source_id != source_id:
             existing.extra = _record_additional_source(
                 existing.extra,

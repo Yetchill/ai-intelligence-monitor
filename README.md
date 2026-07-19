@@ -120,8 +120,14 @@ CLI 不包含终端 UI；它与未来网页和任务调度入口共享同一个 
 
 ```bash
 uv run alembic upgrade head
-uv run python -m app.cli sources seed
+uv run python -m app.cli sources seed-formal
+uv run python -m app.web
 ```
+
+这也是已有数据库从阶段七升级后的完整路径。Alembic 只迁移结构和旧来源安全默认值，不创建业务
+来源；`seed-formal` 才初始化 7 个正式来源。命令可重复执行，不覆盖已有修改，不重新启用已停用
+来源。阶段七原始 AIIA 预设仅在全部受管字段仍与旧版本完全一致时安全提升为正式来源；有修改时
+报告 conflict 并保留原值。来源页也提供同一幂等初始化操作和当前正式来源数量提示。
 
 启动网页：
 
@@ -136,7 +142,7 @@ uv run python -m app.web
 ```
 
 然后访问 `http://127.0.0.1:8000/`。页面可以搜索和筛选资讯、收藏、人工修改分类、添加和编辑
-来源、抓取预览、更新全部 enabled 来源或单个 enabled 来源，并查看运行记录。启动只检查 Alembic 迁移状态，不会
+来源、抓取预览、更新全部 enabled 正式来源或显式选择单个 test/fallback 来源，并查看运行记录。启动只检查 Alembic 迁移状态，不会
 自动迁移、重建数据库、导入来源或执行公网采集。完整说明见
 [`docs/web-ui.md`](docs/web-ui.md)。
 来源识别范围、SSRF 边界、token 和重新检测流程见

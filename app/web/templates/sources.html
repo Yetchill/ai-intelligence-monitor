@@ -3,8 +3,16 @@
 {% block content %}
   <section class="page-heading">
     <div><p class="eyebrow">来源管理</p><h1>来源</h1><p>查看来源状态，添加、编辑、重新检测或更新来源。</p></div>
-    <div class="page-actions"><a class="button" href="/sources/new">添加来源</a><form action="/updates" method="post" data-update-form><button class="button primary" type="submit" data-processing-text="正在更新…">更新全部来源</button></form></div>
+    <div class="page-actions"><a class="button" href="/sources/new">添加来源</a><form action="/updates" method="post" data-update-form><button class="button primary" type="submit" data-processing-text="正在更新…">更新全部正式来源</button></form></div>
   </section>
+  {% if seeded %}<p class="notice success">正式来源初始化完成：新建 {{ seed_created }}，安全提升旧预设 {{ seed_promoted }}，冲突 {{ seed_conflicts }}。重复执行不会覆盖已有修改或重新启用已停用来源。</p>{% endif %}
+  {% if formal_source_count < 7 %}
+    <section class="notice">
+      <strong>当前只有 {{ formal_source_count }} / 7 个正式来源。</strong>
+      <p>数据库迁移只更新结构，不创建业务来源。可在此安全、幂等初始化，也可运行 <code>uv run python -m app.cli sources seed-formal</code>。</p>
+      <form action="/sources/seed-formal" method="post"><button class="button primary" type="submit">初始化正式来源</button></form>
+    </section>
+  {% endif %}
   {% if page.entries %}
     <div class="table-wrap">
       <table>
@@ -23,6 +31,7 @@
               <td>
                 <div class="stack-actions">
                   <a class="button small" href="/sources/{{ source.id }}">详情与编辑</a>
+                  <form action="/sources/{{ source.id }}/preview" method="post" data-update-form><button class="button small" type="submit" data-processing-text="预览中…">运行时预览</button></form>
                   <form action="/sources/{{ source.id }}/enabled" method="post">
                     <input type="hidden" name="enabled" value="{{ 'false' if source.enabled else 'true' }}">
                     <input type="hidden" name="return_to" value="{{ return_to }}">

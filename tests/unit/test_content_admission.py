@@ -188,6 +188,16 @@ def test_default_home_hides_nonformal_and_explicit_all_shows_history(database: D
                     fingerprint=f"{index:064x}",
                 )
             )
+        uow.items.add(
+            IntelligenceItem(
+                source_id=formal.id,
+                title="阶段七历史资讯",
+                original_url="https://items.example/historical",
+                canonical_url="https://items.example/historical",
+                fingerprint="f" * 64,
+                admission_accepted=False,
+            )
+        )
 
     service = WebDataService(lambda: RepositoryUnitOfWork(database))
     leadership = service.list_items(ItemQuery())
@@ -197,6 +207,7 @@ def test_default_home_hides_nonformal_and_explicit_all_shows_history(database: D
 
     assert [entry.source_name for entry in leadership.entries] == ["正式来源"]
     assert {entry.source_name for entry in all_sources.entries} == {"正式来源", "测试来源"}
+    assert {entry.title for entry in all_sources.entries} == {"资讯 0", "资讯 1", "阶段七历史资讯"}
     assert [entry.source_name for entry in non_formal.entries] == ["测试来源"]
     assert [entry.source_name for entry in disabled.entries] == ["测试来源"]
     with RepositoryUnitOfWork(database) as uow:

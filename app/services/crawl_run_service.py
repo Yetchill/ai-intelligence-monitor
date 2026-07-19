@@ -76,9 +76,12 @@ class CrawlRunService:
             run.duplicate_count = sum(result.duplicate for result in source_results)
             run.failed_count = sum(result.failed for result in source_results)
             reason_counts: Counter[str] = Counter()
+            failure_counts: Counter[str] = Counter()
             for result in source_results:
                 reason_counts.update(result.rejection_reason_counts)
+                failure_counts.update(result.failure_reason_counts)
             run.rejection_reason_counts = dict(reason_counts)
+            run.failure_reason_counts = dict(failure_counts)
             run.error_summary = error_summary
             result = _to_result(run, source_results)
         return result
@@ -129,6 +132,7 @@ def _to_result(
         duplicate_count=run.duplicate_count,
         failed_count=run.failed_count,
         rejection_reason_counts=dict(run.rejection_reason_counts),
+        failure_reason_counts=dict(run.failure_reason_counts),
     )
 
 

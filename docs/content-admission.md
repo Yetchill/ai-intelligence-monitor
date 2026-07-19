@@ -3,6 +3,9 @@
 ## 所在层级与流程
 
 `ContentAdmissionPolicy` 位于 application service 层，领域结果位于 `app/domain/admission.py`。
+通过准入并成功进入持久化阶段的资讯会设置 `admission_accepted=true`。新增 migration 对历史资讯
+安全回填 false：历史数据不会删除，仍可在“全部来源”或相应历史范围查看，但不会仅因旧来源被
+提升为 formal 就绕过准入进入默认首页或正式导出；再次抓取并实际通过准入后才置 true。
 调用顺序为：
 
 `Collector -> normalize_collected_item -> ContentAdmissionPolicy -> Classifier -> persistence`

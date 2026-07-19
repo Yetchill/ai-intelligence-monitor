@@ -151,6 +151,7 @@ class IntelligenceItem(Base):
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     is_favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    admission_accepted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     extra: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     source: Mapped[Source] = relationship(back_populates="items")
@@ -190,6 +191,9 @@ class CrawlRun(Base):
     duplicate_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     rejection_reason_counts: Mapped[dict[str, int]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    failure_reason_counts: Mapped[dict[str, int]] = mapped_column(
         JSON, nullable=False, default=dict
     )
     error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)

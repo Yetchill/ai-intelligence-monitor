@@ -30,7 +30,8 @@ async def test_seed_update_and_web_actions_use_temporary_database(tmp_path: Path
     database = Database(database_url)
     try:
         seed = SourceSeedService(lambda: RepositoryUnitOfWork(database))
-        assert seed.seed() == (7, 0)
+        seed_result = seed.seed()
+        assert (seed_result.created, seed_result.promoted) == (7, 0)
 
         async with update_pipeline_context(database) as pipeline:
             first = await pipeline.update()
