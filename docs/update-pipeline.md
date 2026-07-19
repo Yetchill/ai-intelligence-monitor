@@ -10,8 +10,9 @@ Collector，执行顺序为：
 → CollectorRegistry 创建 Collector
 → 网络采集
 → 标准化 CollectedItem
-→ canonical URL / 同来源 fingerprint 去重
+→ ContentAdmissionPolicy 准入
 → RuleBasedClassifier 分类
+→ canonical URL / 同来源 fingerprint 去重
 → 保存或更新 IntelligenceItem
 → 内容变化时创建 ItemRevision
 → 更新 Source 状态
@@ -60,6 +61,10 @@ CrawlRun。Pipeline 失败仍按原规则落为 failed/partial_success，调度�
 每条有效记录调用 `RuleBasedClassifier`。新增条目保存自动类别、分数、原因和 provider。
 已有条目的自动分类字段可以刷新，但 `manual_category` 与收藏永远不被流水线覆盖；有效展示分类
 为 `manual_category or category`。最终有效分类为 `unclassified` 的发现会进入运行统计。
+
+标准化成功后先调用 `ContentAdmissionPolicy`。rejected 不进入分类和保存、不计 new；accepted
+才进入规则分类器。配置异常以 `source.configuration_invalid` 失败关闭，日志只记录来源 id、阶段、
+主 reason、分数和 rule ids，不输出正文。Preview、Web/CLI 手动更新和调度更新使用同一 policy。
 
 ## 幂等、去重与跨来源 URL
 
@@ -135,3 +140,7 @@ SQLAlchemy Session，UI 和 CLI 只接触应用服务和结果对象。
 `manual_category or category`；已有人工分类的条目不计入待确认。独立 `reclassify_item` 在分类
 网络/异步边界外关闭读取 Session，再用短事务写自动分类字段且不覆盖人工分类；`reclassify_all`
 逐条调用该入口，失败前已成功条目保持提交，失败会向调用方抛出。
+
+阶段八新增 `normalized_count`、`accepted_count`、`rejected_count`、`classified_count`、
+`duplicate_count`、`failed_count` 和 `rejection_reason_counts`。旧 discovered/new/updated/skipped/
+unclassified 为兼容统计继续保留；rejected 永远不计 new。

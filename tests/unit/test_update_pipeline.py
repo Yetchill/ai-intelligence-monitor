@@ -106,6 +106,8 @@ def _source(name: str, url: str, *, enabled: bool = True) -> Source:
         collector_name="scenario",
         collector_config={},
         origin=SourceOrigin.PRESET,
+        minimum_quality_score=0,
+        allow_external_links=True,
     )
 
 
@@ -193,6 +195,43 @@ async def test_first_run_persists_classification_and_second_run_is_skipped(
     assert stored_source.last_checked_at is not None
     assert stored_source.last_success_at is not None
     assert stored_source.last_error is None
+
+
+@pytest.mark.asyncio
+async def test_admission_rejection_is_audited_and_never_counted_as_new(
+    database: Database,
+) -> None:
+    source = _source("正式来源", "https://example.com/feed")
+    source.minimum_quality_score = 50
+    _add_sources(database, source)
+    backend = ScenarioFetcher()
+    backend.responses[source.start_url] = [
+        [
+            _item(
+                "https://example.com/recruitment",
+                title="人工智能企业校园招聘公告",
+            ),
+            _item(
+                "https://example.com/release",
+                title="新一代大模型正式发布",
+            ),
+        ]
+    ]
+
+    result = await _pipeline(database, backend).update()
+
+    assert result.discovered_count == 2
+    assert result.normalized_count == 2
+    assert result.accepted_count == 1
+    assert result.rejected_count == 1
+    assert result.classified_count == 1
+    assert result.new_count == 1
+    assert result.rejection_reason_counts == {"content.recruitment": 1}
+    with RepositoryUnitOfWork(database) as uow:
+        assert [item.title for item in uow.items.list()] == ["新一代大模型正式发布"]
+        run = uow.crawl_runs.get(result.crawl_run_id)
+        assert run is not None
+        assert run.rejection_reason_counts == {"content.recruitment": 1}
 
 
 @pytest.mark.asyncio

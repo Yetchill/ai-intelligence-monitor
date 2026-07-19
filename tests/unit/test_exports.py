@@ -21,7 +21,14 @@ from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import event, insert, select
 
 from app import cli
-from app.domain.enums import Category, SourceOrigin, SourceType
+from app.domain.enums import (
+    Category,
+    SourceAudience,
+    SourceKind,
+    SourceOrigin,
+    SourceTier,
+    SourceType,
+)
 from app.domain.exports import (
     EmptyExportError,
     ExportFormat,
@@ -62,6 +69,11 @@ def _source(name: str, url: str) -> Source:
         collector_name="rss",
         collector_config={},
         origin=SourceOrigin.PRESET,
+        source_kind=SourceKind.FORMAL,
+        source_tier=SourceTier.OFFICIAL_COMPANY,
+        audience=SourceAudience.LEADERSHIP,
+        homepage_visible=True,
+        export_visible=True,
     )
 
 
@@ -181,7 +193,7 @@ def test_excel_normal_export_structure_and_safe_filename(database: Database) -> 
         assert result.filename.endswith(".xlsx") and "/" not in result.filename
         assert workbook.sheetnames == ["资讯列表", "导出说明"]  # type: ignore[attr-defined]
         assert sheet.freeze_panes == "A2"
-        assert sheet.auto_filter.ref == "A1:L5"
+        assert sheet.auto_filter.ref == "A1:M5"
         header_cells = [cast(Cell, cell) for cell in sheet[1]]
         assert [cell.value for cell in header_cells] == list(ExcelExporter._headers)
         assert all(cast(bool, cell.font.bold) for cell in header_cells)

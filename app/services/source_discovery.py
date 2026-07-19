@@ -16,12 +16,22 @@ from bs4 import BeautifulSoup, Tag
 from app.collectors.registry import CollectorRegistry
 from app.domain.classification import Classifier
 from app.domain.collection import CollectContext, Fetcher, FetchResult
-from app.domain.enums import Category, DiscoveryStatus, SourceOrigin, SourceType
+from app.domain.enums import (
+    Category,
+    DiscoveryStatus,
+    SourceAudience,
+    SourceKind,
+    SourceOrigin,
+    SourceTier,
+    SourceType,
+)
 from app.domain.models import Source
 from app.domain.onboarding import DiscoveryResult, DiscoverySession, PreviewItem, PreviewResult
 from app.fetchers.errors import FetchError, ForbiddenFetchError
+from app.services.content_admission import ContentAdmissionPolicy
+from app.services.item_normalization import ItemNormalizationError, normalize_collected_item
 from app.services.source_url_security import SourceUrlGuard, SourceUrlSecurityError
-from app.utils.url import canonicalize_url, is_http_url
+from app.utils.url import canonicalize_url
 
 COMMON_FEED_PATHS = ("/feed", "/rss", "/atom.xml", "/feed.xml")
 HTML_SELECTOR_CANDIDATES = (
@@ -213,10 +223,12 @@ class SourcePreviewService:
         registry: CollectorRegistry,
         fetcher: Fetcher,
         classifier: Classifier,
+        admission_policy: ContentAdmissionPolicy | None = None,
     ) -> None:
         self._registry = registry
         self._fetcher = fetcher
         self._classifier = classifier
+        self._admission_policy = admission_policy or ContentAdmissionPolicy()
 
     async def preview(self, discovery: DiscoveryResult) -> PreviewResult:
         if not discovery.usable:
@@ -230,6 +242,22 @@ class SourcePreviewService:
             collector_name=discovery.collector_name,
             collector_config=discovery.collector_config,
             origin=SourceOrigin.USER_ADDED,
+            source_kind=(
+                SourceKind.FALLBACK
+                if discovery.source_type is SourceType.GITHUB_RELEASE
+                else SourceKind.TEST
+            ),
+            source_tier=SourceTier.FALLBACK,
+            audience=SourceAudience.ALL,
+            homepage_visible=False,
+            export_visible=False,
+            content_scope=[],
+            include_terms=[],
+            exclude_terms=[],
+            minimum_quality_score=15,
+            accept_title_only=True,
+            allow_external_links=False,
+            allow_technical_updates=False,
         )
         collector = self._registry.create(source, self._fetcher)
         config = _preview_config(discovery)
@@ -249,26 +277,31 @@ class SourcePreviewService:
         seen_urls: set[str] = set()
         seen_titles: set[str] = set()
         rejected = 0
+        admission_reasons: dict[str, int] = {}
         for item in collected:
             if len(items) >= 10:
                 break
-            if not is_http_url(item.original_url):
-                errors.append("已跳过一条链接格式无效的预览记录。")
+            try:
+                normalized_item = normalize_collected_item(item)
+            except ItemNormalizationError:
+                errors.append("已跳过一条无法规范化的预览记录。")
                 rejected += 1
                 continue
-            normalized_url = canonicalize_url(item.original_url)
-            normalized_title = " ".join(item.title.split())
+            admission = self._admission_policy.admit(normalized_item, source)
+            if not admission.accepted:
+                rejected += 1
+                admission_reasons[admission.reason] = admission_reasons.get(admission.reason, 0) + 1
+                continue
+            normalized_url = normalized_item.canonical_url
+            normalized_title = normalized_item.title
             title_key = normalized_title.casefold()
-            if (
-                normalized_url is None
-                or not normalized_title
-                or normalized_url in seen_urls
-                or title_key in seen_titles
-            ):
+            if not normalized_title or normalized_url in seen_urls or title_key in seen_titles:
                 rejected += 1
                 continue
             try:
-                classification = await self._classifier.classify(item, source_default=None)
+                classification = await self._classifier.classify(
+                    normalized_item, source_default=None
+                )
                 category = classification.category
             except Exception:
                 category = Category.UNCLASSIFIED
@@ -277,13 +310,18 @@ class SourcePreviewService:
                 PreviewItem(
                     title=_bounded_text(normalized_title, MAX_PREVIEW_TITLE_LENGTH) or "无标题",
                     url=normalized_url,
-                    published_at=item.published_at,
-                    summary=_bounded_text(item.summary, MAX_PREVIEW_SUMMARY_LENGTH),
+                    published_at=normalized_item.published_at,
+                    summary=_bounded_text(normalized_item.summary, MAX_PREVIEW_SUMMARY_LENGTH),
                     category=category,
                 )
             )
             seen_urls.add(normalized_url)
             seen_titles.add(title_key)
+        if admission_reasons:
+            summary = ", ".join(
+                f"{reason}={count}" for reason, count in sorted(admission_reasons.items())
+            )
+            errors.append(f"内容准入已拒绝 {sum(admission_reasons.values())} 条: {summary}")
         if rejected >= 3 and rejected * 3 >= len(collected) * 2:
             errors.append("预览中重复或无效记录过多, 当前结果需要人工处理且不能直接启用。")
             items.clear()

@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
 from app.config.settings import PROJECT_ROOT
-from app.domain.enums import Category, CrawlStatus, RunTrigger
+from app.domain.enums import Category, CrawlStatus, RunTrigger, SourceScope
 from app.domain.exports import ExportFormat, ExportQuery
 from app.domain.queries import ItemFilter
 from app.domain.update import UpdateMode, UpdateResult
@@ -93,6 +93,7 @@ def _print_result(result: UpdateResult) -> None:
         f"sources={result.source_success}/{result.source_total} "
         f"discovered={result.discovered_count} new={result.new_count} "
         f"updated={result.updated_count} skipped={result.skipped_count} "
+        f"accepted={result.accepted_count} rejected={result.rejected_count} "
         f"unclassified={result.unclassified_count}"
     )
     if result.source_total == 0:
@@ -222,6 +223,7 @@ def _run_export(database: Database, arguments: argparse.Namespace) -> None:
                 discovered_from=discovered_from,
                 discovered_to=discovered_to,
                 unclassified=arguments.unclassified,
+                source_scope=SourceScope.FORMAL_EXPORT,
             ),
             limit=arguments.limit,
         ),

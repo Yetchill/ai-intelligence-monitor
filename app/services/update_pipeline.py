@@ -3,8 +3,10 @@
 import asyncio
 import logging
 import traceback
+from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime
+from hashlib import sha256
 from typing import cast
 
 from app.domain.classification import ClassificationResult
@@ -18,6 +20,7 @@ from app.domain.update import (
     UpdateResult,
 )
 from app.services.classification_service import ClassificationService
+from app.services.content_admission import ContentAdmissionPolicy
 from app.services.crawl_run_service import CrawlRunService
 from app.services.crawl_service import CrawlService
 from app.services.error_sanitization import sanitize_error
@@ -48,12 +51,14 @@ class UpdatePipeline:
         classification_service: ClassificationService,
         persistence_service: ItemPersistenceService | None = None,
         crawl_run_service: CrawlRunService | None = None,
+        admission_policy: ContentAdmissionPolicy | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._crawl_service = crawl_service
         self._classification_service = classification_service
         self._persistence_service = persistence_service or ItemPersistenceService(uow_factory)
         self._crawl_run_service = crawl_run_service or CrawlRunService(uow_factory)
+        self._admission_policy = admission_policy or ContentAdmissionPolicy()
 
     async def update(
         self,
@@ -133,7 +138,10 @@ class UpdatePipeline:
         published_to: datetime | None,
     ) -> SourceUpdateResult:
         discovered = 0
-        invalid_skipped = 0
+        normalized_count = 0
+        rejected_count = 0
+        failed_count = 0
+        rejection_reasons: Counter[str] = Counter()
         try:
             collected = await self._crawl_service.collect(
                 source,
@@ -152,7 +160,9 @@ class UpdatePipeline:
                         normalize_collected_item(item, keep_query_params=keep_query_params)
                     )
                 except ItemNormalizationError as exc:
-                    invalid_skipped += 1
+                    rejected_count += 1
+                    failed_count += 1
+                    rejection_reasons["normalization.invalid"] += 1
                     LOGGER.warning(
                         "Skipped invalid item from source_id=%s: %s",
                         source.id,
@@ -167,18 +177,56 @@ class UpdatePipeline:
                     source_name=source.name,
                     status=SourceUpdateStatus.FAILED,
                     discovered=discovered,
-                    skipped=invalid_skipped,
+                    skipped=rejected_count,
+                    rejected=rejected_count,
+                    failed=failed_count,
+                    rejection_reason_counts=dict(rejection_reasons),
                     error=error,
                 )
 
-            classified_items: list[ClassifiedItem] = []
+            normalized_count = len(normalized_items)
+            admitted_items: list[CollectedItem] = []
             for item in normalized_items:
+                decision = self._admission_policy.admit(item, source)
+                if decision.accepted:
+                    admitted_items.append(item)
+                    LOGGER.info(
+                        "Content accepted source_id=%s stage=admission item_ref=%s "
+                        "reason=%s score=%s rules=%s",
+                        source.id,
+                        _item_ref(item),
+                        decision.reason,
+                        decision.quality_score,
+                        ",".join(match.rule_id for match in decision.matched_rules),
+                    )
+                    continue
+                rejected_count += 1
+                rejection_reasons[decision.reason] += 1
+                if decision.reason == "source.configuration_invalid":
+                    LOGGER.warning(
+                        "Admission configuration rejected source_id=%s stage=admission rules=%s",
+                        source.id,
+                        ",".join(match.rule_id for match in decision.matched_rules),
+                    )
+                LOGGER.info(
+                    "Content rejected source_id=%s stage=admission item_ref=%s "
+                    "reason=%s score=%s rules=%s",
+                    source.id,
+                    _item_ref(item),
+                    decision.reason,
+                    decision.quality_score,
+                    ",".join(match.rule_id for match in decision.matched_rules),
+                )
+
+            classified_items: list[ClassifiedItem] = []
+            for item in admitted_items:
                 try:
                     classification = await self._classification_service.classify(
                         item,
                         source_default=source.default_category,
                     )
                 except Exception as exc:
+                    failed_count += 1
                     _log_exception(
                         f"Classification failed for source_id={source.id}; using unclassified",
                         exc,
@@ -196,7 +244,7 @@ class UpdatePipeline:
                 source_name=source.name,
                 crawl_run_id=crawl_run_id,
                 items=classified_items,
-                invalid_skipped=invalid_skipped,
+                invalid_skipped=rejection_reasons["normalization.invalid"],
                 checked_at=datetime.now(UTC),
             )
             return SourceUpdateResult(
@@ -208,6 +256,13 @@ class UpdatePipeline:
                 updated=stats.updated,
                 skipped=stats.skipped,
                 unclassified=stats.unclassified,
+                normalized=normalized_count,
+                accepted=len(admitted_items),
+                rejected=rejected_count,
+                classified=len(classified_items),
+                duplicate=stats.duplicate,
+                failed=failed_count,
+                rejection_reason_counts=dict(rejection_reasons),
             )
         except Exception as exc:
             safe_error = sanitize_error(exc)
@@ -218,7 +273,11 @@ class UpdatePipeline:
                 source_name=source.name,
                 status=SourceUpdateStatus.FAILED,
                 discovered=discovered,
-                skipped=invalid_skipped,
+                normalized=normalized_count,
+                rejected=rejected_count,
+                skipped=rejection_reasons["normalization.invalid"],
+                failed=failed_count + 1,
+                rejection_reason_counts=dict(rejection_reasons),
                 error=safe_error,
             )
 
@@ -251,3 +310,9 @@ def _keep_query_params(source: Source) -> tuple[str, ...] | None:
         return None
     values = cast(list[object], value)
     return tuple(item for item in values if isinstance(item, str))
+
+
+def _item_ref(item: CollectedItem) -> str:
+    """Return a stable short audit reference without logging title, body, or URL."""
+
+    return sha256(item.canonical_url.encode("utf-8")).hexdigest()[:16]

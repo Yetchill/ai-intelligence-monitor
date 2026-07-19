@@ -238,6 +238,7 @@ def _selector_items(
                     canonical_url=url,
                     published_at=parse_datetime(date_text),
                     summary=summary,
+                    extra={"link_type": _link_type(page_url, url)},
                 )
             )
         except (AttributeError, TypeError, ValueError):
@@ -304,6 +305,7 @@ def _filtered_link_items(
                     canonical_url=url,
                     published_at=parse_datetime(_nearby_date(anchor)),
                     summary=_nearby_summary(anchor, title),
+                    extra={"link_type": _link_type(page_url, url)},
                 )
             )
         except (AttributeError, TypeError, ValueError):
@@ -359,6 +361,12 @@ def _valid_title(title: str, url: str, config: _HTMLConfig, *, apply_include_rul
             pattern.casefold() in lowered_url for pattern in config.include_url
         )
     return True
+
+
+def _link_type(page_url: str, item_url: str) -> str:
+    page_host = (urlsplit(page_url).hostname or "").casefold()
+    item_host = (urlsplit(item_url).hostname or "").casefold()
+    return "same_site" if page_host == item_host else "external"
 
 
 def _url_is_excluded(url: str, config: _HTMLConfig) -> bool:

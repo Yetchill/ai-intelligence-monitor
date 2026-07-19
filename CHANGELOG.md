@@ -20,6 +20,13 @@
 
 ### Added
 
+- 增加阶段八 A formal/test/fallback 来源体系、来源等级/受众/首页与导出可见性及安全 Alembic 迁移；
+- 增加 7 个官方正式来源的幂等 seed，移除 Qwen-Agent、Google 技术验收默认来源；
+- 增加独立 `ContentAdmissionPolicy`、结构化 matched rules、0..100 质量分、来源级 include/exclude/scope；
+- 增加招聘、培训、营销、活动与 GitHub 维护版本拒绝规则，以及重大发布、政策、征集、名单和落地信号；
+- 增加 CrawlRun 准入统计和拒绝原因审计、首页来源范围筛选、正式导出来源性质标记；
+- 增加正式来源调研、准入运维文档以及离线和 network marker 测试。
+
 - 增加阶段七强类型单例运行设置、明确星期位图、IANA 时区校验和 Alembic 迁移；
 - 增加 FastAPI 生命周期管理的轻量单进程 `SchedulerService`、未来时间计算和安全重载；
 - 增加 Web/CLI/定时更新共享锁、CrawlRun 触发来源及运行记录来源展示；

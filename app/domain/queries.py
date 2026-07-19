@@ -3,7 +3,14 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.domain.enums import Category, CrawlStatus, RunTrigger, SourceType
+from app.domain.enums import (
+    Category,
+    CrawlStatus,
+    RunTrigger,
+    SourceKind,
+    SourceScope,
+    SourceType,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +38,7 @@ class ItemFilter:
     discovered_from: datetime | None = None
     discovered_to: datetime | None = None
     unclassified: bool | None = None
+    source_scope: SourceScope = SourceScope.LEADERSHIP
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +61,7 @@ class ItemListEntry:
     is_favorite: bool
     source_id: int
     source_name: str
+    source_kind: SourceKind
 
     @property
     def effective_category(self) -> Category:
@@ -67,6 +76,8 @@ class ItemListEntry:
 class SourceOption:
     id: int
     name: str
+    source_kind: SourceKind
+    enabled: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +95,11 @@ class SourceListEntry:
     last_checked_at: datetime | None
     last_success_at: datetime | None
     last_error: str | None
+    source_kind: SourceKind
+    source_tier: str
+    audience: str
+    homepage_visible: bool
+    export_visible: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,3 +118,10 @@ class CrawlRunListEntry:
     skipped_count: int
     unclassified_count: int
     error_summary: str | None
+    normalized_count: int
+    accepted_count: int
+    rejected_count: int
+    classified_count: int
+    duplicate_count: int
+    failed_count: int
+    rejection_reason_counts: dict[str, int]

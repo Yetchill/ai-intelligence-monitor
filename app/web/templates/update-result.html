@@ -9,6 +9,8 @@
       <div><strong>{{ result.discovered_count }}</strong><span>发现</span></div><div><strong>{{ result.new_count }}</strong><span>新增</span></div>
       <div><strong>{{ result.updated_count }}</strong><span>更新</span></div><div><strong>{{ result.skipped_count }}</strong><span>跳过</span></div>
       <div><strong>{{ result.unclassified_count }}</strong><span>待分类</span></div>
+      <div><strong>{{ result.normalized_count }}</strong><span>规范化</span></div><div><strong>{{ result.accepted_count }}</strong><span>准入</span></div>
+      <div><strong>{{ result.rejected_count }}</strong><span>拒绝</span></div><div><strong>{{ result.classified_count }}</strong><span>已分类</span></div>
     </div>
     {% if error_summary %}<p class="notice error">{{ error_summary }}</p>{% endif %}
     <div class="page-actions"><a class="button primary" href="/">返回资讯</a><a class="button subtle" href="/runs#run-{{ result.crawl_run_id }}">查看更新记录</a></div>

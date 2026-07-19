@@ -18,7 +18,15 @@ from sqlalchemy import event
 from sqlalchemy.exc import OperationalError
 
 from app import cli
-from app.domain.enums import Category, CrawlStatus, SourceOrigin, SourceType
+from app.domain.enums import (
+    Category,
+    CrawlStatus,
+    SourceAudience,
+    SourceKind,
+    SourceOrigin,
+    SourceTier,
+    SourceType,
+)
 from app.domain.models import CrawlRun, IntelligenceItem, Source
 from app.domain.update import UpdateResult
 from app.services.source_seed_service import SourceSeedService
@@ -49,6 +57,11 @@ def _source(name: str, url: str, *, enabled: bool = True) -> Source:
         collector_name="rss",
         collector_config={},
         origin=SourceOrigin.PRESET,
+        source_kind=SourceKind.FORMAL,
+        source_tier=SourceTier.OFFICIAL_COMPANY,
+        audience=SourceAudience.LEADERSHIP,
+        homepage_visible=True,
+        export_visible=True,
     )
 
 
@@ -730,33 +743,34 @@ def test_item_query_uses_bounded_selects_without_n_plus_one(
 def test_seed_sources_is_idempotent_and_does_not_overwrite_existing(database: Database) -> None:
     service = SourceSeedService(lambda: RepositoryUnitOfWork(database))
 
-    assert service.seed() == (3, 0)
+    assert service.seed() == (7, 0)
     with RepositoryUnitOfWork(database) as uow:
-        google = uow.sources.get_by_start_url("https://blog.google/rss")
-        assert google is not None
-        google.name = "用户保留名称"
-        google.enabled = False
-    assert service.seed() == (0, 3)
+        openai = uow.sources.get_by_start_url("https://openai.com/news/rss.xml")
+        assert openai is not None
+        openai.name = "用户保留名称"
+        openai.enabled = False
+    assert service.seed() == (0, 7)
     with RepositoryUnitOfWork(database) as uow:
         sources = uow.sources.list()
-        google = uow.sources.get_by_start_url("https://blog.google/rss")
-    assert len(sources) == 3
-    assert google is not None
-    assert google.name == "用户保留名称"
-    assert google.enabled is False
+        openai = uow.sources.get_by_start_url("https://openai.com/news/rss.xml")
+    assert len(sources) == 7
+    assert openai is not None
+    assert openai.name == "用户保留名称"
+    assert openai.enabled is False
+    assert all("Qwen-Agent" not in source.name for source in sources)
 
 
 def test_seed_does_not_duplicate_equivalent_user_url(database: Database) -> None:
-    existing = _source("用户来源", "https://blog.google/rss/", enabled=False)
+    existing = _source("用户来源", "https://openai.com/news/rss.xml/", enabled=False)
     with RepositoryUnitOfWork(database) as uow:
         uow.sources.add(existing)
 
     service = SourceSeedService(lambda: RepositoryUnitOfWork(database))
 
-    assert service.seed() == (2, 1)
+    assert service.seed() == (6, 1)
     with RepositoryUnitOfWork(database) as uow:
         sources = uow.sources.list()
-    assert len(sources) == 3
+    assert len(sources) == 7
     assert sum(source.name == "用户来源" for source in sources) == 1
     assert next(source for source in sources if source.name == "用户来源").enabled is False
 
@@ -782,12 +796,12 @@ def test_seed_sources_cli_is_idempotent(
     verification = Database(database_url)
     try:
         with RepositoryUnitOfWork(verification) as uow:
-            assert len(uow.sources.list()) == 3
+            assert len(uow.sources.list()) == 7
     finally:
         verification.dispose()
     output = capsys.readouterr().out
-    assert "created=3 existing=0" in output
-    assert "created=0 existing=3" in output
+    assert "created=7 existing=0" in output
+    assert "created=0 existing=7" in output
 
 
 def test_web_test_database_is_not_formal_database(database: Database) -> None:

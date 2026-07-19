@@ -44,6 +44,64 @@ def test_alembic_initializes_database(tmp_path: Path) -> None:
         database.dispose()
 
 
+def test_content_source_migration_disables_qwen_without_deleting_history(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "qwen-migration.db"
+    config = Config(PROJECT_ROOT / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+    command.upgrade(config, "f2c7a93d1b44")
+    database = Database(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with database.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO sources "
+                    "(id, name, source_type, start_url, enabled, collector_name, "
+                    "collector_config, requires_custom_collector, origin, created_at, updated_at) "
+                    "VALUES (1, 'Qwen-Agent Releases', 'github_release', "
+                    "'https://github.com/QwenLM/Qwen-Agent/releases', 1, "
+                    "'github_release', '{}', 0, 'preset', :now, :now)"
+                ),
+                {"now": "2026-07-19 00:00:00"},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO intelligence_items "
+                    "(source_id, title, original_url, canonical_url, discovered_at, "
+                    "last_seen_at, updated_at, category, fingerprint, is_favorite, "
+                    "is_active, extra) "
+                    "VALUES (1, '历史版本', 'https://github.com/QwenLM/Qwen-Agent/releases/1', "
+                    "'https://github.com/QwenLM/Qwen-Agent/releases/1', :now, :now, :now, "
+                    "'agent_product', :fingerprint, 1, 1, '{}')"
+                ),
+                {"now": "2026-07-19 00:00:00", "fingerprint": "a" * 64},
+            )
+    finally:
+        database.dispose()
+
+    command.upgrade(config, "head")
+    migrated = Database(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with migrated.engine.connect() as connection:
+            source_row = connection.execute(
+                text(
+                    "SELECT enabled, source_kind, homepage_visible, export_visible "
+                    "FROM sources WHERE id = 1"
+                )
+            ).one()
+            history = connection.execute(
+                text(
+                    "SELECT title, is_favorite, manual_category "
+                    "FROM intelligence_items WHERE source_id = 1"
+                )
+            ).one()
+        assert tuple(source_row) == (0, "fallback", 0, 0)
+        assert tuple(history) == ("历史版本", 1, None)
+    finally:
+        migrated.dispose()
+
+
 def test_web_startup_migration_check_does_not_upgrade_database(tmp_path: Path) -> None:
     database_path = tmp_path / "behind-head.db"
     database_url = f"sqlite:///{database_path.as_posix()}"

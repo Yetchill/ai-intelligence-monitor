@@ -7,7 +7,15 @@ from threading import Lock
 
 from sqlalchemy.exc import IntegrityError, OperationalError
 
-from app.domain.enums import Category, DiscoveryStatus, SourceOrigin, SourceType
+from app.domain.enums import (
+    Category,
+    DiscoveryStatus,
+    SourceAudience,
+    SourceKind,
+    SourceOrigin,
+    SourceTier,
+    SourceType,
+)
 from app.domain.models import Source
 from app.domain.onboarding import DiscoverySession
 from app.services.source_discovery import (
@@ -137,6 +145,22 @@ class SourceManagementService:
                             discovery_confidence=discovery.discovery_confidence,
                             requires_custom_collector=discovery.requires_custom_collector,
                             origin=SourceOrigin.USER_ADDED,
+                            source_kind=(
+                                SourceKind.FALLBACK
+                                if discovery.source_type is SourceType.GITHUB_RELEASE
+                                else SourceKind.TEST
+                            ),
+                            source_tier=SourceTier.FALLBACK,
+                            audience=SourceAudience.ALL,
+                            homepage_visible=False,
+                            export_visible=False,
+                            content_scope=[],
+                            include_terms=[],
+                            exclude_terms=[],
+                            minimum_quality_score=15,
+                            accept_title_only=True,
+                            allow_external_links=False,
+                            allow_technical_updates=False,
                             last_tested_at=discovery.tested_at,
                         )
                     )

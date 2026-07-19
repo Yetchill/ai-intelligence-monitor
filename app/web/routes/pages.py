@@ -62,7 +62,7 @@ async def export_items(request: Request, export_format: ExportFormat) -> Respons
     params = ItemQueryParams.parse(values)
     result = request.app.state.services.exports.export(
         export_format,
-        ExportQuery(filters=params.to_filter()),
+        ExportQuery(filters=params.to_filter(for_export=True)),
     )
     return Response(
         content=result.content,

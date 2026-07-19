@@ -1,4 +1,4 @@
-# 阶段七运行设置与轻量定时更新架构
+# 阶段八 A 正式来源与内容准入架构
 
 ## 范围
 
@@ -229,3 +229,18 @@ ItemRevision 或任何导出记录；阶段六没有数据模型变化或 Alembi
 结构化检测结果和预览，不持有完整响应。保存时会原子占用并在成功后消费 token；浏览器 token
 不能决定 collector 名称或配置。多进程与应用重启不会共享状态。完整流程见
 [`source-onboarding.md`](source-onboarding.md)。
+
+## 正式来源与内容准入
+
+Source 使用 typed columns 表达业务身份：`source_kind` 区分 formal/test/fallback，
+`source_tier` 表示权威等级，`audience` 表示 leadership/all；`homepage_visible` 与
+`export_visible` 分别控制首页和正式导出。已有来源和用户自行添加来源迁移为 test 或 fallback，
+默认隐藏，不能因旧 preset 身份被误认为正式来源。
+
+准入位于标准化与分类之间。领域决定不依赖 SQLAlchemy；application service 验证来源规则、应用
+全局与来源级策略并返回可审计结果。拒绝内容不写入 item 表，只聚合计数与原因到 CrawlRun。
+Repository 只实现 typed `SourceScope` 查询，不承担准入判断。详见
+[`content-admission.md`](content-admission.md)。
+
+默认首页 scope 为 leadership，要求来源 enabled、formal、首页可见且受众适配；默认导出使用
+formal_export，要求 enabled、formal 且导出可见。all/non_formal/fallback/disabled 只能显式选择。

@@ -28,8 +28,17 @@
       <select name="source_id">
         <option value="">全部来源</option>
         {% for source in source_options %}
-          <option value="{{ source.id }}" {% if filters.source_id == source.id %}selected{% endif %}>{{ source.name }}</option>
+          <option value="{{ source.id }}" {% if filters.source_id == source.id %}selected{% endif %}>{{ source.name }} · {{ source.source_kind.value }}{% if not source.enabled %} · 已停用{% endif %}</option>
         {% endfor %}
+      </select>
+    </label>
+    <label>来源范围
+      <select name="source_scope">
+        <option value="leadership" {% if filters.source_scope == 'leadership' %}selected{% endif %}>领导首页（正式）</option>
+        <option value="all" {% if filters.source_scope == 'all' %}selected{% endif %}>全部来源</option>
+        <option value="non_formal" {% if filters.source_scope == 'non_formal' %}selected{% endif %}>非正式来源</option>
+        <option value="fallback" {% if filters.source_scope == 'fallback' %}selected{% endif %}>备用技术来源</option>
+        <option value="disabled" {% if filters.source_scope == 'disabled' %}selected{% endif %}>已停用来源历史</option>
       </select>
     </label>
     <label>收藏
@@ -93,6 +102,7 @@
             <span class="category-badge {% if item.effective_category.value == 'unclassified' %}pending{% endif %}">{{ category_label(item.effective_category) }}</span>
             <span class="origin-badge">{{ item.category_origin }}</span>
             {% if item.is_favorite %}<span class="favorite-badge">已收藏</span>{% endif %}
+            <span class="origin-badge">{{ item.source_kind.value }}</span>
           </div>
           <h2>
             {% if item.original_url %}

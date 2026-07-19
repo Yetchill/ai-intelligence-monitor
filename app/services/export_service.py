@@ -58,11 +58,12 @@ class ExportService:
                     manual_category=item.manual_category,
                     source_id=item.source_id,
                     source_name=source_name,
+                    source_kind=source_kind,
                     is_favorite=item.is_favorite,
                     classification_score=item.classification_score,
                     classification_reason=item.classification_reason,
                 )
-                for item, source_name in rows
+                for item, source_name, source_kind in rows
             )
 
         generated_at = datetime.now(UTC)
@@ -92,6 +93,7 @@ def _filter_summary(item_filter: ItemFilter) -> str:
         parts.append(f"分类: {CATEGORY_LABELS[item_filter.category]}")
     if item_filter.source_id is not None:
         parts.append(f"来源 ID: {item_filter.source_id}")
+    parts.append(f"来源范围: {item_filter.source_scope.value}")
     if item_filter.favorite is not None:
         parts.append("仅收藏" if item_filter.favorite else "未收藏")
     _append_range(parts, "发布时间", item_filter.published_from, item_filter.published_to)
