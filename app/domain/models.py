@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     Enum,
     Float,
@@ -19,7 +20,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from app.domain.enums import Category, CrawlStatus, SourceOrigin, SourceType
+from app.domain.enums import Category, CrawlStatus, RunTrigger, SourceOrigin, SourceType
 
 
 def utc_now() -> datetime:
@@ -144,6 +145,9 @@ class CrawlRun(Base):
     status: Mapped[CrawlStatus] = mapped_column(
         enum_type(CrawlStatus), nullable=False, default=CrawlStatus.RUNNING
     )
+    trigger: Mapped[RunTrigger] = mapped_column(
+        enum_type(RunTrigger), nullable=False, default=RunTrigger.LEGACY_MANUAL
+    )
     source_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     source_success: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     source_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -155,6 +159,31 @@ class CrawlRun(Base):
     error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     revisions: Mapped[list["ItemRevision"]] = relationship(back_populates="crawl_run")
+
+
+class ScheduleSettings(Base):
+    """Singleton, strongly typed local scheduling configuration."""
+
+    __tablename__ = "schedule_settings"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_schedule_settings_singleton"),
+        CheckConstraint("schedule_hour BETWEEN 0 AND 23", name="ck_schedule_hour"),
+        CheckConstraint("schedule_minute BETWEEN 0 AND 59", name="ck_schedule_minute"),
+        CheckConstraint("schedule_days_mask BETWEEN 1 AND 127", name="ck_schedule_days"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    schedule_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    schedule_hour: Mapped[int] = mapped_column(Integer, nullable=False, default=9)
+    schedule_minute: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    schedule_days_mask: Mapped[int] = mapped_column(Integer, nullable=False, default=127)
+    timezone: Mapped[str] = mapped_column(String(100), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+    last_scheduled_trigger_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class ItemRevision(Base):

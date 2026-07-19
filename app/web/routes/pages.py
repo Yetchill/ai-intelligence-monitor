@@ -3,15 +3,22 @@
 import re
 from typing import Annotated
 from urllib.parse import quote, urlencode, urlsplit
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Form, Path, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from app.domain.enums import Category
+from app.domain.enums import Category, Weekday
 from app.domain.exports import ExportFormat, ExportQuery
 from app.domain.onboarding import DiscoverySession
 from app.domain.update import UpdateResult
 from app.services.error_sanitization import sanitize_error
+from app.services.schedule_settings_service import (
+    ScheduleValidationError,
+    parse_time,
+    validate_timezone,
+)
+from app.services.scheduler_service import SchedulerReloadError
 from app.web.schemas import MAX_DATABASE_ID, ItemQueryParams, PageParams, WebInputError
 
 router = APIRouter()
@@ -228,6 +235,59 @@ async def runs_page(request: Request) -> HTMLResponse:
             else None,
         },
     )
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request) -> HTMLResponse:
+    view = request.app.state.services.scheduler.view()
+    try:
+        zone = validate_timezone(view.settings.timezone)
+    except ScheduleValidationError:
+        zone = ZoneInfo("UTC")
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "settings.html",
+        {
+            "view": view,
+            "weekdays": tuple(Weekday),
+            "saved": request.query_params.get("saved") == "1",
+            "next_run_local": view.next_run_at.astimezone(zone) if view.next_run_at else None,
+            "last_trigger_local": (
+                view.settings.last_scheduled_trigger_at.astimezone(zone)
+                if view.settings.last_scheduled_trigger_at
+                else None
+            ),
+            "timezone_error": view.error,
+            "display_timezone": view.settings.timezone if view.error is None else "UTC 回退显示",
+        },
+    )
+
+
+@router.post("/settings", response_class=HTMLResponse)
+async def save_settings(
+    request: Request,
+    schedule_time: Annotated[str, Form(min_length=5, max_length=5)],
+    days: Annotated[list[str], Form()],
+    timezone: Annotated[str, Form(min_length=1, max_length=100)],
+    enabled: Annotated[str | None, Form(max_length=5)] = None,
+) -> RedirectResponse:
+    if enabled not in {None, "true"}:
+        raise WebInputError("定时更新开关无效。")
+    hour, minute = parse_time(schedule_time)
+    request.app.state.services.schedule_settings.save(
+        enabled=enabled == "true",
+        hour=hour,
+        minute=minute,
+        days=days,
+        timezone=timezone,
+    )
+    try:
+        await request.app.state.services.scheduler.reload()
+    except Exception as exc:
+        raise SchedulerReloadError(
+            "设置已保存, 但调度器未能立即重载; 请重试保存或重启应用。"
+        ) from exc
+    return RedirectResponse("/settings?saved=1", status_code=303)
 
 
 @router.post("/items/{item_id}/favorite", response_class=HTMLResponse)

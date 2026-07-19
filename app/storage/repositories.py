@@ -5,11 +5,19 @@ from types import TracebackType
 from typing import Any
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.domain.models import Base, CrawlRun, IntelligenceItem, ItemRevision, Source
+from app.domain.models import (
+    Base,
+    CrawlRun,
+    IntelligenceItem,
+    ItemRevision,
+    ScheduleSettings,
+    Source,
+)
 from app.domain.queries import ItemFilter, ItemQuery
 from app.storage.database import Database
 
@@ -206,6 +214,36 @@ class ItemRevisionRepository(BaseRepository[ItemRevision]):
         return list(self._session.scalars(statement))
 
 
+class ScheduleSettingsRepository(BaseRepository[ScheduleSettings]):
+    model = ScheduleSettings
+
+    def get_singleton(self) -> ScheduleSettings | None:
+        return self._session.get(ScheduleSettings, 1)
+
+    def add_singleton_if_missing(self, entity: ScheduleSettings) -> ScheduleSettings:
+        """Create the singleton without racing another first writer."""
+
+        statement = (
+            sqlite_insert(ScheduleSettings)
+            .values(
+                id=1,
+                schedule_enabled=entity.schedule_enabled,
+                schedule_hour=entity.schedule_hour,
+                schedule_minute=entity.schedule_minute,
+                schedule_days_mask=entity.schedule_days_mask,
+                timezone=entity.timezone,
+                updated_at=entity.updated_at,
+                last_scheduled_trigger_at=entity.last_scheduled_trigger_at,
+            )
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
+        self._session.execute(statement)
+        row = self.get_singleton()
+        if row is None:
+            raise RuntimeError("could not create schedule settings singleton")
+        return row
+
+
 class RepositoryUnitOfWork:
     """Expose repositories while keeping SQLAlchemy sessions out of callers."""
 
@@ -216,6 +254,7 @@ class RepositoryUnitOfWork:
         self.items: IntelligenceItemRepository
         self.crawl_runs: CrawlRunRepository
         self.revisions: ItemRevisionRepository
+        self.schedule_settings: ScheduleSettingsRepository
 
     def __enter__(self) -> "RepositoryUnitOfWork":
         session = self._database.session_factory()
@@ -224,6 +263,7 @@ class RepositoryUnitOfWork:
         self.items = IntelligenceItemRepository(session)
         self.crawl_runs = CrawlRunRepository(session)
         self.revisions = ItemRevisionRepository(session)
+        self.schedule_settings = ScheduleSettingsRepository(session)
         return self
 
     def __exit__(

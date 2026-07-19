@@ -6,9 +6,10 @@ from typing import cast
 import pytest
 
 from app import cli
-from app.domain.enums import CrawlStatus
+from app.domain.enums import CrawlStatus, RunTrigger
 from app.domain.update import SourceUpdateResult, SourceUpdateStatus, UpdateResult
 from app.storage.database import Database
+from app.storage.repositories import RepositoryUnitOfWork
 
 
 class DisposableDatabase:
@@ -99,3 +100,23 @@ def test_all_sources_failed_result_returns_nonzero(
 
     assert exit_code == 1
     assert "status=failed" in capsys.readouterr().out
+
+
+def test_cli_update_uses_execution_service_and_records_manual_cli_trigger(
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(cli, "configure_logging", lambda: None)
+
+    def fake_from_settings(_cls: type[Database]) -> Database:
+        return database
+
+    monkeypatch.setattr(cli.Database, "from_settings", classmethod(fake_from_settings))
+
+    assert cli.main(["update"]) == 0
+    assert "status=success" in capsys.readouterr().out
+    with RepositoryUnitOfWork(database) as uow:
+        runs = uow.crawl_runs.list_recent()
+    assert len(runs) == 1
+    assert runs[0].trigger is RunTrigger.MANUAL_CLI

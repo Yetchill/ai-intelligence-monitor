@@ -1,7 +1,7 @@
 # AI 行业动态与成果申报情报工具
 
 这是一个面向公司内部使用的本地信息聚合工具。当前已完成基础数据库、采集器、规则分类，
-以及 **阶段六：Excel 与 Word 导出**。
+以及 **阶段七：运行设置与轻量定时更新**。
 
 ## 当前已实现
 
@@ -50,10 +50,15 @@
 - 按最终分类有序分组、跳过空章节和空简介的 Word 报告；
 - Excel 公式注入、非法 XML 字符、危险超链接、文件名和响应头安全处理；
 - Web 内存下载及支持筛选、数量限制、原子写入和显式覆盖的最小导出 CLI。
+- 强类型单例运行设置、IANA 时区、明确星期选择和 Alembic 迁移；
+- FastAPI 生命周期管理的单进程调度器，以及保存后立即重载；
+- 网页手动、CLI 手动和定时运行来源标记，以及三者共享的更新锁；
+- 设置页面和 `schedule show/enable/disable/run` CLI。
 
 ## 尚未实现
 
-定时任务、一键启动、Windows 打包、浏览器采集、PDF、自动邮件和真实 AI 功能尚未实现。
+一键启动、Windows 计划任务、系统托盘、Windows 打包、浏览器采集、PDF、自动邮件和真实 AI
+功能尚未实现。
 当前来源页面不允许删除来源、直接修改入口 URL 或任意编辑 `collector_config`。
 
 ## 开发环境
@@ -129,6 +134,22 @@ uv run python -m app.web
 [`docs/web-ui.md`](docs/web-ui.md)。
 来源识别范围、SSRF 边界、token 和重新检测流程见
 [`docs/source-onboarding.md`](docs/source-onboarding.md)。
+
+## 定时更新
+
+网页“设置”页面可开启计划、选择时间/星期和 IANA 时区。应用必须保持运行，内置计划才会执行；
+关机或应用退出期间错过的任务会跳过，重启不会补跑。手动与定时更新共用进程内锁，互不并发。
+独立 CLI 进程与 Web 进程之间不提供跨进程互斥；不要并行运行两个调度器。
+
+```bash
+uv run python -m app.cli schedule show
+uv run python -m app.cli schedule enable --time 09:00 --days mon,tue,wed,thu,fri --timezone Asia/Shanghai
+uv run python -m app.cli schedule disable
+uv run python -m app.cli schedule run
+```
+
+前台 `schedule run` 用于开发验证，`Ctrl+C` 正常停止。当前不是系统服务，也不安装 Windows 计划
+任务或桌面启动器。完整语义见 [`docs/scheduling.md`](docs/scheduling.md)。
 
 资讯页会显示当前筛选匹配条数，可直接导出全部匹配结果为 Excel 或 Word，不受当前分页限制。
 也可以使用 CLI：

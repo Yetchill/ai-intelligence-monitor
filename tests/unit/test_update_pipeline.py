@@ -1,5 +1,6 @@
 """Stage-four update pipeline behavior with no public-network dependency."""
 
+import asyncio
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta, timezone
 from typing import cast
@@ -9,7 +10,7 @@ import pytest
 from app.classifiers.rule_based import RuleBasedClassifier
 from app.collectors.registry import CollectorRegistry
 from app.domain.collection import CollectContext, CollectedItem, Fetcher, FetchResult
-from app.domain.enums import Category, CrawlStatus, SourceOrigin, SourceType
+from app.domain.enums import Category, CrawlStatus, RunTrigger, SourceOrigin, SourceType
 from app.domain.models import IntelligenceItem, Source
 from app.domain.update import SourceUpdateStatus, UpdateMode
 from app.services.classification_service import ClassificationService
@@ -53,6 +54,26 @@ class ScenarioCollector:
         if isinstance(response, Exception):
             raise response
         return response
+
+
+class BlockingScenarioFetcher(ScenarioFetcher):
+    def __init__(self) -> None:
+        super().__init__()
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+
+class BlockingScenarioCollector:
+    name = "blocking-scenario"
+
+    def __init__(self, fetcher: Fetcher) -> None:
+        self.backend = cast(BlockingScenarioFetcher, fetcher)
+
+    async def collect(self, context: CollectContext) -> list[CollectedItem]:
+        self.backend.contexts.append(context)
+        self.backend.started.set()
+        await self.backend.release.wait()
+        return []
 
 
 class TrackingUnitOfWork(RepositoryUnitOfWork):
@@ -490,6 +511,58 @@ async def test_disabled_sources_are_skipped_by_default_and_can_be_explicitly_run
     explicit_result = await pipeline.update(source_id=disabled.id, allow_disabled=True)
     assert explicit_result.source_total == 1
     assert backend.contexts[-1].source_url == disabled.start_url
+
+
+@pytest.mark.asyncio
+async def test_scheduled_update_selects_only_enabled_sources_and_marks_run(
+    database: Database,
+) -> None:
+    enabled = _source("Enabled", "https://example.com/scheduled-enabled")
+    disabled = _source("Disabled", "https://example.com/scheduled-disabled", enabled=False)
+    _add_sources(database, enabled, disabled)
+    backend = ScenarioFetcher()
+    backend.responses[enabled.start_url] = [[]]
+
+    result = await _pipeline(database, backend).update(trigger=RunTrigger.SCHEDULED)
+
+    assert result.trigger is RunTrigger.SCHEDULED
+    assert [context.source_url for context in backend.contexts] == [enabled.start_url]
+    with RepositoryUnitOfWork(database) as uow:
+        assert uow.crawl_runs.get(result.crawl_run_id).trigger is RunTrigger.SCHEDULED  # type: ignore[union-attr]
+
+
+@pytest.mark.asyncio
+async def test_cancelled_scheduled_update_finishes_crawl_run_and_releases_resources(
+    database: Database,
+) -> None:
+    source = _source("Blocking", "https://example.com/blocking")
+    source.collector_name = "blocking-scenario"
+    _add_sources(database, source)
+    backend = BlockingScenarioFetcher()
+    registry = CollectorRegistry()
+    registry.register("blocking-scenario", BlockingScenarioCollector)
+
+    def uow_factory() -> RepositoryUnitOfWork:
+        return RepositoryUnitOfWork(database)
+
+    pipeline = UpdatePipeline(
+        uow_factory=uow_factory,
+        crawl_service=CrawlService(registry, backend),
+        classification_service=ClassificationService(RuleBasedClassifier.from_yaml(), uow_factory),
+    )
+    task = asyncio.create_task(pipeline.update(trigger=RunTrigger.SCHEDULED))
+    await asyncio.wait_for(backend.started.wait(), timeout=1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    with RepositoryUnitOfWork(database) as uow:
+        runs = uow.crawl_runs.list_recent()
+    assert len(runs) == 1
+    assert runs[0].status is CrawlStatus.FAILED
+    assert runs[0].finished_at is not None
+    assert runs[0].trigger is RunTrigger.SCHEDULED
+    assert "cancelled" in (runs[0].error_summary or "")
 
 
 @pytest.mark.asyncio

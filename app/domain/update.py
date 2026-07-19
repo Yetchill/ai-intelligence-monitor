@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from app.domain.enums import CrawlStatus
+from app.domain.enums import CrawlStatus, RunTrigger
 
 
 class UpdateMode(StrEnum):
@@ -48,3 +48,4 @@ class UpdateResult:
     unclassified_count: int
     error_summary: str | None
     source_results: tuple[SourceUpdateResult, ...]
+    trigger: RunTrigger = RunTrigger.LEGACY_MANUAL

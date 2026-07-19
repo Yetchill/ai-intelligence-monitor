@@ -37,6 +37,7 @@ def test_alembic_initializes_database(tmp_path: Path) -> None:
             "crawl_runs",
             "intelligence_items",
             "item_revisions",
+            "schedule_settings",
             "sources",
         }
     finally:
@@ -293,6 +294,140 @@ def test_source_description_migration_round_trip_preserves_nonempty_graph(tmp_pa
             assert list(connection.execute(text("PRAGMA foreign_key_check"))) == []
     finally:
         repeated.dispose()
+
+
+def test_runtime_scheduling_migration_round_trip_preserves_nonempty_graph(tmp_path: Path) -> None:
+    database_path = tmp_path / "runtime-scheduling-migration.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+    config = Config(PROJECT_ROOT / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(config, "c94d2a1f7e3b")
+    database = Database(database_url)
+    try:
+        with database.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO sources "
+                    "(name, description, source_type, start_url, enabled, collector_name, "
+                    "collector_config, requires_custom_collector, origin, created_at, updated_at) "
+                    "VALUES ('Existing source', 'note', 'rss', 'https://example.com/feed', 1, "
+                    "'rss', '{}', 0, 'user_added', '2026-07-19 00:00:00', "
+                    "'2026-07-19 00:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO crawl_runs "
+                    "(started_at, finished_at, status, source_total, source_success, "
+                    "source_failed, discovered_count, new_count, updated_count, skipped_count, "
+                    "unclassified_count) VALUES ('2026-07-19 00:00:00', "
+                    "'2026-07-19 00:01:00', 'success', 1, 1, 0, 1, 1, 0, 0, 1)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO intelligence_items "
+                    "(source_id, title, original_url, canonical_url, discovered_at, last_seen_at, "
+                    "updated_at, category, fingerprint, is_favorite, is_active, extra) VALUES "
+                    "(1, 'Existing item', 'https://example.com/item', "
+                    "'https://example.com/item', '2026-07-19 00:00:00', "
+                    "'2026-07-19 00:01:00', '2026-07-19 00:01:00', 'unclassified', "
+                    f"'{('e' * 64)}', 1, 1, '{{}}')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO item_revisions "
+                    "(item_id, crawl_run_id, changed_at, old_data, new_data) VALUES "
+                    "(1, 1, '2026-07-19 00:01:00', '{\"title\": \"Old\"}', "
+                    '\'{"title": "Existing item"}\')'
+                )
+            )
+    finally:
+        database.dispose()
+
+    command.upgrade(config, "head")
+    migrated = Database(database_url)
+    try:
+        with migrated.engine.connect() as connection:
+            assert connection.scalar(text("SELECT trigger FROM crawl_runs")) == "legacy_manual"
+            assert connection.scalar(text("SELECT count(*) FROM schedule_settings")) == 0
+            assert connection.scalar(text("SELECT count(*) FROM sources")) == 1
+            assert connection.scalar(text("SELECT count(*) FROM intelligence_items")) == 1
+            assert connection.scalar(text("SELECT count(*) FROM item_revisions")) == 1
+            assert list(connection.execute(text("PRAGMA foreign_key_check"))) == []
+    finally:
+        migrated.dispose()
+
+    command.downgrade(config, "c94d2a1f7e3b")
+    downgraded = Database(database_url)
+    try:
+        inspector = inspect(downgraded.engine)
+        assert "schedule_settings" not in inspector.get_table_names()
+        assert "trigger" not in {column["name"] for column in inspector.get_columns("crawl_runs")}
+        with downgraded.engine.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM sources")) == 1
+            assert connection.scalar(text("SELECT count(*) FROM intelligence_items")) == 1
+            assert connection.scalar(text("SELECT count(*) FROM item_revisions")) == 1
+            assert connection.scalar(text("SELECT count(*) FROM crawl_runs")) == 1
+            assert list(connection.execute(text("PRAGMA foreign_key_check"))) == []
+    finally:
+        downgraded.dispose()
+
+    command.upgrade(config, "head")
+    repeated = Database(database_url)
+    try:
+        with repeated.engine.connect() as connection:
+            assert connection.scalar(text("SELECT trigger FROM crawl_runs")) == "legacy_manual"
+            assert connection.scalar(text("SELECT title FROM intelligence_items")) == (
+                "Existing item"
+            )
+            assert connection.scalar(text("SELECT is_favorite FROM intelligence_items")) == 1
+            assert list(connection.execute(text("PRAGMA foreign_key_check"))) == []
+    finally:
+        repeated.dispose()
+
+
+def test_runtime_scheduling_migration_rejects_unknown_status_before_schema_changes(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "runtime-scheduling-unknown-status.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+    config = Config(PROJECT_ROOT / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(config, "c94d2a1f7e3b")
+    database = Database(database_url)
+    try:
+        with database.engine.begin() as connection:
+            connection.exec_driver_sql("PRAGMA ignore_check_constraints=ON")
+            connection.execute(
+                text(
+                    "INSERT INTO crawl_runs "
+                    "(started_at, status, source_total, source_success, source_failed, "
+                    "discovered_count, new_count, updated_count, skipped_count, "
+                    "unclassified_count) VALUES "
+                    "('2026-07-19 00:00:00', 'mystery', 1, 0, 1, 0, 0, 0, 0, 0)"
+                )
+            )
+            connection.exec_driver_sql("PRAGMA ignore_check_constraints=OFF")
+    finally:
+        database.dispose()
+
+    with pytest.raises(RuntimeError, match=r"unknown status.*mystery"):
+        command.upgrade(config, "head")
+
+    preserved = Database(database_url)
+    try:
+        inspector = inspect(preserved.engine)
+        with preserved.engine.connect() as connection:
+            assert connection.scalar(text("SELECT status FROM crawl_runs")) == "mystery"
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
+                "c94d2a1f7e3b"
+            )
+        assert "trigger" not in {column["name"] for column in inspector.get_columns("crawl_runs")}
+        assert "schedule_settings" not in inspector.get_table_names()
+    finally:
+        preserved.dispose()
 
 
 def test_status_migration_rejects_unknown_history_before_schema_changes(tmp_path: Path) -> None:

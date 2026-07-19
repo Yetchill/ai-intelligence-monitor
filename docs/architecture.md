@@ -1,15 +1,15 @@
-# 阶段六 Excel 与 Word 导出架构
+# 阶段七运行设置与轻量定时更新架构
 
 ## 范围
 
 当前架构覆盖基础设施、基础采集器、纯逻辑分类子系统，以及更新流水线、分类持久化与运行
-记录、本地 Web UI 与基础人工操作、信息源发现与管理，以及 Excel/Word 导出。定时任务、PDF、
-自动邮件、一键启动、Windows 打包、浏览器获取和真实 AI 模块尚未创建。
+记录、本地 Web UI 与基础人工操作、信息源发现与管理、Excel/Word 导出，以及单进程内置定时
+更新。PDF、自动邮件、一键启动、Windows 计划任务/打包、浏览器获取和真实 AI 模块尚未创建。
 
 ## 依赖方向
 
 ```text
-Jinja2 Web / 最小 CLI / 未来任务入口
+Jinja2 Web / 最小 CLI / SchedulerService
           ↓
   WebDataService / ExportService / UpdatePipeline
           ↓             ↓                 ↓
@@ -27,6 +27,11 @@ SQLAlchemy 2.x 映射与 SQLite
           ↓
 Alembic 版本化迁移
 ```
+
+网页、CLI 和调度器通过 `UpdateExecutionService` 共享同一个可注入 `UpdateLock`，再构造现有
+`UpdatePipeline`。`SchedulerService` 不依赖 FastAPI 路由，不复制采集、分类或持久化逻辑。
+设置由 `ScheduleSettingsService` 通过短 UoW 读写单例强类型表。详细语义见
+[`scheduling.md`](scheduling.md)。
 
 `ExportService` 与 `WebDataService` 共享 `ItemFilter`，Repository 的 `_item_filters` 和
 `_item_order` 是列表与导出的唯一 SQL 条件和排序实现。分页列表增加 `LIMIT/OFFSET`；导出按
@@ -134,6 +139,13 @@ Fetcher 只访问 HTTP(S) 公开资源，不执行脚本、不处理登录或验
 `last_seen_at` 和自动分类变化不属于内容修订。修订必须关联条目，流水线修订同时关联本次
 `CrawlRun`；自动分类审计未来如有需要应使用独立机制，不与内容 Revision 混合。
 
+`trigger` 区分历史手动、网页手动、CLI 手动与定时运行，不改变原有状态和统计语义。
+
+### ScheduleSettings
+
+单例表以独立布尔、整数、位图、IANA 时区和 UTC 时间列保存计划，数据库约束限制小时、分钟、
+星期范围和单例 id。不接受 cron 或无类型通用 JSON。
+
 ## 数据库生命周期
 
 生产/本地数据库以 Alembic 为结构真源：
@@ -185,11 +197,12 @@ UTC 规范化边界。
 
 所有状态修改均为 POST。收藏、人工分类和来源启停由 `WebDataService` 提供明确接口；人工分类
 只写 `manual_category` 和 `updated_at`，不修改自动分类字段、`last_seen_at` 或 ItemRevision。
-`WebUpdateService` 使用进程内非阻塞锁串行化更新，并通过共享工厂构造现有 `UpdatePipeline`；
-锁在 `finally` 中释放。
+`WebUpdateService` 与 `SchedulerService` 使用同一个 `UpdateExecutionService`/进程内非阻塞锁
+串行化更新，并通过共享工厂构造现有 `UpdatePipeline`；锁在 `finally` 中释放。
 
-Web 应用启动时只核对当前 Alembic revision 与 head。版本落后会给出升级命令，不自动迁移、
-重建数据库、导入来源或启动采集。详细运行和安全边界见 [`web-ui.md`](web-ui.md)。
+Web 应用启动时先核对当前 Alembic revision 与 head，再读取计划并按需创建一个调度任务；关闭时
+停止任务并释放资源。版本落后会给出升级命令，不自动迁移、重建数据库或导入来源。计划关闭时
+不创建更新任务。详细运行和安全边界见 [`web-ui.md`](web-ui.md)。
 
 ## 后续扩展边界
 

@@ -9,7 +9,7 @@
         <tbody>
           {% for run in page.entries %}
             <tr id="run-{{ run.id }}">
-              <td><span class="status-badge {{ run.status.value }}">{{ status_label(run.status) }}</span><div class="muted">#{{ run.id }}</div></td>
+              <td><span class="status-badge {{ run.status.value }}">{{ status_label(run.status) }}</span><div class="muted">#{{ run.id }} · {{ trigger_label(run.trigger) }}</div></td>
               <td>{{ format_time(run.started_at) }}<br><span class="muted">{{ format_time(run.finished_at) if run.finished_at else '尚未完成' }}</span></td>
               <td>{{ run.source_success }} 成功 / {{ run.source_failed }} 失败<br><span class="muted">共 {{ run.source_total }}</span></td>
               <td>{{ run.discovered_count }}</td><td>{{ run.new_count }}</td><td>{{ run.updated_count }}</td><td>{{ run.skipped_count }}</td><td>{{ run.unclassified_count }}</td>

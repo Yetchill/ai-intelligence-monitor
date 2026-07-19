@@ -93,6 +93,7 @@ class WebDataService:
                 CrawlRunListEntry(
                     id=run.id,
                     status=run.status,
+                    trigger=run.trigger,
                     started_at=run.started_at,
                     finished_at=run.finished_at,
                     source_total=run.source_total,

@@ -1,5 +1,6 @@
 """Shared update pipeline used by CLI and future UI or scheduling adapters."""
 
+import asyncio
 import logging
 import traceback
 from collections.abc import Callable
@@ -8,7 +9,7 @@ from typing import cast
 
 from app.domain.classification import ClassificationResult
 from app.domain.collection import CollectedItem
-from app.domain.enums import Category
+from app.domain.enums import Category, RunTrigger
 from app.domain.models import Source
 from app.domain.update import (
     SourceUpdateResult,
@@ -64,9 +65,10 @@ class UpdatePipeline:
         max_items: int | None = None,
         published_from: datetime | None = None,
         published_to: datetime | None = None,
+        trigger: RunTrigger = RunTrigger.MANUAL_CLI,
     ) -> UpdateResult:
         sources = self._select_sources(source_id=source_id, allow_disabled=allow_disabled)
-        crawl_run_id = self._crawl_run_service.start(source_total=len(sources))
+        crawl_run_id = self._crawl_run_service.start(source_total=len(sources), trigger=trigger)
         source_results: list[SourceUpdateResult] = []
         try:
             for source in sources:
@@ -81,6 +83,19 @@ class UpdatePipeline:
                 )
                 source_results.append(result)
             return self._crawl_run_service.finish(crawl_run_id, source_results)
+        except asyncio.CancelledError as exc:
+            _log_exception("Update pipeline cancelled", exc)
+            try:
+                self._crawl_run_service.finish(
+                    crawl_run_id,
+                    source_results,
+                    fatal_error="update cancelled during application shutdown",
+                )
+            except Exception as finish_error:
+                _log_exception(
+                    "Failed to move cancelled CrawlRun out of running state", finish_error
+                )
+            raise
         except Exception as exc:
             _log_exception("Uncaught update pipeline failure", exc)
             try:

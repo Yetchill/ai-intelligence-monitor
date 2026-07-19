@@ -45,3 +45,20 @@ class CrawlStatus(StrEnum):
     # Source compatibility for callers compiled against the stage-one names.
     SUCCEEDED = SUCCESS
     PARTIAL = PARTIAL_SUCCESS
+
+
+class RunTrigger(StrEnum):
+    LEGACY_MANUAL = "legacy_manual"
+    MANUAL_WEB = "manual_web"
+    MANUAL_CLI = "manual_cli"
+    SCHEDULED = "scheduled"
+
+
+class Weekday(StrEnum):
+    MON = "mon"
+    TUE = "tue"
+    WED = "wed"
+    THU = "thu"
+    FRI = "fri"
+    SAT = "sat"
+    SUN = "sun"
