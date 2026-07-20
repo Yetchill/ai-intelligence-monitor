@@ -123,6 +123,8 @@ class SourcePreviewResult:
     valid_date_ratio: float = 0.0
     valid_link_ratio: float = 0.0
     external_link_ratio: float = 0.0
+    duplicate_count: int = 0
+    duplicate_ratio: float = 0.0
 
     @property
     def primary_rejection_reason(self) -> str | None:

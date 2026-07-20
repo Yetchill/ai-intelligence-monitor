@@ -84,6 +84,13 @@ def _require_activatable(
         raise SourceActivationError(
             "preview title/link validity is below the 80% activation threshold"
         )
+    date_fallback = source.collector_config.get("date_fallback")
+    if result.valid_date_ratio < 0.7 and not (
+        isinstance(date_fallback, str) and date_fallback.strip()
+    ):
+        raise SourceActivationError("preview date validity is below the 70% activation threshold")
+    if result.duplicate_ratio > 0.2:
+        raise SourceActivationError("preview duplicate ratio exceeds the 20% activation threshold")
     if result.failed:
         raise SourceActivationError("preview contains processing failures")
 
@@ -105,6 +112,8 @@ def _preview_payload(result: SourcePreviewResult) -> dict[str, object]:
         "valid_date_ratio": result.valid_date_ratio,
         "valid_link_ratio": result.valid_link_ratio,
         "external_link_ratio": result.external_link_ratio,
+        "duplicate_count": result.duplicate_count,
+        "duplicate_ratio": result.duplicate_ratio,
         "rejection_reason_counts": dict(result.rejection_reason_counts),
         "failure_reason_counts": dict(result.failure_reason_counts),
     }

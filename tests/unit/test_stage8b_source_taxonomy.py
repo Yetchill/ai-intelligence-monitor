@@ -229,7 +229,7 @@ def test_catalog_sync_imports_every_entry_is_idempotent_and_preserves_paused(
     third = service.sync()
 
     assert first.total == len(catalog) == 28
-    assert (first.created, first.active, first.candidate) == (28, 4, 24)
+    assert (first.created, first.active, first.candidate) == (28, 11, 17)
     assert (second.existing, second.conflicts) == (28, 0)
     assert len(sources) == 28
     assert all(
@@ -312,6 +312,74 @@ def test_candidate_activation_is_preview_gated(database: Database) -> None:
         assert active.preview_item_count == 1
 
 
+def test_candidate_activation_rejects_missing_dates_and_excessive_duplicates(
+    database: Database,
+) -> None:
+    candidates = (
+        _source(
+            SourceRole.OFFICIAL_PRODUCT,
+            slug="candidate-missing-dates",
+            start_url="https://candidate-missing-dates.example/list",
+            lifecycle_state=LifecycleState.CANDIDATE,
+            enabled=False,
+            implementation_status=ImplementationStatus.RESEARCH_NEEDED,
+        ),
+        _source(
+            SourceRole.OFFICIAL_PRODUCT,
+            slug="candidate-duplicates",
+            start_url="https://candidate-duplicates.example/list",
+            lifecycle_state=LifecycleState.CANDIDATE,
+            enabled=False,
+            implementation_status=ImplementationStatus.RESEARCH_NEEDED,
+        ),
+    )
+    with RepositoryUnitOfWork(database) as uow:
+        for candidate in candidates:
+            uow.sources.add(candidate)
+    lifecycle = SourceLifecycleService(
+        lambda: RepositoryUnitOfWork(database), default_collector_registry().names()
+    )
+
+    missing_dates = SourcePreviewResult(
+        candidates[0].id,
+        candidates[0].name,
+        SourceUpdateStatus.SUCCESS,
+        fetched=10,
+        normalized=10,
+        accepted=10,
+        valid_title_ratio=1.0,
+        valid_date_ratio=0.6,
+        valid_link_ratio=1.0,
+    )
+    duplicates = SourcePreviewResult(
+        candidates[1].id,
+        candidates[1].name,
+        SourceUpdateStatus.SUCCESS,
+        fetched=10,
+        normalized=10,
+        accepted=10,
+        valid_title_ratio=1.0,
+        valid_date_ratio=1.0,
+        valid_link_ratio=1.0,
+        duplicate_count=3,
+        duplicate_ratio=0.3,
+    )
+
+    with pytest.raises(SourceActivationError, match="date validity"):
+        lifecycle.activate("candidate-missing-dates", missing_dates, confirm=True)
+    with pytest.raises(SourceActivationError, match="duplicate ratio"):
+        lifecycle.activate("candidate-duplicates", duplicates, confirm=True)
+    with RepositoryUnitOfWork(database) as uow:
+        assert (
+            uow.sources.get_by_slug("candidate-missing-dates").lifecycle_state  # type: ignore[union-attr]
+            is LifecycleState.CANDIDATE
+        )
+        assert (
+            uow.sources.get_by_slug("candidate-duplicates").lifecycle_state  # type: ignore[union-attr]
+            is LifecycleState.CANDIDATE
+        )
+
+
 def test_bulk_source_selection_includes_active_media_but_excludes_candidate_and_paused(
     database: Database,
 ) -> None:
@@ -329,7 +397,7 @@ def test_bulk_source_selection_includes_active_media_but_excludes_candidate_and_
 
     assert "cls-ai-subject" in selected
     assert "nda-news" not in selected
-    assert "deepseek-api-updates" not in selected
+    assert "qwen-official-blog" not in selected
 
 
 def test_report_parent_child_repository_query_and_unique_fingerprints(database: Database) -> None:

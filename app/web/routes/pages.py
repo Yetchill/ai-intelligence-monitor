@@ -19,6 +19,7 @@ from app.services.schedule_settings_service import (
     validate_timezone,
 )
 from app.services.scheduler_service import SchedulerReloadError
+from app.services.source_lifecycle_service import SourceActivationError
 from app.web.schemas import MAX_DATABASE_ID, ItemQueryParams, PageParams, WebInputError
 
 router = APIRouter()
@@ -430,7 +431,18 @@ async def activate_source(
     if not source.slug:
         raise WebInputError("来源缺少稳定 slug, 不能激活。")
     result = await request.app.state.services.updates.preview(source_id)
-    request.app.state.services.source_lifecycle.activate(source.slug, result, confirm=True)
+    try:
+        request.app.state.services.source_lifecycle.activate(source.slug, result, confirm=True)
+    except SourceActivationError as exc:
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "source-preview.html",
+            {
+                "result": result,
+                "activation_failed": True,
+                "activation_error": sanitize_error(exc, limit=300),
+            },
+        )
     return request.app.state.templates.TemplateResponse(
         request,
         "source-preview.html",

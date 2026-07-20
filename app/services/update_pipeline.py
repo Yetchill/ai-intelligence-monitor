@@ -193,6 +193,8 @@ class UpdatePipeline:
         valid_dates = 0
         valid_links = 0
         external_links = 0
+        duplicate_count = 0
+        seen_urls: set[str] = set()
         source_host = (urlsplit(source.start_url).hostname or "").casefold()
         for collected_item in collected:
             try:
@@ -201,6 +203,10 @@ class UpdatePipeline:
                 failures["normalization.failed"] += 1
                 continue
             normalized_count += 1
+            if item.canonical_url in seen_urls:
+                duplicate_count += 1
+            else:
+                seen_urls.add(item.canonical_url)
             decision = self._admission_policy.admit(item, source)
             if not decision.accepted:
                 rejections[decision.reason] += 1
@@ -260,6 +266,8 @@ class UpdatePipeline:
             valid_date_ratio=valid_dates / denominator,
             valid_link_ratio=valid_links / denominator,
             external_link_ratio=external_links / denominator,
+            duplicate_count=duplicate_count,
+            duplicate_ratio=duplicate_count / denominator,
         )
 
     async def _update_source(
@@ -506,6 +514,7 @@ def _failure_reason(error: BaseException, phase: str) -> str:
 def _preview_failure(
     source: Source, failures: Counter[str], error: BaseException
 ) -> SourcePreviewResult:
+    fetch_failed = isinstance(error, FetchError)
     return SourcePreviewResult(
         source_id=source.id,
         source_name=source.name,
@@ -513,4 +522,6 @@ def _preview_failure(
         failed=sum(failures.values()),
         failure_reason_counts=dict(failures),
         error=sanitize_error(error),
+        fetch_status="failed" if fetch_failed else "success",
+        parse_status="not_run" if fetch_failed else "failed",
     )

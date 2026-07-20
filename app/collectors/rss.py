@@ -27,6 +27,7 @@ class RSSCollector:
             return []
 
         items: list[CollectedItem] = []
+        seen_urls: set[str] = set()
         max_items = max(1, min(_integer(context.config.get("max_items"), 1000), 10_000))
         entries = cast(Sequence[object], entries_value)
         for raw_entry in entries:
@@ -44,8 +45,9 @@ class RSSCollector:
                 if not plain_title:
                     continue
                 canonical_url = canonicalize_url(link, base_url=response.url)
-                if canonical_url is None:
+                if canonical_url is None or canonical_url in seen_urls:
                     continue
+                seen_urls.add(canonical_url)
                 summary_value = _string(entry.get("summary")) or _string(entry.get("description"))
                 summary = _plain_text(summary_value)
                 published = (

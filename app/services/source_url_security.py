@@ -21,6 +21,7 @@ from app.fetchers.errors import (
     RateLimitFetchError,
     ServerFetchError,
 )
+from app.fetchers.http import DEFAULT_USER_AGENT
 from app.utils.url import canonicalize_url
 
 MAX_SOURCE_URL_LENGTH = 2048
@@ -212,6 +213,7 @@ class SafeHttpFetcher:
         self._client = httpx.AsyncClient(
             timeout=self._timeout,
             follow_redirects=False,
+            headers={"User-Agent": DEFAULT_USER_AGENT},
             trust_env=False,
             transport=resolved_transport,
         )

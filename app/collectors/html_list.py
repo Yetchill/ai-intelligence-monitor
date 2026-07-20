@@ -3,8 +3,9 @@
 import json
 import re
 from collections import deque
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import cast
 from urllib.parse import urlsplit
 
@@ -67,10 +68,13 @@ class _HTMLConfig:
     title_selector: str | None
     link_selector: str | None
     date_selector: str | None
+    ancestor_date_selector: str | None
     summary_selector: str | None
     pagination_selector: str | None
     embedded_title_key: str | None
     embedded_link_key: str | None
+    embedded_link_template: str | None
+    filter_selector_items: bool
 
 
 class HTMLListCollector:
@@ -78,8 +82,9 @@ class HTMLListCollector:
 
     name = "html_list"
 
-    def __init__(self, fetcher: Fetcher) -> None:
+    def __init__(self, fetcher: Fetcher, *, clock: Callable[[], datetime] | None = None) -> None:
         self._fetcher = fetcher
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     async def collect(self, context: CollectContext) -> list[CollectedItem]:
         config = _read_config(context)
@@ -109,6 +114,7 @@ class HTMLListCollector:
 
             response = await self._fetcher.fetch(page_url)
             soup = BeautifulSoup(response.content, "lxml")
+            collected_at = self._clock()
             if config.mode == "selectors":
                 page_items = _selector_items(
                     soup,
@@ -116,6 +122,7 @@ class HTMLListCollector:
                     config,
                     _embedded_link_map(response.text, config, config.max_items),
                     config.max_items - len(collected),
+                    collected_at,
                 )
             else:
                 page_items = _filtered_link_items(
@@ -123,6 +130,7 @@ class HTMLListCollector:
                     response.url,
                     config,
                     config.max_items - len(collected),
+                    collected_at,
                 )
             for item in page_items:
                 collected.setdefault(item.canonical_url, item)
@@ -184,10 +192,13 @@ def _read_config(context: CollectContext) -> _HTMLConfig:
         title_selector=_text(extraction.get("title_selector")),
         link_selector=_text(extraction.get("link_selector")),
         date_selector=_text(extraction.get("date_selector")),
+        ancestor_date_selector=_text(extraction.get("ancestor_date_selector")),
         summary_selector=_text(extraction.get("summary_selector")),
         pagination_selector=_text(discovery.get("pagination_selector")),
         embedded_title_key=_text(extraction.get("embedded_title_key")),
         embedded_link_key=_text(extraction.get("embedded_link_key")),
+        embedded_link_template=_text(extraction.get("embedded_link_template")),
+        filter_selector_items=_boolean(root.get("filter_selector_items"), False),
     )
 
 
@@ -197,6 +208,7 @@ def _selector_items(
     config: _HTMLConfig,
     embedded_links: Mapping[str, str],
     limit: int,
+    collected_at: datetime,
 ) -> list[CollectedItem]:
     if not config.item_selector:
         raise ValueError("selectors mode requires extraction.item_selector")
@@ -221,11 +233,15 @@ def _selector_items(
             url = resolve_url(page_url, href, keep_query_params=config.keep_query_params)
             if url is None or not _is_allowed_domain(url, config) or _url_is_excluded(url, config):
                 continue
-            if not _valid_title(title, url, config, apply_include_rules=False):
+            if not _valid_title(
+                title, url, config, apply_include_rules=config.filter_selector_items
+            ):
                 continue
             date_text = (
                 _node_text(node.select_one(config.date_selector)) if config.date_selector else None
             )
+            if not date_text and config.ancestor_date_selector:
+                date_text = _ancestor_text(node, config.ancestor_date_selector)
             summary = (
                 _node_text(node.select_one(config.summary_selector))
                 if config.summary_selector
@@ -236,14 +252,29 @@ def _selector_items(
                     title=title,
                     original_url=url,
                     canonical_url=url,
-                    published_at=parse_datetime(date_text),
+                    published_at=parse_datetime(date_text, relative_base=collected_at),
                     summary=summary,
-                    extra={"link_type": _link_type(page_url, url)},
+                    extra={
+                        "link_type": _link_type(page_url, url),
+                        "original_time_text": date_text,
+                    },
                 )
             )
         except (AttributeError, TypeError, ValueError):
             continue
     return items
+
+
+def _ancestor_text(node: Tag, selector: str) -> str | None:
+    """Return the nearest group-level date without reaching unrelated page sections."""
+
+    for parent in node.parents:
+        matched = parent.select_one(selector)
+        if matched is not None:
+            return _node_text(matched)
+        if parent.name in {"main", "body", "html"}:
+            break
+    return None
 
 
 def _embedded_link_map(html: str, config: _HTMLConfig, limit: int) -> Mapping[str, str]:
@@ -254,17 +285,27 @@ def _embedded_link_map(html: str, config: _HTMLConfig, limit: int) -> Mapping[st
     unescaped = html.replace(r"\"", '"')
     title_key = re.escape(config.embedded_title_key)
     link_key = re.escape(config.embedded_link_key)
+    string_value = r'"(?P<link>(?:\\.|[^"])*)"'
+    raw_value = rf"(?:{string_value}|(?P<link_number>\d+))"
     pattern = re.compile(
         rf'"{title_key}":"(?P<title>(?:\\.|[^"])*)"'
-        rf'.{{0,3000}}?"{link_key}":"(?P<link>(?:\\.|[^"])*)"',
+        rf'.{{0,3000}}?"{link_key}":{raw_value}',
+        re.DOTALL,
+    )
+    reverse_pattern = re.compile(
+        rf'"{link_key}":{raw_value}'
+        rf'.{{0,3000}}?"{title_key}":"(?P<title>(?:\\.|[^"])*)"',
         re.DOTALL,
     )
     links: dict[str, str] = {}
-    for match in pattern.finditer(unescaped):
+    for match in (*pattern.finditer(unescaped), *reverse_pattern.finditer(unescaped)):
         if len(links) >= limit:
             break
         title = _decode_json_string(match.group("title"))
-        link = _decode_json_string(match.group("link"))
+        raw_link = match.group("link") or match.group("link_number")
+        link = _decode_json_string(raw_link) if match.group("link") else raw_link
+        if link and config.embedded_link_template:
+            link = config.embedded_link_template.replace("{value}", link)
         if title and link:
             links[title] = link
     return links
@@ -283,6 +324,7 @@ def _filtered_link_items(
     page_url: str,
     config: _HTMLConfig,
     limit: int,
+    collected_at: datetime,
 ) -> list[CollectedItem]:
     items: list[CollectedItem] = []
     for anchor in soup.select("a[href]"):
@@ -303,7 +345,7 @@ def _filtered_link_items(
                     title=title,
                     original_url=url,
                     canonical_url=url,
-                    published_at=parse_datetime(_nearby_date(anchor)),
+                    published_at=parse_datetime(_nearby_date(anchor), relative_base=collected_at),
                     summary=_nearby_summary(anchor, title),
                     extra={"link_type": _link_type(page_url, url)},
                 )

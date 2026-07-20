@@ -1,6 +1,6 @@
 # AI 行业动态与成果申报情报工具
 
-> 阶段八 B 已引入完整来源目录、来源生命周期、taxonomy v2、可信/审核状态、候选 preview/激活门槛以及报告-案例父子模型。完整说明见 [来源目录](docs/source-catalog.md)、[分类体系](docs/taxonomy-v2.md)、[生命周期](docs/source-lifecycle.md) 和 [审核发布](docs/source-review.md)。
+> 阶段八 B 已引入完整来源目录、来源生命周期、taxonomy v2、可信/审核状态、候选 preview/激活门槛以及报告-案例父子模型。完整说明见 [来源目录](docs/source-catalog.md)、[采集方式复审](docs/source-acquisition-review.md)、[分类体系](docs/taxonomy-v2.md)、[生命周期](docs/source-lifecycle.md) 和 [审核发布](docs/source-review.md)。
 
 常用的阶段八 B 运维命令：
 

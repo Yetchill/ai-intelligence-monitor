@@ -1,5 +1,6 @@
 """Built-in source collectors and registration support."""
 
+from app.collectors.cls_topic import CLSTopicCollector
 from app.collectors.github_release import GitHubReleaseCollector
 from app.collectors.html_list import HTMLListCollector
 from app.collectors.hubs import CaseHubCollector, DocumentHubCollector, HubCollector
@@ -8,6 +9,7 @@ from app.collectors.rss import RSSCollector
 from app.collectors.single_page_changelog import SinglePageChangelogCollector
 
 __all__ = [
+    "CLSTopicCollector",
     "CaseHubCollector",
     "CollectorRegistry",
     "DocumentHubCollector",

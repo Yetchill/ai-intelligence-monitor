@@ -10,6 +10,7 @@
 - 新增 lifecycle/source role/crawl mode/review policy/implementation status，以及 preview/activate CLI。
 - 新增 CrawlRun 来源执行明细、人工审核审计、报告-案例 parent 结构、DocumentHub/CaseHub 接口。
 - 首页与正式导出执行统一 PublicationPolicy；行业线索独立展示。
+- 采集层改为 Feed/RSSHub/sitemap/公开数据优先：量子位使用官方资讯 Feed，财联社独立解析公开内嵌 JSON，DeepSeek 与 Kimi 使用单页 changelog adapter；机器之心因申请、登录和验证码保持 candidate。
 
 本项目遵循语义化版本。所有重要变更记录在此文件。
 

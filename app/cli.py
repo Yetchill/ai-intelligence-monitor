@@ -183,12 +183,15 @@ def _print_preview(result: object, *, max_samples: int) -> None:
         f"verification={preview.verification_status_counts} "
         f"review={preview.review_status_counts} valid_title={preview.valid_title_ratio:.1%} "
         f"valid_date={preview.valid_date_ratio:.1%} valid_link={preview.valid_link_ratio:.1%} "
-        f"external_link={preview.external_link_ratio:.1%}"
+        f"external_link={preview.external_link_ratio:.1%} "
+        f"duplicates={preview.duplicate_count} duplicate_ratio={preview.duplicate_ratio:.1%}"
     )
     print(
         f"rejection_reasons={preview.rejection_reason_counts} "
         f"failure_reasons={preview.failure_reason_counts}"
     )
+    if preview.error:
+        print(f"error={preview.error}")
     for index, item in enumerate(preview.items[:max_samples], start=1):
         print(
             f"sample={index} date={item.published_at.isoformat() if item.published_at else '-'} "

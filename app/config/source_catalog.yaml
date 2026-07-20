@@ -102,7 +102,7 @@ sources:
     lookback_days: 365
     max_items_per_run: 20
     implementation_status: needs_custom_collector
-    implementation_reason: 真实探测 HTTP 200，但服务端页面无稳定详情链接且主要内容疑似 JavaScript 生成；需要 CAICT 专用 DocumentHubCollector 适配附件与详情关系。
+    implementation_reason: 服务端页面为 Vite 壳；公开 sitemap 索引存在，但其当前分片返回 404，docs 列表 GET 尚未确认；需要专用 DocumentHubCollector。
     verified_at: null
     activation_evidence: null
     notes: 由旧 AIIA 受管来源安全迁移；不得与同 URL 重复创建。
@@ -144,7 +144,7 @@ sources:
   - slug: deepseek-api-updates
     name: DeepSeek API 更新日志
     url: https://api-docs.deepseek.com/zh-cn/updates/
-    lifecycle_state: candidate
+    lifecycle_state: active
     source_role: official_product
     source_tier: official_company
     audience: leadership
@@ -155,13 +155,18 @@ sources:
     export_visible: true
     lookback_days: 180
     max_items_per_run: 20
-    implementation_status: research_needed
-    implementation_reason: 真实 preview 抽取 20 条，但通用分段把“时间”标题拆成独立条目且部分模型条目缺日期；需轻量专用分段后再激活。
-    verified_at: null
-    activation_evidence: null
+    implementation_status: ready
+    implementation_reason: 日期 h2 与更新 h3 已稳定配对，真实 preview 18 条且标题、日期、链接均为 100%。
+    verified_at: 2026-07-20T13:12:20+08:00
+    activation_evidence: 真实 activate preview extracted=18，product_update=18，重复率 0%。
     notes: 优先级第一批真实 preview。
     collector_name: single_page_changelog
-    collector_config: {section_selector: "article h2, article h3, main h2, main h3", keep_query_params: [entry]}
+    collector_config:
+      content_selector: .theme-doc-markdown
+      date_heading_selector: h2
+      entry_selector: h3
+      append_summary_when_title_lacks_action: true
+      keep_query_params: [entry]
     include_terms: [DeepSeek, API, 模型, 更新]
     exclude_terms: [教程, 常见问题]
     minimum_quality_score: 35
@@ -170,7 +175,7 @@ sources:
   - slug: zhipu-research
     name: 智谱研究与模型发布
     url: https://www.zhipuai.cn/zh/research
-    lifecycle_state: candidate
+    lifecycle_state: active
     source_role: official_product
     source_tier: official_company
     audience: leadership
@@ -181,13 +186,22 @@ sources:
     export_visible: true
     lookback_days: 180
     max_items_per_run: 20
-    implementation_status: research_needed
-    implementation_reason: 真实探测 HTTP 200 且可见标题、日期和链接；仍需运行专用列表 preview，验证详情稳定性与误抓比例。
-    verified_at: null
-    activation_evidence: null
+    implementation_status: ready
+    implementation_reason: 公开服务端页面含稳定研究条目和 ID；专用 selector preview 抽取 15 条，标题、日期、详情链接有效率均为 100%。
+    verified_at: 2026-07-20T13:23:58+08:00
+    activation_evidence: 真实 preview 通过且已由 sources activate --confirm 激活；详情链接由公开页面内嵌 ID 生成。
     notes: 不引入浏览器自动化。
     collector_name: html_list
-    collector_config: {allowed_domains: [www.zhipuai.cn], discovery: {mode: link_filter, max_pages: 1, max_depth: 0, max_items: 20, include_url_patterns: [/zh/research/]}}
+    collector_config:
+      allowed_domains: [www.zhipuai.cn]
+      discovery: {mode: selectors, max_pages: 1, max_depth: 0, max_items: 20}
+      extraction:
+        item_selector: 'main div[class*="border-b"][class*="px-4"][class*="py-10"]'
+        title_selector: div.text-xl
+        date_selector: p
+        embedded_title_key: title_zh
+        embedded_link_key: id
+        embedded_link_template: /zh/research/{value}
     include_terms: [模型, 大模型, 智谱, GLM, 开源, 研究]
     exclude_terms: [活动, 招聘]
     minimum_quality_score: 40
@@ -196,7 +210,7 @@ sources:
   - slug: baidu-qianfan-model-updates
     name: 百度千帆模型更新记录
     url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp
-    lifecycle_state: candidate
+    lifecycle_state: active
     source_role: official_product
     source_tier: official_company
     audience: leadership
@@ -207,13 +221,21 @@ sources:
     export_visible: true
     lookback_days: 180
     max_items_per_run: 20
-    implementation_status: research_needed
-    implementation_reason: 真实 preview HTTP 200 但通用单页 selector 抽取 0 条；需调查公开静态数据或轻量专用分段。
-    verified_at: null
-    activation_evidence: null
+    implementation_status: ready
+    implementation_reason: 月份 h2 与模型表格行已稳定配对，真实 preview 20 条且标题、日期、链接均为 100%。
+    verified_at: 2026-07-20T13:12:47+08:00
+    activation_evidence: 真实 activate preview extracted=20，product_update=20，重复率 0%。
     notes: 第一批真实 preview。
     collector_name: single_page_changelog
-    collector_config: {section_selector: "article h2, article h3, main h2, main h3", keep_query_params: [entry]}
+    collector_config:
+      content_selector: .post__body
+      date_heading_selector: h2
+      entry_selector: tbody tr
+      entry_title_cells: [2, 5]
+      entry_date_cell: 0
+      entry_summary_cell: 6
+      entry_title_replacements: {上新: 正式发布}
+      keep_query_params: [entry]
     include_terms: [千帆, 模型, 更新, 发布, 下线]
     exclude_terms: [教程]
     minimum_quality_score: 35
@@ -226,20 +248,20 @@ sources:
     source_role: official_product
     source_tier: official_company
     audience: leadership
-    crawl_mode: html_list
+    crawl_mode: api
     review_policy: auto_publish
     allowed_primary_types: [product_update, report_release]
     homepage_visible: true
     export_visible: true
     lookback_days: 180
     max_items_per_run: 20
-    implementation_status: blocked_by_javascript
-    implementation_reason: 服务端 HTML 当前不能稳定获得博客条目和详情链接，页面依赖前端渲染；本阶段不引入 Playwright。
+    implementation_status: needs_custom_collector
+    implementation_reason: RSSHub route 证实官方公开 /api/v2/article/retrieval 可用且实测 HTTP 200；单响应约 4 MB，需有界 public JSON adapter，不能继续使用 html_list。
     verified_at: null
     activation_evidence: null
-    notes: 后续调查官方 RSS 或公开静态数据。
-    collector_name: html_list
-    collector_config: {}
+    notes: 不复制 RSSHub route；不引入 Playwright。
+    collector_name: public_json
+    collector_config: {max_items: 20, response_limit_note: official endpoint currently exceeds 2 MiB preview bound}
     include_terms: [Qwen, 模型, Agent, 发布, 开源]
     exclude_terms: [活动]
     minimum_quality_score: 40
@@ -274,7 +296,7 @@ sources:
   - slug: kimi-platform-changelog
     name: Kimi 开放平台更新日志
     url: https://platform.kimi.com/blog/posts/changelog
-    lifecycle_state: candidate
+    lifecycle_state: active
     source_role: official_product
     source_tier: official_company
     audience: leadership
@@ -285,14 +307,20 @@ sources:
     export_visible: true
     lookback_days: 180
     max_items_per_run: 20
-    implementation_status: research_needed
-    implementation_reason: 真实 preview 抽取 20 条且日期/链接完整，但标题全部是日期而非更新实体；需将日期与正文标题合并后再激活。
-    verified_at: null
-    activation_evidence: null
+    implementation_status: ready
+    implementation_reason: 日期 h2 与更新 li 已稳定配对并过滤账户/促销噪声，真实 preview 8 条且标题、日期、链接均为 100%。
+    verified_at: 2026-07-20T13:12:35+08:00
+    activation_evidence: 真实 activate preview extracted=8，accepted=8，重复率 0%。
     notes: 第一批真实 preview。
     collector_name: single_page_changelog
-    collector_config: {section_selector: "article h2, article h3, main h2, main h3", keep_query_params: [entry]}
-    include_terms: [Kimi, API, 模型, 更新, 发布]
+    collector_config:
+      content_selector: article
+      date_heading_selector: h2
+      entry_selector: li
+      include_entry_terms: [模型正式发布, 模型上线, API 发布, Playground 正式发布, 联网搜索功能, Context Caching 功能]
+      exclude_entry_terms: [活动, 五折, 降价, 充值, 发票, 支付, 手机号, 企业认证, 论坛, 文案, 样式]
+      keep_query_params: [entry]
+    include_terms: [Kimi, API, 模型, 更新, 发布, 联网搜索, Context Caching]
     exclude_terms: [教程]
     minimum_quality_score: 35
     allow_external_links: false
@@ -468,7 +496,7 @@ sources:
     lookback_days: 730
     max_items_per_run: 20
     implementation_status: needs_custom_collector
-    implementation_reason: 真实探测 HTTP 200 但无稳定详情链接且疑似 JavaScript；需 CAICT 案例详情适配并验证正文完整度。
+    implementation_reason: 公开 /internal_api/cases 无需认证且实测 HTTP 200 JSON；需专用 CaseHub adapter 映射稳定详情链接并验证正文完整度。
     verified_at: null
     activation_evidence: null
     notes: 只有标题和简介时最高为 case_lead。
@@ -520,7 +548,7 @@ sources:
     lookback_days: 730
     max_items_per_run: 20
     implementation_status: blocked_by_javascript
-    implementation_reason: 真实探测被网站拒绝公开访问，且尚未找到稳定公开接口；不绕过访问控制、不引入 Playwright。
+    implementation_reason: 主页面 HTTP 200 但只有 SPA 壳，/sitemap.xml 也回退为同一 HTML；尚未确认公开数据接口，不绕过访问控制、不引入 Playwright。
     verified_at: null
     activation_evidence: null
     notes: 后续研究公开接口。
@@ -559,7 +587,7 @@ sources:
 
   - slug: xinhua-tech
     name: 新华科技
-    url: https://tech.news.cn/
+    url: https://www.news.cn/tech/index.html
     lifecycle_state: candidate
     source_role: media_discovery
     source_tier: authoritative_media
@@ -572,12 +600,22 @@ sources:
     lookback_days: 30
     max_items_per_run: 20
     implementation_status: research_needed
-    implementation_reason: 真实探测无法安全访问当前入口；需确认规范 HTTPS 入口、列表 selector、日期和详情 URL。
+    implementation_reason: 原 tech.news.cn HTTPS 入口直连 TLS 提前断开；已验证 www.news.cn/tech/index.html 可全程 HTTPS 公开直连，待真实 preview 验收。
     verified_at: null
     activation_evidence: null
     notes: 技术可用后可 active 采集行业线索，但永不自动正式发布。
     collector_name: html_list
-    collector_config: {allowed_domains: [tech.news.cn], discovery: {mode: link_filter, max_pages: 1, max_depth: 0, max_items: 20, include_text: [人工智能, 大模型, 智能体, AI]}}
+    collector_config:
+      allowed_domains: [www.news.cn]
+      filter_selector_items: true
+      discovery:
+        mode: selectors
+        max_pages: 1
+        max_depth: 0
+        max_items: 20
+        include_text: [人工智能, 大模型, 智能体, AI, 算力]
+        exclude_text: [大会前瞻, 论坛, 人物, 采访]
+      extraction: {item_selector: .item, title_selector: .tit a, link_selector: .tit a, date_selector: .time}
     include_terms: [人工智能, 大模型, 智能体, AI]
     exclude_terms: [股价, 概念股, IPO, 人物八卦]
     minimum_quality_score: 30
@@ -586,24 +624,24 @@ sources:
   - slug: cls-ai-subject
     name: 财联社人工智能专题
     url: https://www.cls.cn/subject/1321
-    lifecycle_state: candidate
+    lifecycle_state: active
     source_role: media_discovery
     source_tier: authoritative_media
     audience: all
-    crawl_mode: html_list
+    crawl_mode: api
     review_policy: always_review
     allowed_primary_types: [industry_signal]
     homepage_visible: false
     export_visible: false
     lookback_days: 30
     max_items_per_run: 20
-    implementation_status: research_needed
-    implementation_reason: 真实 preview 抽取 10 条且链接有效，但日期覆盖率 0%；内容可采集，需补稳定日期后才能作为 active media。
-    verified_at: null
-    activation_evidence: null
+    implementation_status: ready
+    implementation_reason: 独立解析专题页公开 __NEXT_DATA__；真实 preview 抽取 20 条，标题、日期、链接有效率均为 100%，重复率 0%。
+    verified_at: 2026-07-20T13:52:56+08:00
+    activation_evidence: 真实 public JSON preview 通过且已由 sources activate --confirm 激活；媒体条目全部 pending，传闻严格隔离。
     notes: 媒体内容默认 media_only + pending。
-    collector_name: html_list
-    collector_config: {allowed_domains: [www.cls.cn], discovery: {mode: link_filter, max_pages: 1, max_depth: 0, max_items: 20, include_url_patterns: [/detail/]}}
+    collector_name: cls_topic
+    collector_config: {max_items: 20}
     include_terms: [人工智能, 大模型, 智能体, AI]
     exclude_terms: [股价, 概念股, IPO, 人物八卦]
     minimum_quality_score: 25
@@ -616,20 +654,20 @@ sources:
     source_role: media_discovery
     source_tier: authoritative_media
     audience: all
-    crawl_mode: html_list
+    crawl_mode: api
     review_policy: always_review
     allowed_primary_types: [industry_signal]
     homepage_visible: false
     export_visible: false
     lookback_days: 30
     max_items_per_run: 20
-    implementation_status: research_needed
-    implementation_reason: 需检查专题列表是否由 JavaScript 数据驱动，以及标题、日期、详情链接的服务端可见性。
+    implementation_status: needs_custom_collector
+    implementation_reason: RSSHub route 指向官方公开 topic/getInfo 与 article/getList POST API；getInfo 已实测 HTTP 200、无需登录，需独立 public JSON adapter。
     verified_at: null
     activation_evidence: null
-    notes: 第二批技术探测。
-    collector_name: html_list
-    collector_config: {allowed_domains: [www.infoq.cn], discovery: {mode: link_filter, max_pages: 1, max_depth: 0, max_items: 20, include_url_patterns: [/article/]}}
+    notes: 不复制 RSSHub route；本轮限定五个来源后停止实现。
+    collector_name: public_json
+    collector_config: {max_items: 20, topic_alias: 'AI&LLM'}
     include_terms: [人工智能, 大模型, 智能体, AI, LLM]
     exclude_terms: [招聘, 课程]
     minimum_quality_score: 25
@@ -655,7 +693,22 @@ sources:
     activation_evidence: null
     notes: 技术可用后可 active，但默认不进首页和正式导出。
     collector_name: html_list
-    collector_config: {allowed_domains: [zhidx.com], discovery: {mode: link_filter, max_pages: 1, max_depth: 0, max_items: 20, include_url_patterns: [/news/]}}
+    collector_config:
+      allowed_domains: [zhidx.com]
+      filter_selector_items: true
+      discovery:
+        mode: selectors
+        max_pages: 1
+        max_depth: 0
+        max_items: 20
+        include_text: [人工智能, AI, 大模型, 智能体, Agent, 模型]
+        exclude_text: [融资, 股价, IPO, 上市, 人物]
+      extraction:
+        item_selector: .news-item
+        title_selector: a.title
+        link_selector: a.title
+        date_selector: .time
+        ancestor_date_selector: .title-name
     include_terms: [人工智能, 大模型, 智能体, AI]
     exclude_terms: [股价, 概念股, IPO, 人物八卦]
     minimum_quality_score: 25
@@ -663,25 +716,25 @@ sources:
 
   - slug: qbitai
     name: 量子位
-    url: https://www.qbitai.com/
-    lifecycle_state: candidate
+    url: https://www.qbitai.com/category/%E8%B5%84%E8%AE%AF/feed
+    lifecycle_state: active
     source_role: media_discovery
     source_tier: authoritative_media
     audience: all
-    crawl_mode: html_list
+    crawl_mode: rss
     review_policy: always_review
     allowed_primary_types: [industry_signal]
     homepage_visible: false
     export_visible: false
     lookback_days: 30
     max_items_per_run: 20
-    implementation_status: research_needed
-    implementation_reason: 真实探测被网站拒绝公开访问；不得绕过访问控制，后续确认稳定公开入口。
-    verified_at: null
-    activation_evidence: null
-    notes: 第二批技术探测。
-    collector_name: html_list
-    collector_config: {allowed_domains: [www.qbitai.com], discovery: {mode: link_filter, max_pages: 1, max_depth: 0, max_items: 20, include_url_patterns: [/20]}}
+    implementation_status: ready
+    implementation_reason: 直接读取站点官方“资讯”WordPress Feed；真实 preview 抽取 10 条，标题、日期、链接有效率均为 100%，重复率 0%。
+    verified_at: 2026-07-20T13:49:35+08:00
+    activation_evidence: 真实 RSS preview 通过且已由 sources activate --confirm 激活；全部媒体条目仍为 media_only、pending。
+    notes: 直接消费网站官方 Feed，不依赖 RSSHub 实例，也不复制 AGPL route 源码。
+    collector_name: rss
+    collector_config: {max_items: 20}
     include_terms: [人工智能, 大模型, 智能体, AI]
     exclude_terms: [股价, 概念股, IPO, 人物八卦]
     minimum_quality_score: 25
@@ -702,10 +755,10 @@ sources:
     lookback_days: 30
     max_items_per_run: 20
     implementation_status: research_needed
-    implementation_reason: 真实探测 HTTP 200 且链接可见，但日期不可见；需专用列表 preview 与日期提取。
+    implementation_reason: 2026-07-20 实测 /dailies、/articles 和 /rss 均进入数据服务引导；匿名页面无 Feed，开通流程涉及创建用户、登录和验证码，不能合规自动激活。
     verified_at: null
     activation_evidence: null
-    notes: 第二批技术探测。
+    notes: 官网说明存在免费 RSS，但当前必须申请开通；不调用创建用户或订单接口，不以浏览器绕过登录和验证码。
     collector_name: html_list
     collector_config: {allowed_domains: [www.jiqizhixin.com], discovery: {mode: link_filter, max_pages: 1, max_depth: 0, max_items: 20, include_url_patterns: [/articles/, /dailies/]}}
     include_terms: [人工智能, 大模型, 智能体, AI]
@@ -716,7 +769,7 @@ sources:
   - slug: 36kr-newsflashes
     name: 36 氪快讯
     url: https://36kr.com/newsflashes
-    lifecycle_state: candidate
+    lifecycle_state: active
     source_role: media_discovery
     source_tier: authoritative_media
     audience: all
@@ -727,13 +780,23 @@ sources:
     export_visible: false
     lookback_days: 30
     max_items_per_run: 20
-    implementation_status: research_needed
-    implementation_reason: 真实探测 HTTP 200 且链接可见，但日期不可见；需适配快讯数据并严格过滤融资、股价、IPO 和市场波动。
-    verified_at: null
-    activation_evidence: null
-    notes: 第二批技术探测。
+    implementation_status: ready
+    implementation_reason: 专用快讯 selector 可解析相对时间与稳定详情链接；严格词表后真实 preview 抽取 2 条，标题、日期、链接有效率均为 100%。
+    verified_at: 2026-07-20T13:24:04+08:00
+    activation_evidence: 真实 preview 通过且已由 sources activate --confirm 激活；会议稿仍由 BasicAdmissionPolicy 拒绝。
+    notes: active 仅表示采集行业线索；内容保持 media_only、pending，且不进首页和正式导出。
     collector_name: html_list
-    collector_config: {allowed_domains: [36kr.com], discovery: {mode: link_filter, max_pages: 1, max_depth: 0, max_items: 20, include_url_patterns: [/newsflashes/]}}
+    collector_config:
+      allowed_domains: [36kr.com]
+      filter_selector_items: true
+      discovery:
+        mode: selectors
+        max_pages: 1
+        max_depth: 0
+        max_items: 20
+        include_text: [人工智能, AI, 大模型, 智能体, Agent, 模型, 算力]
+        exclude_text: [融资, 股价, 股票, IPO, 上市, 回购, 指数, 概念股]
+      extraction: {item_selector: .newsflash-item, title_selector: a.item-title, link_selector: a.item-title, date_selector: .time}
     include_terms: [人工智能, 大模型, 智能体, AI]
     exclude_terms: [融资, 股价, 概念股, IPO, 人物八卦]
     minimum_quality_score: 25

@@ -2,9 +2,9 @@
 
 ## 阶段八 B 开发流程
 
-新增来源需要：严格 catalog entry、合适 source role 规则、受限 Collector 配置、FakeFetcher fixture、无落库 preview、生命周期测试及文档状态。普通列表优先复用 `html_list`；单页日志复用 `single_page_changelog`；报告和案例通过 DocumentHub/CaseHub 接口扩展。不得把站点 selector 或例外堆入 UpdatePipeline。
+新增来源需要：严格 catalog entry、合适 source role 规则、受限 Collector 配置、FakeFetcher fixture、无落库 preview、生命周期测试及文档状态。采集方式按官方 RSS/Atom、RSSHub 已有 route、sitemap、公开内嵌 JSON、无需认证公开接口、静态 HTML 站点 adapter、JavaScript 浏览器的顺序调查。不得默认用一个通用 `html_list` 猜测全部网站，也不得把站点例外堆入 UpdatePipeline。
 
-`crawl_mode=rsshub` 只是未来自建适配点。本阶段不引入 Node.js、Docker、公共 RSSHub、Playwright、验证码绕过或私人接口。
+`crawl_mode=rsshub` 只是未来自建适配点。本阶段不引入 Node.js、Docker、公共 RSSHub、Playwright、验证码绕过或私人接口。RSSHub 为 AGPL-3.0；可以消费输出或据公开网站行为独立实现 adapter，不直接复制 route 源码。
 
 ## 边界
 
@@ -54,7 +54,11 @@ collector = registry.create(source, fetcher)
 }
 ```
 
-`RSSCollector` 只读取 Feed 自带标题、链接、发布时间和摘要，不访问 entry 详情页。Feed 中单条缺少标题或链接时会跳过该条。
+`RSSCollector` 只读取 Feed 自带标题、链接、发布时间和摘要，不访问 entry 详情页。Feed 中单条缺少标题或链接时会跳过该条；单次响应内按规范化详情 URL 去重。量子位直接使用官方 `/category/资讯/feed`，不依赖 RSSHub 实例。
+
+## 公开内嵌 JSON adapter
+
+页面已公开提供稳定结构化数据时，优先解析该 payload，而不是模拟浏览器或调用需要签名/登录的接口。`CLSTopicCollector` 只读取财联社专题页的 `script#__NEXT_DATA__`，使用公开文章 ID、标题和 Unix 时间生成稳定详情链接；它不复用 RSSHub 的签名算法，也不访问认证接口。
 
 ## GitHub Releases
 

@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+from app.collectors.cls_topic import CLSTopicCollector
 from app.collectors.github_release import GitHubReleaseCollector
 from app.collectors.html_list import HTMLListCollector
 from app.collectors.hubs import CaseHubCollector, DocumentHubCollector
@@ -55,4 +56,5 @@ def default_collector_registry() -> CollectorRegistry:
     registry.register(SinglePageChangelogCollector.name, SinglePageChangelogCollector)
     registry.register(DocumentHubCollector.name, DocumentHubCollector)
     registry.register(CaseHubCollector.name, CaseHubCollector)
+    registry.register(CLSTopicCollector.name, CLSTopicCollector)
     return registry
