@@ -1,10 +1,14 @@
 """Persistence-independent values returned by the update application services."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
 from app.domain.enums import CrawlStatus, RunTrigger
+
+
+def _empty_reason_counts() -> dict[str, int]:
+    return {}
 
 
 class UpdateMode(StrEnum):
@@ -30,6 +34,22 @@ class SourceUpdateResult:
     skipped: int = 0
     unclassified: int = 0
     error: str | None = None
+    normalized: int = 0
+    accepted: int = 0
+    rejected: int = 0
+    classified: int = 0
+    duplicate: int = 0
+    failed: int = 0
+    rejection_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+    failure_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+
+    @property
+    def primary_rejection_reason(self) -> str | None:
+        return _primary_reason(self.rejection_reason_counts)
+
+    @property
+    def primary_failure_reason(self) -> str | None:
+        return _primary_reason(self.failure_reason_counts)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,3 +69,50 @@ class UpdateResult:
     error_summary: str | None
     source_results: tuple[SourceUpdateResult, ...]
     trigger: RunTrigger = RunTrigger.LEGACY_MANUAL
+    normalized_count: int = 0
+    accepted_count: int = 0
+    rejected_count: int = 0
+    classified_count: int = 0
+    duplicate_count: int = 0
+    failed_count: int = 0
+    rejection_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+    failure_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+
+
+@dataclass(frozen=True, slots=True)
+class SourcePreviewItem:
+    title: str
+    original_url: str
+    accepted: bool
+    reason: str
+    quality_score: int
+
+
+@dataclass(frozen=True, slots=True)
+class SourcePreviewResult:
+    source_id: int
+    source_name: str
+    status: SourceUpdateStatus
+    fetched: int = 0
+    normalized: int = 0
+    accepted: int = 0
+    rejected: int = 0
+    failed: int = 0
+    rejection_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+    failure_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+    items: tuple[SourcePreviewItem, ...] = ()
+    error: str | None = None
+
+    @property
+    def primary_rejection_reason(self) -> str | None:
+        return _primary_reason(self.rejection_reason_counts)
+
+    @property
+    def primary_failure_reason(self) -> str | None:
+        return _primary_reason(self.failure_reason_counts)
+
+
+def _primary_reason(counts: dict[str, int]) -> str | None:
+    if not counts:
+        return None
+    return min(counts, key=lambda reason: (-counts[reason], reason))

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}运行时预览 · AI 行业情报{% endblock %}
+{% block content %}
+  <section class="page-heading"><div><p class="eyebrow">不落库预览</p><h1>{{ result.source_name }}</h1><p>使用该来源保存的真实采集配置，最多抓取 10 条并执行规范化与内容准入；不会分类或写入资讯、运行记录。</p></div></section>
+  <section class="result-panel">
+    <div class="stats-grid"><div><strong>{{ result.fetched }}</strong><span>抓取</span></div><div><strong>{{ result.normalized }}</strong><span>规范化</span></div><div><strong>{{ result.accepted }}</strong><span>准入</span></div><div><strong>{{ result.rejected }}</strong><span>拒绝</span></div><div><strong>{{ result.failed }}</strong><span>失败</span></div></div>
+    {% if result.primary_failure_reason %}<p class="notice error">失败主因：{{ process_reason_label(result.primary_failure_reason) }}{% if result.error %}；{{ result.error }}{% endif %}</p>{% elif result.primary_rejection_reason %}<p class="notice">拒绝主因：{{ process_reason_label(result.primary_rejection_reason) }}（{{ result.rejection_reason_counts[result.primary_rejection_reason] }} 条）</p>{% endif %}
+  </section>
+  {% if result.items %}<div class="table-wrap"><table><thead><tr><th>标题</th><th>准入</th><th>质量分</th><th>原因</th></tr></thead><tbody>{% for item in result.items %}<tr><td><a href="{{ item.original_url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a></td><td>{{ '接受' if item.accepted else '拒绝' }}</td><td>{{ item.quality_score }}</td><td>{{ process_reason_label(item.reason) }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+  <div class="page-actions"><a class="button" href="/sources">返回来源</a></div>
+{% endblock %}

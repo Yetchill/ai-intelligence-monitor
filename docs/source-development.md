@@ -55,9 +55,9 @@ collector = registry.create(source, fetcher)
 入口可使用仓库地址、Releases 地址或 `owner/repository`：
 
 ```text
-https://github.com/QwenLM/Qwen-Agent
-https://github.com/QwenLM/Qwen-Agent/releases
-QwenLM/Qwen-Agent
+https://github.com/example-org/official-release-only-project
+https://github.com/example-org/official-release-only-project/releases
+example-org/official-release-only-project
 ```
 
 可选配置：
@@ -154,6 +154,16 @@ uv run pytest -m network -s
 ```
 
 集成测试只断言纯采集结果，不创建或写入正式数据库。网络状态、站点结构和公共 API 配额会变化，失败时应先确认错误类别，再更新来源配置或固定样本。
+
+## 正式来源与 GitHub 边界
+
+正式来源配置必须显式提供 kind、tier、audience、两个 visibility、content scope、include/exclude、
+最低分、title-only、外跳和技术更新开关。站点特例不得进入通用 HTML Collector；selector 或
+link-filter 不能稳定获得逐条原文链接时，应记录候选限制并更换来源，或单独开发、注册和测试 Collector。
+
+`GitHubReleaseCollector` 是备用采集能力，不代表 GitHub Releases 是正式业务来源。人工添加
+GitHub 来源默认 fallback、首页和正式导出隐藏且 `allow_technical_updates=false`。patch、普通
+bug fix、依赖/CI/构建/文档维护和预发布的判断属于 `ContentAdmissionPolicy`，不得移入 Collector。
 
 ## 自动识别与 Collector 的关系
 

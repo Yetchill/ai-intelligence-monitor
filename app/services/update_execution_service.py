@@ -7,7 +7,7 @@ from datetime import datetime
 from threading import Lock, get_ident
 
 from app.domain.enums import RunTrigger
-from app.domain.update import UpdateMode, UpdateResult
+from app.domain.update import SourcePreviewResult, UpdateMode, UpdateResult
 from app.services.update_pipeline import UpdatePipeline
 from app.storage.database import Database
 
@@ -78,12 +78,17 @@ class UpdateExecutionService:
         self._pipeline_context_factory = pipeline_context_factory
         self._lock = update_lock
 
+    async def preview(self, source_id: int) -> SourcePreviewResult:
+        async with self._pipeline_context_factory(self._database) as pipeline:
+            return await pipeline.preview(source_id)
+
     async def update(
         self,
         *,
         trigger: RunTrigger,
         source_id: int | None = None,
         allow_disabled: bool = False,
+        formal_only: bool = False,
         mode: UpdateMode = UpdateMode.INCREMENTAL,
         max_pages: int | None = None,
         max_items: int | None = None,
@@ -94,6 +99,7 @@ class UpdateExecutionService:
             trigger=trigger,
             source_id=source_id,
             allow_disabled=allow_disabled,
+            formal_only=formal_only,
             mode=mode,
             max_pages=max_pages,
             max_items=max_items,
@@ -107,6 +113,7 @@ class UpdateExecutionService:
         trigger: RunTrigger,
         source_id: int | None = None,
         allow_disabled: bool = False,
+        formal_only: bool = False,
         mode: UpdateMode = UpdateMode.INCREMENTAL,
         max_pages: int | None = None,
         max_items: int | None = None,
@@ -124,6 +131,7 @@ class UpdateExecutionService:
                 return await pipeline.update(
                     source_id=source_id,
                     allow_disabled=allow_disabled,
+                    formal_only=formal_only,
                     mode=mode,
                     max_pages=max_pages,
                     max_items=max_items,
@@ -140,6 +148,7 @@ class UpdateExecutionService:
         try:
             return await self._execute(
                 trigger=RunTrigger.SCHEDULED,
+                formal_only=True,
                 before_update=before_update,
             )
         except UpdateInProgressError:

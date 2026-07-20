@@ -8,7 +8,7 @@
       <p>集中查看已采集的行业动态，并按需要收藏或修正分类。</p>
     </div>
     <form action="/updates" method="post" data-update-form>
-      <button class="button primary" type="submit" data-processing-text="正在更新…">更新全部来源</button>
+      <button class="button primary" type="submit" data-processing-text="正在更新…">更新全部正式来源</button>
     </form>
   </section>
 
@@ -28,8 +28,17 @@
       <select name="source_id">
         <option value="">全部来源</option>
         {% for source in source_options %}
-          <option value="{{ source.id }}" {% if filters.source_id == source.id %}selected{% endif %}>{{ source.name }}</option>
+          <option value="{{ source.id }}" {% if filters.source_id == source.id %}selected{% endif %}>{{ source.name }} · {{ source.source_kind.value }}{% if not source.enabled %} · 已停用{% endif %}</option>
         {% endfor %}
+      </select>
+    </label>
+    <label>来源范围
+      <select name="source_scope">
+        <option value="leadership" {% if filters.source_scope == 'leadership' %}selected{% endif %}>领导首页（正式）</option>
+        <option value="all" {% if filters.source_scope == 'all' %}selected{% endif %}>全部来源</option>
+        <option value="non_formal" {% if filters.source_scope == 'non_formal' %}selected{% endif %}>非正式来源</option>
+        <option value="fallback" {% if filters.source_scope == 'fallback' %}selected{% endif %}>备用技术来源</option>
+        <option value="disabled" {% if filters.source_scope == 'disabled' %}selected{% endif %}>已停用来源历史</option>
       </select>
     </label>
     <label>收藏
@@ -93,6 +102,7 @@
             <span class="category-badge {% if item.effective_category.value == 'unclassified' %}pending{% endif %}">{{ category_label(item.effective_category) }}</span>
             <span class="origin-badge">{{ item.category_origin }}</span>
             {% if item.is_favorite %}<span class="favorite-badge">已收藏</span>{% endif %}
+            <span class="origin-badge">{{ item.source_kind.value }}</span>
           </div>
           <h2>
             {% if item.original_url %}
@@ -130,10 +140,10 @@
   {% else %}
     <section class="empty-state">
       <h2>暂时没有符合条件的资讯</h2>
-      <p>可以清除筛选，或在导入示例来源后运行一次更新。</p>
-      <div><a class="button subtle" href="/">清除筛选</a></div>
+      <p>默认首页只显示已启用正式来源中通过准入的内容。若尚未初始化正式来源，请先前往来源页；若更新后仍为空，请查看更新记录中的抓取失败与准入拒绝原因。</p>
+      <div><a class="button subtle" href="/">清除筛选</a><a class="button subtle" href="/sources">检查或初始化来源</a></div>
       <form action="/updates" method="post" data-update-form>
-        <button class="button primary" type="submit" data-processing-text="正在更新…">立即更新</button>
+        <button class="button primary" type="submit" data-processing-text="正在更新…">立即更新全部正式来源</button>
       </form>
     </section>
   {% endif %}

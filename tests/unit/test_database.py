@@ -8,8 +8,10 @@ from alembic.config import Config
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
-from app.domain.enums import Category
+from app.domain.enums import Category, SourceKind
 from app.domain.models import IntelligenceItem, Source
+from app.services.content_admission import ContentAdmissionPolicy
+from app.services.source_seed_service import SourceSeedService
 from app.storage.database import Database
 from app.storage.repositories import RepositoryUnitOfWork
 from app.web.app import require_current_migration
@@ -42,6 +44,200 @@ def test_alembic_initializes_database(tmp_path: Path) -> None:
         }
     finally:
         database.dispose()
+
+
+def test_content_source_migration_disables_qwen_without_deleting_history(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "qwen-migration.db"
+    config = Config(PROJECT_ROOT / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+    command.upgrade(config, "f2c7a93d1b44")
+    database = Database(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with database.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO sources "
+                    "(id, name, source_type, start_url, enabled, collector_name, "
+                    "collector_config, requires_custom_collector, origin, created_at, updated_at) "
+                    "VALUES (1, 'Qwen-Agent Releases', 'github_release', "
+                    "'https://github.com/QwenLM/Qwen-Agent/releases', 1, "
+                    "'github_release', '{}', 0, 'preset', :now, :now)"
+                ),
+                {"now": "2026-07-19 00:00:00"},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO intelligence_items "
+                    "(source_id, title, original_url, canonical_url, discovered_at, "
+                    "last_seen_at, updated_at, category, fingerprint, is_favorite, "
+                    "is_active, extra) "
+                    "VALUES (1, '历史版本', 'https://github.com/QwenLM/Qwen-Agent/releases/1', "
+                    "'https://github.com/QwenLM/Qwen-Agent/releases/1', :now, :now, :now, "
+                    "'agent_product', :fingerprint, 1, 1, '{}')"
+                ),
+                {"now": "2026-07-19 00:00:00", "fingerprint": "a" * 64},
+            )
+    finally:
+        database.dispose()
+
+    command.upgrade(config, "head")
+    migrated = Database(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with migrated.engine.connect() as connection:
+            source_row = connection.execute(
+                text(
+                    "SELECT enabled, source_kind, homepage_visible, export_visible "
+                    "FROM sources WHERE id = 1"
+                )
+            ).one()
+            history = connection.execute(
+                text(
+                    "SELECT title, is_favorite, manual_category "
+                    "FROM intelligence_items WHERE source_id = 1"
+                )
+            ).one()
+        assert tuple(source_row) == (0, "fallback", 0, 0)
+        assert tuple(history) == ("历史版本", 1, None)
+    finally:
+        migrated.dispose()
+
+
+def test_stage_seven_database_upgrade_and_formal_seed_preserve_history(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "stage-seven-upgrade.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+    config = Config(PROJECT_ROOT / "alembic.ini")
+    config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(config, "f2c7a93d1b44")
+    database = Database(database_url)
+    try:
+        now = "2026-07-18 00:00:00"
+        with database.engine.begin() as connection:
+            for source_id, name, source_type, url, enabled, collector, collector_config in (
+                (
+                    1,
+                    "Google Blog RSS",
+                    "rss",
+                    "https://blog.google/rss",
+                    1,
+                    "rss",
+                    '{"max_items": 100}',
+                ),
+                (
+                    2,
+                    "AIIA",
+                    "html_list",
+                    "https://www.aiiaorg.cn/",
+                    0,
+                    "html_list",
+                    '{"allowed_domains":["www.aiiaorg.cn","mp.weixin.qq.com"],'
+                    '"discovery":{"mode":"selectors","max_pages":1,"max_depth":0,'
+                    '"max_items":100},"extraction":{"item_selector":'
+                    '".news-scroll-area div.cursor-pointer","title_selector":"h3",'
+                    '"date_selector":"span","embedded_title_key":"title",'
+                    '"embedded_link_key":"external_url"}}',
+                ),
+                (
+                    3,
+                    "Qwen-Agent Releases",
+                    "github_release",
+                    "https://github.com/QwenLM/Qwen-Agent/releases",
+                    1,
+                    "github_release",
+                    '{"max_releases":100,"include_prereleases":false}',
+                ),
+            ):
+                connection.execute(
+                    text(
+                        "INSERT INTO sources (id,name,source_type,start_url,enabled,"
+                        "collector_name,collector_config,default_category,"
+                        "requires_custom_collector,origin,"
+                        "created_at,updated_at) VALUES (:id,:name,:type,:url,:enabled,:collector,"
+                        ":collector_config,:default_category,0,'preset',:now,:now)"
+                    ),
+                    {
+                        "id": source_id,
+                        "name": name,
+                        "type": source_type,
+                        "url": url,
+                        "enabled": enabled,
+                        "collector": collector,
+                        "collector_config": collector_config,
+                        "default_category": (
+                            "policy_industry"
+                            if name == "AIIA"
+                            else "agent_product"
+                            if name == "Qwen-Agent Releases"
+                            else None
+                        ),
+                        "now": now,
+                    },
+                )
+            connection.execute(
+                text(
+                    "INSERT INTO intelligence_items (source_id,title,original_url,canonical_url,"
+                    "discovered_at,last_seen_at,updated_at,category,manual_category,fingerprint,"
+                    "is_favorite,is_active,extra) VALUES (3,'历史版本','https://example.com/old',"
+                    "'https://example.com/old',:now,:now,:now,'agent_product','award_case',"
+                    ":fingerprint,1,1,'{}')"
+                ),
+                {"now": now, "fingerprint": "f" * 64},
+            )
+    finally:
+        database.dispose()
+
+    command.upgrade(config, "head")
+    upgraded = Database(database_url)
+    try:
+        with RepositoryUnitOfWork(upgraded) as uow:
+            sources = uow.sources.list()
+            historical_item = uow.items.list()[0]
+        assert len(sources) == 3
+        assert [source.enabled for source in sources] == [True, False, False]
+        assert [source.source_kind.value for source in sources] == ["test", "test", "fallback"]
+        for source in sources:
+            ContentAdmissionPolicy().validate_source(source)
+            assert isinstance(source.content_scope, list)
+            assert isinstance(source.include_terms, list)
+            assert isinstance(source.exclude_terms, list)
+            assert source.audience.value == "all"
+            assert source.source_tier.value == "fallback"
+            assert source.homepage_visible is False
+            assert source.export_visible is False
+            assert source.minimum_quality_score == 50.0
+            assert source.accept_title_only is True
+            assert source.allow_technical_updates is False
+        qwen = sources[2]
+        assert qwen.allow_external_links is False
+        assert historical_item.is_favorite is True
+        assert historical_item.manual_category is Category.AWARD_CASE
+        assert historical_item.admission_accepted is False
+
+        seed = SourceSeedService(lambda: RepositoryUnitOfWork(upgraded))
+        first = seed.seed()
+        second = seed.seed()
+        assert (first.created, first.promoted, first.conflicts) == (6, 1, 0)
+        assert (second.created, second.promoted, second.existing) == (0, 0, 7)
+        with RepositoryUnitOfWork(upgraded) as uow:
+            final_sources = uow.sources.list()
+            aiia = uow.sources.get_by_start_url("https://www.aiiaorg.cn/")
+            qwen = uow.sources.get(3)
+        assert len(final_sources) == 9
+        assert sum(source.source_kind is SourceKind.FORMAL for source in final_sources) == 7
+        assert aiia is not None and aiia.allow_external_links is True
+        assert aiia.enabled is False
+        assert qwen is not None
+        assert (
+            qwen.enabled,
+            qwen.source_kind.value,
+            qwen.homepage_visible,
+            qwen.export_visible,
+        ) == (False, "fallback", False, False)
+    finally:
+        upgraded.dispose()
 
 
 def test_web_startup_migration_check_does_not_upgrade_database(tmp_path: Path) -> None:

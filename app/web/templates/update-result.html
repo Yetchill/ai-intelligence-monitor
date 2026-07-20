@@ -9,8 +9,22 @@
       <div><strong>{{ result.discovered_count }}</strong><span>发现</span></div><div><strong>{{ result.new_count }}</strong><span>新增</span></div>
       <div><strong>{{ result.updated_count }}</strong><span>更新</span></div><div><strong>{{ result.skipped_count }}</strong><span>跳过</span></div>
       <div><strong>{{ result.unclassified_count }}</strong><span>待分类</span></div>
+      <div><strong>{{ result.normalized_count }}</strong><span>规范化</span></div><div><strong>{{ result.accepted_count }}</strong><span>准入</span></div>
+      <div><strong>{{ result.rejected_count }}</strong><span>拒绝</span></div><div><strong>{{ result.classified_count }}</strong><span>已分类</span></div>
+      <div><strong>{{ result.duplicate_count }}</strong><span>重复</span></div><div><strong>{{ result.failed_count }}</strong><span>处理失败</span></div>
     </div>
+    {% if result.source_total == 0 %}<p class="notice">没有选择到已启用的正式来源。请先到来源页初始化正式来源，或检查正式来源是否已被停用。</p>{% endif %}
     {% if error_summary %}<p class="notice error">{{ error_summary }}</p>{% endif %}
     <div class="page-actions"><a class="button primary" href="/">返回资讯</a><a class="button subtle" href="/runs#run-{{ result.crawl_run_id }}">查看更新记录</a></div>
   </section>
+  {% if result.source_results %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>来源 / 状态</th><th>fetched / normalized</th><th>accepted / rejected</th><th>classified</th><th>inserted / updated / duplicate</th><th>failed</th><th>主要原因</th></tr></thead>
+      <tbody>{% for source in result.source_results %}<tr>
+        <td>{{ source.source_name }}<br><span class="status-badge {{ source.status.value }}">{{ '成功' if source.status.value == 'success' else '失败' }}</span></td>
+        <td>{{ source.discovered }} / {{ source.normalized }}</td><td>{{ source.accepted }} / {{ source.rejected }}</td><td>{{ source.classified }}</td><td>{{ source.new }} / {{ source.updated }} / {{ source.duplicate }}</td><td>{{ source.failed }}</td>
+        <td class="error-cell">{% if source.primary_failure_reason %}<strong>失败：</strong>{{ process_reason_label(source.primary_failure_reason) }}{% if source.error %}<br>{{ source.error }}{% endif %}{% elif source.primary_rejection_reason %}<strong>准入拒绝：</strong>{{ process_reason_label(source.primary_rejection_reason) }}（{{ source.rejection_reason_counts[source.primary_rejection_reason] }}）{% else %}—{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+  {% endif %}
 {% endblock %}

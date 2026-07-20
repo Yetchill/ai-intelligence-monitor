@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.domain.enums import SourceAudience, SourceKind, SourceScope
 from app.domain.models import (
     Base,
     CrawlRun,
@@ -79,9 +80,22 @@ class SourceRepository(BaseRepository[Source]):
         statement = select(Source).where(Source.enabled.is_(True)).order_by(Source.id)
         return list(self._session.scalars(statement))
 
-    def list_options(self) -> list[tuple[int, str]]:
-        statement = select(Source.id, Source.name).order_by(Source.name, Source.id)
-        return [(source_id, name) for source_id, name in self._session.execute(statement)]
+    def list_enabled_formal(self) -> list[Source]:
+        statement = (
+            select(Source)
+            .where(Source.enabled.is_(True), Source.source_kind == SourceKind.FORMAL)
+            .order_by(Source.id)
+        )
+        return list(self._session.scalars(statement))
+
+    def list_options(self) -> list[tuple[int, str, SourceKind, bool]]:
+        statement = select(Source.id, Source.name, Source.source_kind, Source.enabled).order_by(
+            Source.name, Source.id
+        )
+        return [
+            (source_id, name, source_kind, enabled)
+            for source_id, name, source_kind, enabled in self._session.execute(statement)
+        ]
 
     def paginate(self, *, page: int, per_page: int) -> tuple[list[Source], int]:
         total = self._session.scalar(select(func.count(Source.id))) or 0
@@ -143,7 +157,7 @@ class IntelligenceItemRepository(BaseRepository[IntelligenceItem]):
 
     def paginate_with_sources(
         self, query: ItemQuery
-    ) -> tuple[list[tuple[IntelligenceItem, str]], int]:
+    ) -> tuple[list[tuple[IntelligenceItem, str, SourceKind]], int]:
         total = self.count_filtered(query)
         rows = self.list_filtered_with_sources(
             query,
@@ -167,17 +181,20 @@ class IntelligenceItemRepository(BaseRepository[IntelligenceItem]):
         *,
         limit: int,
         offset: int = 0,
-    ) -> list[tuple[IntelligenceItem, str]]:
+    ) -> list[tuple[IntelligenceItem, str, SourceKind]]:
         filters = _item_filters(item_filter)
         statement = (
-            select(IntelligenceItem, Source.name)
+            select(IntelligenceItem, Source.name, Source.source_kind)
             .join(Source, IntelligenceItem.source_id == Source.id)
             .where(*filters)
             .order_by(*_item_order())
             .offset(offset)
             .limit(limit)
         )
-        return [(item, source_name) for item, source_name in self._session.execute(statement)]
+        return [
+            (item, source_name, source_kind)
+            for item, source_name, source_kind in self._session.execute(statement)
+        ]
 
 
 class CrawlRunRepository(BaseRepository[CrawlRun]):
@@ -300,6 +317,31 @@ class RepositoryUnitOfWork:
 
 def _item_filters(query: ItemFilter) -> list[ColumnElement[bool]]:
     filters: list[ColumnElement[bool]] = [IntelligenceItem.is_active.is_(True)]
+    if query.source_scope is SourceScope.LEADERSHIP:
+        filters.extend(
+            (
+                Source.enabled.is_(True),
+                Source.source_kind == SourceKind.FORMAL,
+                Source.homepage_visible.is_(True),
+                Source.audience.in_((SourceAudience.LEADERSHIP, SourceAudience.ALL)),
+                IntelligenceItem.admission_accepted.is_(True),
+            )
+        )
+    elif query.source_scope is SourceScope.FORMAL_EXPORT:
+        filters.extend(
+            (
+                Source.enabled.is_(True),
+                Source.source_kind == SourceKind.FORMAL,
+                Source.export_visible.is_(True),
+                IntelligenceItem.admission_accepted.is_(True),
+            )
+        )
+    elif query.source_scope is SourceScope.NON_FORMAL:
+        filters.append(Source.source_kind != SourceKind.FORMAL)
+    elif query.source_scope is SourceScope.DISABLED:
+        filters.append(Source.enabled.is_(False))
+    elif query.source_scope is SourceScope.FALLBACK:
+        filters.append(Source.source_kind == SourceKind.FALLBACK)
     if query.keyword:
         escaped = _escape_like(query.keyword)
         pattern = f"%{escaped}%"

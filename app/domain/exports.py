@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
-from app.domain.enums import Category
+from app.domain.enums import Category, SourceKind, SourceScope
 from app.domain.queries import ItemFilter
 
 
@@ -15,7 +15,9 @@ class ExportFormat(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class ExportQuery:
-    filters: ItemFilter = field(default_factory=ItemFilter)
+    filters: ItemFilter = field(
+        default_factory=lambda: ItemFilter(source_scope=SourceScope.FORMAL_EXPORT)
+    )
     limit: int | None = None
 
 
@@ -31,6 +33,7 @@ class ExportItem:
     manual_category: Category | None
     source_id: int
     source_name: str
+    source_kind: SourceKind
     is_favorite: bool
     classification_score: float | None
     classification_reason: str | None

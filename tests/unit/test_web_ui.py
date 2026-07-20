@@ -18,9 +18,23 @@ from sqlalchemy import event
 from sqlalchemy.exc import OperationalError
 
 from app import cli
-from app.domain.enums import Category, CrawlStatus, SourceOrigin, SourceType
+from app.domain.enums import (
+    Category,
+    CrawlStatus,
+    SourceAudience,
+    SourceKind,
+    SourceOrigin,
+    SourceTier,
+    SourceType,
+)
 from app.domain.models import CrawlRun, IntelligenceItem, Source
-from app.domain.update import UpdateResult
+from app.domain.update import (
+    SourcePreviewItem,
+    SourcePreviewResult,
+    SourceUpdateResult,
+    SourceUpdateStatus,
+    UpdateResult,
+)
 from app.services.source_seed_service import SourceSeedService
 from app.services.update_pipeline import UpdatePipeline
 from app.storage.database import Database
@@ -49,6 +63,11 @@ def _source(name: str, url: str, *, enabled: bool = True) -> Source:
         collector_name="rss",
         collector_config={},
         origin=SourceOrigin.PRESET,
+        source_kind=SourceKind.FORMAL,
+        source_tier=SourceTier.OFFICIAL_COMPANY,
+        audience=SourceAudience.LEADERSHIP,
+        homepage_visible=True,
+        export_visible=True,
     )
 
 
@@ -495,6 +514,7 @@ def test_all_write_routes_reject_get(database: Database, client: TestClient) -> 
         f"/sources/{first.id}/enabled",
         "/updates",
         f"/sources/{first.id}/updates",
+        f"/sources/{first.id}/preview",
     )
     assert all(client.get(path).status_code == 405 for path in paths)
 
@@ -534,6 +554,105 @@ def test_web_updates_call_shared_pipeline_and_render_result(database: Database) 
         assert "更新结果" in response.text
         assert "3" in response.text
         assert "/runs#run-1" in response.text
+
+
+def test_web_update_result_does_not_label_fetch_failure_as_rejection(
+    database: Database,
+) -> None:
+    now = datetime.now(UTC)
+    result = UpdateResult(
+        crawl_run_id=7,
+        status=CrawlStatus.FAILED,
+        started_at=now,
+        finished_at=now,
+        source_total=1,
+        source_success=0,
+        source_failed=1,
+        discovered_count=0,
+        new_count=0,
+        updated_count=0,
+        skipped_count=0,
+        unclassified_count=0,
+        error_summary="network unavailable",
+        source_results=(
+            SourceUpdateResult(
+                source_id=1,
+                source_name="网络来源",
+                status=SourceUpdateStatus.FAILED,
+                failed=1,
+                failure_reason_counts={"fetch.failed": 1},
+                error="network unavailable",
+            ),
+        ),
+        failed_count=1,
+        failure_reason_counts={"fetch.failed": 1},
+    )
+    pipeline = RecordingPipeline(result)
+
+    @asynccontextmanager
+    async def context(_database: Database) -> AsyncGenerator[UpdatePipeline]:
+        yield pipeline
+
+    application = create_app(
+        database=database,
+        enforce_migrations=False,
+        pipeline_context_factory=context,
+    )
+    with TestClient(application) as update_client:
+        response = update_client.post("/updates")
+
+    assert response.status_code == 200
+    assert "失败" in response.text
+    assert "网络抓取失败" in response.text
+    assert "准入拒绝" not in response.text
+
+
+def test_saved_source_preview_page_shows_primary_rejection_reason(database: Database) -> None:
+    source = _source("预览来源", "https://preview.example/feed")
+    with RepositoryUnitOfWork(database) as uow:
+        uow.sources.add(source)
+
+    class PreviewPipeline(RecordingPipeline):
+        async def preview(self, source_id: int, *, max_items: int = 10) -> SourcePreviewResult:
+            del max_items
+            assert source_id == source.id
+            return SourcePreviewResult(
+                source_id=source.id,
+                source_name=source.name,
+                status=SourceUpdateStatus.SUCCESS,
+                fetched=1,
+                normalized=1,
+                rejected=1,
+                rejection_reason_counts={"quality.below_minimum": 1},
+                items=(
+                    SourcePreviewItem(
+                        title="普通动态",
+                        original_url="https://preview.example/item",
+                        accepted=False,
+                        reason="quality.below_minimum",
+                        quality_score=30,
+                    ),
+                ),
+            )
+
+    pipeline = PreviewPipeline(_result())
+
+    @asynccontextmanager
+    async def context(_database: Database) -> AsyncGenerator[UpdatePipeline]:
+        yield pipeline
+
+    application = create_app(
+        database=database,
+        enforce_migrations=False,
+        pipeline_context_factory=context,
+    )
+    with TestClient(application) as preview_client:
+        response = preview_client.post(f"/sources/{source.id}/preview")
+
+    assert response.status_code == 200
+    assert "拒绝主因" in response.text
+    assert "质量分低于来源门槛" in response.text
+    assert "不落库预览" in response.text
 
 
 def test_update_result_error_is_sanitized_escaped_and_truncated(database: Database) -> None:
@@ -730,33 +849,37 @@ def test_item_query_uses_bounded_selects_without_n_plus_one(
 def test_seed_sources_is_idempotent_and_does_not_overwrite_existing(database: Database) -> None:
     service = SourceSeedService(lambda: RepositoryUnitOfWork(database))
 
-    assert service.seed() == (3, 0)
+    first_result = service.seed()
+    assert (first_result.created, first_result.promoted, first_result.existing) == (7, 0, 0)
     with RepositoryUnitOfWork(database) as uow:
-        google = uow.sources.get_by_start_url("https://blog.google/rss")
-        assert google is not None
-        google.name = "用户保留名称"
-        google.enabled = False
-    assert service.seed() == (0, 3)
+        openai = uow.sources.get_by_start_url("https://openai.com/news/rss.xml")
+        assert openai is not None
+        openai.name = "用户保留名称"
+        openai.enabled = False
+    second_result = service.seed()
+    assert (second_result.created, second_result.promoted, second_result.existing) == (0, 0, 7)
     with RepositoryUnitOfWork(database) as uow:
         sources = uow.sources.list()
-        google = uow.sources.get_by_start_url("https://blog.google/rss")
-    assert len(sources) == 3
-    assert google is not None
-    assert google.name == "用户保留名称"
-    assert google.enabled is False
+        openai = uow.sources.get_by_start_url("https://openai.com/news/rss.xml")
+    assert len(sources) == 7
+    assert openai is not None
+    assert openai.name == "用户保留名称"
+    assert openai.enabled is False
+    assert all("Qwen-Agent" not in source.name for source in sources)
 
 
 def test_seed_does_not_duplicate_equivalent_user_url(database: Database) -> None:
-    existing = _source("用户来源", "https://blog.google/rss/", enabled=False)
+    existing = _source("用户来源", "https://openai.com/news/rss.xml/", enabled=False)
     with RepositoryUnitOfWork(database) as uow:
         uow.sources.add(existing)
 
     service = SourceSeedService(lambda: RepositoryUnitOfWork(database))
 
-    assert service.seed() == (2, 1)
+    result = service.seed()
+    assert (result.created, result.existing, result.conflicts) == (6, 1, 0)
     with RepositoryUnitOfWork(database) as uow:
         sources = uow.sources.list()
-    assert len(sources) == 3
+    assert len(sources) == 7
     assert sum(source.name == "用户来源" for source in sources) == 1
     assert next(source for source in sources if source.name == "用户来源").enabled is False
 
@@ -777,17 +900,60 @@ def test_seed_sources_cli_is_idempotent(
     monkeypatch.setattr(cli.Database, "from_settings", classmethod(database_from_settings))
     monkeypatch.setattr(cli, "configure_logging", lambda: None)
 
-    assert cli.main(["sources", "seed"]) == 0
-    assert cli.main(["sources", "seed"]) == 0
+    assert cli.main(["sources", "seed-formal"]) == 0
+    assert cli.main(["sources", "seed-formal"]) == 0
     verification = Database(database_url)
     try:
         with RepositoryUnitOfWork(verification) as uow:
-            assert len(uow.sources.list()) == 3
+            assert len(uow.sources.list()) == 7
     finally:
         verification.dispose()
     output = capsys.readouterr().out
-    assert "created=3 existing=0" in output
-    assert "created=0 existing=3" in output
+    assert "created=7 promoted=0 existing=0" in output
+    assert "created=0 promoted=0 existing=7" in output
+
+
+def test_sources_page_can_idempotently_initialize_formal_sources(
+    database: Database, client: TestClient
+) -> None:
+    before = client.get("/sources")
+    first = client.post("/sources/seed-formal")
+    second = client.post("/sources/seed-formal")
+
+    assert "当前只有 0 / 7 个正式来源" in before.text
+    assert first.status_code == 200
+    assert "新建 7" in first.text
+    assert second.status_code == 200
+    assert "新建 0" in second.text
+    with RepositoryUnitOfWork(database) as uow:
+        sources = uow.sources.list()
+    assert len(sources) == 7
+    assert all(source.source_kind is SourceKind.FORMAL for source in sources)
+
+
+def test_seed_does_not_promote_modified_legacy_aiia(database: Database) -> None:
+    legacy = Source(
+        name="用户改名 AIIA",
+        source_type=SourceType.HTML_LIST,
+        start_url="https://www.aiiaorg.cn/",
+        enabled=False,
+        default_category=Category.POLICY_INDUSTRY,
+        collector_name="html_list",
+        collector_config={},
+        origin=SourceOrigin.PRESET,
+    )
+    with RepositoryUnitOfWork(database) as uow:
+        uow.sources.add(legacy)
+
+    result = SourceSeedService(lambda: RepositoryUnitOfWork(database)).seed()
+
+    assert (result.created, result.promoted, result.conflicts) == (6, 0, 1)
+    with RepositoryUnitOfWork(database) as uow:
+        stored = uow.sources.get(legacy.id)
+    assert stored is not None
+    assert stored.name == "用户改名 AIIA"
+    assert stored.enabled is False
+    assert stored.source_kind is SourceKind.TEST
 
 
 def test_web_test_database_is_not_formal_database(database: Database) -> None:

@@ -4,6 +4,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from app.classifiers.manual import ManualCategoryError, ManualClassifier
+from app.domain.enums import SourceKind
 from app.domain.queries import (
     CrawlRunListEntry,
     ItemListEntry,
@@ -51,15 +52,19 @@ class WebDataService:
                     is_favorite=item.is_favorite,
                     source_id=item.source_id,
                     source_name=source_name,
+                    source_kind=source_kind,
                 )
-                for item, source_name in rows
+                for item, source_name, source_kind in rows
             )
         return Page(entries, query.page, query.per_page, total)
 
     def source_options(self) -> tuple[SourceOption, ...]:
         with self._uow_factory() as uow:
             options = uow.sources.list_options()
-        return tuple(SourceOption(source_id, name) for source_id, name in options)
+        return tuple(
+            SourceOption(source_id, name, source_kind, enabled)
+            for source_id, name, source_kind, enabled in options
+        )
 
     def list_sources(self, *, page: int, per_page: int) -> Page[SourceListEntry]:
         with self._uow_factory() as uow:
@@ -81,10 +86,19 @@ class WebDataService:
                     last_error=(
                         sanitize_error(source.last_error, limit=240) if source.last_error else None
                     ),
+                    source_kind=source.source_kind,
+                    source_tier=source.source_tier.value,
+                    audience=source.audience.value,
+                    homepage_visible=source.homepage_visible,
+                    export_visible=source.export_visible,
                 )
                 for source in sources
             )
         return Page(entries, page, per_page, total)
+
+    def formal_source_count(self) -> int:
+        with self._uow_factory() as uow:
+            return sum(source.source_kind is SourceKind.FORMAL for source in uow.sources.list())
 
     def list_crawl_runs(self, *, page: int, per_page: int) -> Page[CrawlRunListEntry]:
         with self._uow_factory() as uow:
@@ -107,6 +121,14 @@ class WebDataService:
                     error_summary=(
                         sanitize_error(run.error_summary, limit=300) if run.error_summary else None
                     ),
+                    normalized_count=run.normalized_count,
+                    accepted_count=run.accepted_count,
+                    rejected_count=run.rejected_count,
+                    classified_count=run.classified_count,
+                    duplicate_count=run.duplicate_count,
+                    failed_count=run.failed_count,
+                    rejection_reason_counts=dict(run.rejection_reason_counts),
+                    failure_reason_counts=dict(run.failure_reason_counts),
                 )
                 for run in runs
             )

@@ -1,5 +1,6 @@
 """CrawlRun lifecycle ownership and aggregate statistics."""
 
+from collections import Counter
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
@@ -68,6 +69,19 @@ class CrawlRunService:
             run.updated_count = sum(result.updated for result in source_results)
             run.skipped_count = sum(result.skipped for result in source_results)
             run.unclassified_count = sum(result.unclassified for result in source_results)
+            run.normalized_count = sum(result.normalized for result in source_results)
+            run.accepted_count = sum(result.accepted for result in source_results)
+            run.rejected_count = sum(result.rejected for result in source_results)
+            run.classified_count = sum(result.classified for result in source_results)
+            run.duplicate_count = sum(result.duplicate for result in source_results)
+            run.failed_count = sum(result.failed for result in source_results)
+            reason_counts: Counter[str] = Counter()
+            failure_counts: Counter[str] = Counter()
+            for result in source_results:
+                reason_counts.update(result.rejection_reason_counts)
+                failure_counts.update(result.failure_reason_counts)
+            run.rejection_reason_counts = dict(reason_counts)
+            run.failure_reason_counts = dict(failure_counts)
             run.error_summary = error_summary
             result = _to_result(run, source_results)
         return result
@@ -111,6 +125,14 @@ def _to_result(
         unclassified_count=run.unclassified_count,
         error_summary=run.error_summary,
         source_results=tuple(source_results),
+        normalized_count=run.normalized_count,
+        accepted_count=run.accepted_count,
+        rejected_count=run.rejected_count,
+        classified_count=run.classified_count,
+        duplicate_count=run.duplicate_count,
+        failed_count=run.failed_count,
+        rejection_reason_counts=dict(run.rejection_reason_counts),
+        failure_reason_counts=dict(run.failure_reason_counts),
     )
 
 

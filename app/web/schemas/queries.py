@@ -5,7 +5,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from app.domain.enums import Category
+from app.domain.enums import Category, SourceScope
 from app.domain.queries import ItemFilter, ItemQuery
 
 MAX_DATABASE_ID = 9_223_372_036_854_775_807
@@ -46,6 +46,13 @@ class ItemQueryParams(PageParams):
     discovered_from: date | None = None
     discovered_to: date | None = None
     unclassified: Literal["all", "yes", "no"] = "all"
+    source_scope: Literal["leadership", "all", "non_formal", "disabled", "fallback"] = "leadership"
+
+    @field_validator("source_scope", mode="before")
+    @classmethod
+    def safe_source_scope(cls, value: object) -> object:
+        allowed = {"leadership", "all", "non_formal", "disabled", "fallback"}
+        return value if value in allowed else "leadership"
 
     @field_validator("keyword", mode="before")
     @classmethod
@@ -85,11 +92,15 @@ class ItemQueryParams(PageParams):
             discovered_from=item_filter.discovered_from,
             discovered_to=item_filter.discovered_to,
             unclassified=item_filter.unclassified,
+            source_scope=item_filter.source_scope,
             page=self.page,
             per_page=self.per_page,
         )
 
-    def to_filter(self) -> ItemFilter:
+    def to_filter(self, *, for_export: bool = False) -> ItemFilter:
+        scope = SourceScope(self.source_scope)
+        if for_export and scope is SourceScope.LEADERSHIP:
+            scope = SourceScope.FORMAL_EXPORT
         return ItemFilter(
             keyword=self.keyword,
             category=self.category,
@@ -100,6 +111,7 @@ class ItemQueryParams(PageParams):
             discovered_from=_start(self.discovered_from),
             discovered_to=_exclusive_end(self.discovered_to),
             unclassified=_tri_state(self.unclassified),
+            source_scope=scope,
         )
 
     def query_values(self) -> dict[str, str]:
@@ -114,9 +126,10 @@ class ItemQueryParams(PageParams):
             "discovered_from",
             "discovered_to",
             "unclassified",
+            "source_scope",
         ):
             value = getattr(self, key)
-            if value is None or value == "all":
+            if value is None or (value == "all" and key != "source_scope"):
                 continue
             values[key] = value.value if isinstance(value, Category) else str(value)
         return values

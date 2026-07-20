@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
 from app.config.settings import PROJECT_ROOT
-from app.domain.enums import Category, CrawlStatus, RunTrigger
+from app.domain.enums import Category, CrawlStatus, RunTrigger, SourceScope
 from app.domain.exports import ExportFormat, ExportQuery
 from app.domain.queries import ItemFilter
 from app.domain.update import UpdateMode, UpdateResult
@@ -71,6 +71,7 @@ async def _run_update(database: Database, arguments: argparse.Namespace) -> int:
         trigger=RunTrigger.MANUAL_CLI,
         source_id=arguments.source_id,
         allow_disabled=arguments.allow_disabled,
+        formal_only=arguments.source_id is None and not arguments.all_enabled,
         mode=UpdateMode(arguments.mode),
         max_pages=arguments.max_pages,
         max_items=arguments.max_items,
@@ -83,8 +84,11 @@ async def _run_update(database: Database, arguments: argparse.Namespace) -> int:
 
 def _seed_sources(database: Database) -> None:
     service = SourceSeedService(lambda: RepositoryUnitOfWork(database))
-    created, existing = service.seed()
-    print(f"preset sources: created={created} existing={existing}")
+    result = service.seed()
+    print(
+        f"formal sources: created={result.created} promoted={result.promoted} "
+        f"existing={result.existing} conflicts={result.conflicts} expected={result.expected}"
+    )
 
 
 def _print_result(result: UpdateResult) -> None:
@@ -93,6 +97,7 @@ def _print_result(result: UpdateResult) -> None:
         f"sources={result.source_success}/{result.source_total} "
         f"discovered={result.discovered_count} new={result.new_count} "
         f"updated={result.updated_count} skipped={result.skipped_count} "
+        f"accepted={result.accepted_count} rejected={result.rejected_count} "
         f"unclassified={result.unclassified_count}"
     )
     if result.source_total == 0:
@@ -102,8 +107,12 @@ def _print_result(result: UpdateResult) -> None:
         suffix = f" error={sanitize_error(source.error)}" if source.error else ""
         print(
             f"source={source.source_id}:{source_name} status={source.status.value} "
-            f"discovered={source.discovered} new={source.new} updated={source.updated} "
-            f"skipped={source.skipped} unclassified={source.unclassified}{suffix}"
+            f"fetched={source.discovered} normalized={source.normalized} "
+            f"accepted={source.accepted} rejected={source.rejected} "
+            f"classified={source.classified} inserted={source.new} updated={source.updated} "
+            f"duplicate={source.duplicate} failed={source.failed} "
+            f"rejection_reasons={source.rejection_reason_counts or {}} "
+            f"failure_reasons={source.failure_reason_counts or {}}{suffix}"
         )
 
 
@@ -222,6 +231,7 @@ def _run_export(database: Database, arguments: argparse.Namespace) -> None:
                 discovered_from=discovered_from,
                 discovered_to=discovered_to,
                 unclassified=arguments.unclassified,
+                source_scope=SourceScope.FORMAL_EXPORT,
             ),
             limit=arguments.limit,
         ),
@@ -292,6 +302,11 @@ def _parser() -> argparse.ArgumentParser:
     update.add_argument("--source-id", type=int)
     update.add_argument("--allow-disabled", action="store_true")
     update.add_argument(
+        "--all-enabled",
+        action="store_true",
+        help="include enabled test/fallback sources; bulk updates select formal sources by default",
+    )
+    update.add_argument(
         "--mode",
         choices=[mode.value for mode in UpdateMode],
         default="incremental",
@@ -304,7 +319,8 @@ def _parser() -> argparse.ArgumentParser:
     runs.add_argument("--limit", type=int, default=5)
     sources = commands.add_parser("sources", help="manage preset source configuration")
     source_commands = sources.add_subparsers(dest="source_command", required=True)
-    source_commands.add_parser("seed", help="idempotently import documented example sources")
+    source_commands.add_parser("seed-formal", help="idempotently initialize formal sources")
+    source_commands.add_parser("seed", help=argparse.SUPPRESS)
     export = commands.add_parser("export", help="export filtered intelligence")
     export_formats = export.add_subparsers(dest="export_format", required=True)
     for export_format in ExportFormat:

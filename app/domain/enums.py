@@ -27,6 +27,40 @@ class SourceOrigin(StrEnum):
     IMPORTED = "imported"
 
 
+class SourceKind(StrEnum):
+    """Business standing of a configured source."""
+
+    FORMAL = "formal"
+    TEST = "test"
+    FALLBACK = "fallback"
+
+
+class SourceTier(StrEnum):
+    """Editorial authority tier used by the admission policy."""
+
+    GOVERNMENT = "government"
+    OFFICIAL_COMPANY = "official_company"
+    ASSOCIATION = "association"
+    AUTHORITATIVE_MEDIA = "authoritative_media"
+    FALLBACK = "fallback"
+
+
+class SourceAudience(StrEnum):
+    LEADERSHIP = "leadership"
+    ALL = "all"
+
+
+class SourceScope(StrEnum):
+    """Stable item-list visibility scopes exposed by Web and export adapters."""
+
+    LEADERSHIP = "leadership"
+    FORMAL_EXPORT = "formal_export"
+    ALL = "all"
+    NON_FORMAL = "non_formal"
+    DISABLED = "disabled"
+    FALLBACK = "fallback"
+
+
 class DiscoveryStatus(StrEnum):
     READY = "ready"
     PARTIAL = "partial"

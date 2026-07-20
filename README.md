@@ -1,7 +1,7 @@
 # AI 行业动态与成果申报情报工具
 
 这是一个面向公司内部使用的本地信息聚合工具。当前已完成基础数据库、采集器、规则分类，
-以及 **阶段七：运行设置与轻量定时更新**。
+以及 **阶段八 A：正式信息源体系与内容准入过滤**。
 
 ## 当前已实现
 
@@ -37,7 +37,7 @@
 - 数据库层服务端分页、稳定排序、关键词搜索及分类/来源/收藏/时间筛选；
 - POST 收藏、人工分类覆盖/清除及来源启停；
 - 网页复用 `UpdatePipeline` 的全量/单来源同步更新与进程内互斥锁；
-- 显式、幂等的三个示例来源导入命令。
+- 显式、幂等且不覆盖用户修改的 7 个正式来源导入命令；新数据库不再创建 Qwen-Agent Releases。
 - 来源添加向导，支持 RSS/Atom、GitHub Releases 和简单 HTML 列表自动识别；
 - 实际连接固定到已验证公网 IP、逐跳复查、禁用环境代理并限制超时和解压后响应大小的 SSRF 安全 Fetcher；
 - 复用现有 CollectorRegistry、Collector 和 Classifier 的最多 10 条无落库预览；
@@ -54,6 +54,13 @@
 - FastAPI 生命周期管理的单进程调度器，以及保存后立即重载；
 - 网页手动、CLI 手动和定时运行来源标记，以及三者共享的更新锁；
 - 设置页面和 `schedule show/enable/disable/run` CLI。
+- formal/test/fallback 来源边界、来源权威等级、目标受众及首页/正式导出可见性；
+- 独立于 Collector 和分类器的 `ContentAdmissionPolicy`，提供结构化匹配规则、0..100 质量分和失败关闭；
+- 首页默认仅展示领导可见正式来源，正式 Excel/Word 默认排除测试、备用、停用和拒绝内容；
+- CrawlRun accepted/rejected/classified/duplicate/failed 统计及主要拒绝原因计数。
+
+正式来源清单和限制见 [docs/content-sources.md](docs/content-sources.md)，准入规则与审计语义见
+[docs/content-admission.md](docs/content-admission.md)。
 
 ## 尚未实现
 
@@ -108,13 +115,19 @@ CLI 不包含终端 UI；它与未来网页和任务调度入口共享同一个 
 
 ## 本地网页
 
-首次使用先升级数据库；需要示例来源时再显式导入。导入只写来源配置，不会自动访问网络，
+首次使用先升级数据库；需要正式来源时再显式导入。导入只写来源配置，不会自动访问网络，
 重复执行不会覆盖相同 URL 的已有来源：
 
 ```bash
 uv run alembic upgrade head
-uv run python -m app.cli sources seed
+uv run python -m app.cli sources seed-formal
+uv run python -m app.web
 ```
+
+这也是已有数据库从阶段七升级后的完整路径。Alembic 只迁移结构和旧来源安全默认值，不创建业务
+来源；`seed-formal` 才初始化 7 个正式来源。命令可重复执行，不覆盖已有修改，不重新启用已停用
+来源。阶段七原始 AIIA 预设仅在全部受管字段仍与旧版本完全一致时安全提升为正式来源；有修改时
+报告 conflict 并保留原值。来源页也提供同一幂等初始化操作和当前正式来源数量提示。
 
 启动网页：
 
@@ -129,7 +142,7 @@ uv run python -m app.web
 ```
 
 然后访问 `http://127.0.0.1:8000/`。页面可以搜索和筛选资讯、收藏、人工修改分类、添加和编辑
-来源、抓取预览、更新全部 enabled 来源或单个 enabled 来源，并查看运行记录。启动只检查 Alembic 迁移状态，不会
+来源、抓取预览、更新全部 enabled 正式来源或显式选择单个 test/fallback 来源，并查看运行记录。启动只检查 Alembic 迁移状态，不会
 自动迁移、重建数据库、导入来源或执行公网采集。完整说明见
 [`docs/web-ui.md`](docs/web-ui.md)。
 来源识别范围、SSRF 边界、token 和重新检测流程见

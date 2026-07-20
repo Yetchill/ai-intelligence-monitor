@@ -39,8 +39,9 @@ class ExcelExporter:
         "收藏状态",
         "自动分类分数",
         "自动分类原因",
+        "来源性质",
     )
-    _widths = (8, 44, 20, 12, 24, 19, 19, 60, 14, 12, 16, 48)
+    _widths = (8, 44, 20, 12, 24, 19, 19, 60, 14, 12, 16, 48, 14)
 
     def render(
         self,
@@ -75,6 +76,7 @@ class ExcelExporter:
                         "是" if item.is_favorite else "否",
                         item.classification_score,
                         excel_safe_text(item.classification_reason or ""),
+                        item.source_kind.value,
                     )
                 )
                 row = index + 1
@@ -88,7 +90,7 @@ class ExcelExporter:
                     cell.alignment = Alignment(vertical="top", wrap_text=True)
 
             sheet.freeze_panes = "A2"
-            sheet.auto_filter.ref = f"A1:L{len(items) + 1}"
+            sheet.auto_filter.ref = f"A1:M{len(items) + 1}"
             sheet.row_dimensions[1].height = 24
             for index, width in enumerate(self._widths, start=1):
                 sheet.column_dimensions[get_column_letter(index)].width = width

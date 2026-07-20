@@ -5,15 +5,15 @@
   {% if page.entries %}
     <div class="table-wrap">
       <table>
-        <thead><tr><th>状态</th><th>开始 / 完成</th><th>来源</th><th>discovered</th><th>new</th><th>updated</th><th>skipped</th><th>待分类</th><th>错误摘要</th></tr></thead>
+        <thead><tr><th>状态</th><th>开始 / 完成</th><th>来源</th><th>fetched / normalized</th><th>accepted / rejected</th><th>classified</th><th>inserted / updated</th><th>duplicate / failed</th><th>拒绝原因 / 错误</th></tr></thead>
         <tbody>
           {% for run in page.entries %}
             <tr id="run-{{ run.id }}">
               <td><span class="status-badge {{ run.status.value }}">{{ status_label(run.status) }}</span><div class="muted">#{{ run.id }} · {{ trigger_label(run.trigger) }}</div></td>
               <td>{{ format_time(run.started_at) }}<br><span class="muted">{{ format_time(run.finished_at) if run.finished_at else '尚未完成' }}</span></td>
               <td>{{ run.source_success }} 成功 / {{ run.source_failed }} 失败<br><span class="muted">共 {{ run.source_total }}</span></td>
-              <td>{{ run.discovered_count }}</td><td>{{ run.new_count }}</td><td>{{ run.updated_count }}</td><td>{{ run.skipped_count }}</td><td>{{ run.unclassified_count }}</td>
-              <td class="error-cell">{{ run.error_summary or '—' }}</td>
+              <td>{{ run.discovered_count }} / {{ run.normalized_count }}</td><td>{{ run.accepted_count }} / {{ run.rejected_count }}</td><td>{{ run.classified_count }}</td><td>{{ run.new_count }} / {{ run.updated_count }}</td><td>{{ run.duplicate_count }} / {{ run.failed_count }}</td>
+              <td class="error-cell">{% if run.failure_reason_counts %}<strong>失败</strong><br>{% for reason, count in run.failure_reason_counts.items() %}{{ process_reason_label(reason) }}={{ count }}<br>{% endfor %}{% endif %}{% if run.rejection_reason_counts %}<strong>准入拒绝</strong><br>{% for reason, count in run.rejection_reason_counts.items() %}{{ process_reason_label(reason) }}={{ count }}{% if not loop.last %}<br>{% endif %}{% endfor %}{% endif %}{% if run.error_summary %}<br>{{ run.error_summary }}{% elif not run.rejection_reason_counts and not run.failure_reason_counts %}—{% endif %}</td>
             </tr>
           {% endfor %}
         </tbody>

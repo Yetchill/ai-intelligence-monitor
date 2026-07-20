@@ -62,7 +62,7 @@ async def export_items(request: Request, export_format: ExportFormat) -> Respons
     params = ItemQueryParams.parse(values)
     result = request.app.state.services.exports.export(
         export_format,
-        ExportQuery(filters=params.to_filter()),
+        ExportQuery(filters=params.to_filter(for_export=True)),
     )
     return Response(
         content=result.content,
@@ -76,7 +76,9 @@ async def export_items(request: Request, export_format: ExportFormat) -> Respons
 
 @router.get("/sources", response_class=HTMLResponse)
 async def sources_page(request: Request) -> HTMLResponse:
-    params = PageParams.parse(dict(request.query_params))
+    params = PageParams.parse(
+        {key: value for key, value in request.query_params.items() if key in {"page", "per_page"}}
+    )
     page = request.app.state.services.data.list_sources(page=params.page, per_page=params.per_page)
     _require_existing_page(page.page, page.total_pages)
     values = {"per_page": str(params.per_page)}
@@ -90,8 +92,27 @@ async def sources_page(request: Request) -> HTMLResponse:
             if page.page < page.total_pages
             else None,
             "return_to": _current_path(request),
+            "formal_source_count": request.app.state.services.data.formal_source_count(),
+            "seeded": request.query_params.get("seeded") == "1",
+            "seed_created": request.query_params.get("created"),
+            "seed_promoted": request.query_params.get("promoted"),
+            "seed_conflicts": request.query_params.get("conflicts"),
         },
     )
+
+
+@router.post("/sources/seed-formal", response_class=HTMLResponse)
+async def seed_formal_sources(request: Request) -> RedirectResponse:
+    result = request.app.state.services.source_seed.seed()
+    query = urlencode(
+        {
+            "seeded": "1",
+            "created": str(result.created),
+            "promoted": str(result.promoted),
+            "conflicts": str(result.conflicts),
+        }
+    )
+    return RedirectResponse(f"/sources?{query}", status_code=303)
 
 
 @router.get("/sources/new", response_class=HTMLResponse)
@@ -340,6 +361,19 @@ async def update_source(
 ) -> HTMLResponse:
     result = await request.app.state.services.updates.update(source_id=source_id)
     return _update_response(request, result)
+
+
+@router.post("/sources/{source_id}/preview", response_class=HTMLResponse)
+async def preview_source(
+    request: Request,
+    source_id: Annotated[int, Path(ge=1, le=MAX_DATABASE_ID)],
+) -> HTMLResponse:
+    result = await request.app.state.services.updates.preview(source_id)
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "source-preview.html",
+        {"result": result},
+    )
 
 
 def _update_response(request: Request, result: UpdateResult) -> HTMLResponse:

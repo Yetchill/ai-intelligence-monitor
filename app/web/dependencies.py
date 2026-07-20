@@ -7,7 +7,7 @@ from app.classifiers.rule_based import RuleBasedClassifier
 from app.collectors.registry import default_collector_registry
 from app.domain.collection import Fetcher
 from app.domain.enums import RunTrigger
-from app.domain.update import UpdateResult
+from app.domain.update import SourcePreviewResult, UpdateResult
 from app.services.application_factory import build_export_service, update_pipeline_context
 from app.services.export_service import ExportService
 from app.services.schedule_settings_service import ScheduleSettingsService
@@ -18,6 +18,7 @@ from app.services.source_discovery import (
     SourcePreviewService,
 )
 from app.services.source_management import SourceManagementService, SourceOnboardingService
+from app.services.source_seed_service import SourceSeedService
 from app.services.source_url_security import SafeHttpFetcher, SourceUrlGuard
 from app.services.update_execution_service import (
     PipelineContextFactory,
@@ -42,7 +43,14 @@ class WebUpdateService:
         )
 
     async def update(self, *, source_id: int | None = None) -> UpdateResult:
-        return await self._execution.update(trigger=RunTrigger.MANUAL_WEB, source_id=source_id)
+        return await self._execution.update(
+            trigger=RunTrigger.MANUAL_WEB,
+            source_id=source_id,
+            formal_only=source_id is None,
+        )
+
+    async def preview(self, source_id: int) -> SourcePreviewResult:
+        return await self._execution.preview(source_id)
 
     async def try_scheduled_update(
         self, *, before_update: Callable[[], None] | None = None
@@ -60,6 +68,7 @@ class WebServices:
     scheduler: SchedulerService
     onboarding: SourceOnboardingService
     sources: SourceManagementService
+    source_seed: SourceSeedService
     token_store: DiscoveryTokenStore
     _owned_source_fetcher: SafeHttpFetcher | None = None
 
@@ -102,6 +111,7 @@ class WebServices:
             scheduler=scheduler,
             onboarding=SourceOnboardingService(discovery, preview, store),
             sources=SourceManagementService(uow_factory, store),
+            source_seed=SourceSeedService(uow_factory),
             token_store=store,
             _owned_source_fetcher=owned_fetcher,
         )

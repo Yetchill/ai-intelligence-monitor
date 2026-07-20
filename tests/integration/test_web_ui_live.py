@@ -30,7 +30,8 @@ async def test_seed_update_and_web_actions_use_temporary_database(tmp_path: Path
     database = Database(database_url)
     try:
         seed = SourceSeedService(lambda: RepositoryUnitOfWork(database))
-        assert seed.seed() == (3, 0)
+        seed_result = seed.seed()
+        assert (seed_result.created, seed_result.promoted) == (7, 0)
 
         async with update_pipeline_context(database) as pipeline:
             first = await pipeline.update()
@@ -46,8 +47,12 @@ async def test_seed_update_and_web_actions_use_temporary_database(tmp_path: Path
         with TestClient(application) as client:
             home = client.get("/")
             assert home.status_code == 200
-            assert items[0].title in home.text
-            assert client.get("/", params={"source_id": items[0].source_id}).status_code == 200
+            focused = client.get(
+                "/",
+                params={"source_id": items[0].source_id, "keyword": items[0].title},
+            )
+            assert focused.status_code == 200
+            assert items[0].title in focused.text
             client.post(
                 f"/items/{items[0].id}/favorite",
                 data={"favorite": "true"},

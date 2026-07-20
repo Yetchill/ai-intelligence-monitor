@@ -20,7 +20,16 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from app.domain.enums import Category, CrawlStatus, RunTrigger, SourceOrigin, SourceType
+from app.domain.enums import (
+    Category,
+    CrawlStatus,
+    RunTrigger,
+    SourceAudience,
+    SourceKind,
+    SourceOrigin,
+    SourceTier,
+    SourceType,
+)
 
 
 def utc_now() -> datetime:
@@ -71,6 +80,24 @@ class Source(Base):
     origin: Mapped[SourceOrigin] = mapped_column(
         enum_type(SourceOrigin), nullable=False, default=SourceOrigin.PRESET
     )
+    source_kind: Mapped[SourceKind] = mapped_column(
+        enum_type(SourceKind), nullable=False, default=SourceKind.TEST
+    )
+    source_tier: Mapped[SourceTier] = mapped_column(
+        enum_type(SourceTier), nullable=False, default=SourceTier.FALLBACK
+    )
+    audience: Mapped[SourceAudience] = mapped_column(
+        enum_type(SourceAudience), nullable=False, default=SourceAudience.ALL
+    )
+    homepage_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    export_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    content_scope: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    include_terms: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    exclude_terms: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    minimum_quality_score: Mapped[float] = mapped_column(Float, nullable=False, default=50.0)
+    accept_title_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    allow_external_links: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    allow_technical_updates: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -124,6 +151,7 @@ class IntelligenceItem(Base):
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     is_favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    admission_accepted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     extra: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     source: Mapped[Source] = relationship(back_populates="items")
@@ -156,6 +184,18 @@ class CrawlRun(Base):
     updated_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     unclassified_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    normalized_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    accepted_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rejected_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    classified_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    duplicate_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rejection_reason_counts: Mapped[dict[str, int]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    failure_reason_counts: Mapped[dict[str, int]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     revisions: Mapped[list["ItemRevision"]] = relationship(back_populates="crawl_run")

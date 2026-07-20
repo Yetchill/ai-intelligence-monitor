@@ -28,6 +28,7 @@ class SourcePersistenceStats:
     updated: int
     skipped: int
     unclassified: int
+    duplicate: int
 
 
 class ItemPersistenceService:
@@ -51,6 +52,7 @@ class ItemPersistenceService:
         updated_count = 0
         skipped_count = invalid_skipped
         unclassified_count = 0
+        duplicate_count = 0
         processed_item_ids: set[int] = set()
 
         with self._uow_factory() as uow:
@@ -81,10 +83,12 @@ class ItemPersistenceService:
                         automatic_category_provider=classified.classification.provider,
                         manual_category=None,
                         fingerprint=fingerprint,
+                        admission_accepted=True,
                         extra=dict(normalized.extra),
                     )
                     existing, inserted = uow.items.add_or_get_existing(candidate)
                     if existing.id in processed_item_ids:
+                        duplicate_count += 1
                         continue
                     if inserted:
                         new_count += 1
@@ -100,8 +104,10 @@ class ItemPersistenceService:
                         )
                         updated_count += outcome == "updated"
                         skipped_count += outcome == "skipped"
+                        duplicate_count += outcome == "skipped"
                 else:
                     if existing.id in processed_item_ids:
+                        duplicate_count += 1
                         continue
                     outcome = self._update_existing(
                         uow,
@@ -114,6 +120,7 @@ class ItemPersistenceService:
                     )
                     updated_count += outcome == "updated"
                     skipped_count += outcome == "skipped"
+                    duplicate_count += outcome == "skipped"
 
                 processed_item_ids.add(existing.id)
                 effective_category = existing.manual_category or existing.category
@@ -128,6 +135,7 @@ class ItemPersistenceService:
             updated=updated_count,
             skipped=skipped_count,
             unclassified=unclassified_count,
+            duplicate=duplicate_count,
         )
 
     def _update_existing(
@@ -142,6 +150,7 @@ class ItemPersistenceService:
         now: datetime,
     ) -> str:
         existing.last_seen_at = now
+        existing.admission_accepted = True
         if existing.source_id != source_id:
             existing.extra = _record_additional_source(
                 existing.extra,

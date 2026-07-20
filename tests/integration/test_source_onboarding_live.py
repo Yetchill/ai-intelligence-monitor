@@ -32,14 +32,14 @@ async def test_django_weblog_rss_onboarding_live() -> None:
 
 
 @pytest.mark.asyncio
-async def test_qwen_agent_releases_onboarding_live() -> None:
+async def test_qwen_agent_releases_preview_is_rejected_by_default() -> None:
     discovery, preview = await _discover_and_preview(
         "https://github.com/QwenLM/Qwen-Agent/releases"
     )
 
     assert discovery.source_type is SourceType.GITHUB_RELEASE
-    assert preview.items
-    print(f"onboarding GitHub Releases previewed {len(preview.items)} items")
+    assert preview.items == ()
+    assert preview.errors
 
 
 @pytest.mark.asyncio

@@ -74,7 +74,12 @@ Fetcher，`UpdatePipeline` 本身没有复制或改写。
 可用后，短事务才替换系统检测得到的 URL、类型、collector 和配置；冲突或事务失败时旧配置保持
 不变。不可用的重新检测只记录测试时间和检测状态，不覆盖当前 collector，也不删除历史资讯。
 
-## 验收来源说明
+## 正式身份与预览准入
 
-Google Blog RSS、Qwen-Agent Releases 和普通 HTML 列表页仍只是技术验收来源，不代表正式、完整
-或经过内容质量评审的来源库。本阶段不扩充正式来源库，也不优化来源内容质量。
+新用户手工添加的来源属于 `test`；GitHub Releases 属于 `fallback`。两者默认不在领导首页或
+正式导出显示。检测预览与正式更新共用内容准入策略，预览不落库，只显示主拒绝原因计数。通过
+采集预览不等于获得 formal 身份；正式来源必须进入受审查的 seed/迁移配置。
+
+Qwen-Agent Releases 不再属于默认来源。`GitHubReleaseCollector` 仅保留为备用能力；普通维护、
+patch、依赖升级和预发布即使采集成功也会被准入拒绝。正式来源清单见
+[`content-sources.md`](content-sources.md)。

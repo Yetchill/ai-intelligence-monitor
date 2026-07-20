@@ -70,7 +70,9 @@ class WordExporter:
                     )
                     details = document.add_paragraph()
                     details.add_run("来源: ").bold = True
-                    details.add_run(clean_text(item.source_name, limit=255))
+                    details.add_run(
+                        f"{clean_text(item.source_name, limit=255)} ({item.source_kind.value})"
+                    )
                     details.add_run("\n发布时间: ").bold = True
                     details.add_run(format_time(item.published_at) or "未知")
                     details.add_run("\n分类方式: ").bold = True
