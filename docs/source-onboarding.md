@@ -1,5 +1,11 @@
 # 信息源添加、自动识别与抓取预览
 
+## Catalog 与用户来源
+
+`sources sync-catalog` 将所有目录来源（包括 candidate）入库。用户发现并保存的新来源也一律先成为 candidate；旧 enabled 复选框不能直接激活。使用运行时 preview 检查 v2 分类和质量，再通过 `sources activate <slug> --confirm` 激活。详细门槛见 [source-lifecycle.md](source-lifecycle.md)。
+
+来源管理页展示全部 lifecycle、角色、crawl mode、技术状态、阻碍原因、上次 preview 与建议下一步，并可按 active/candidate/paused/official/media/blocked/needs-custom 筛选。
+
 ## 使用流程
 
 在来源页选择“添加来源”，输入一个公开 HTTP(S) 网址。系统规范化网址、安全检查目标，识别

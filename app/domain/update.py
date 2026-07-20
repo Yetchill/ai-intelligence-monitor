@@ -4,7 +4,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
-from app.domain.enums import CrawlStatus, RunTrigger
+from app.domain.enums import (
+    CrawlStatus,
+    PrimaryType,
+    ReviewStatus,
+    RunTrigger,
+    VerificationStatus,
+)
 
 
 def _empty_reason_counts() -> dict[str, int]:
@@ -86,6 +92,12 @@ class SourcePreviewItem:
     accepted: bool
     reason: str
     quality_score: int
+    published_at: datetime | None = None
+    primary_type: PrimaryType = PrimaryType.UNCLASSIFIED
+    verification_status: VerificationStatus = VerificationStatus.MEDIA_ONLY
+    review_status: ReviewStatus = ReviewStatus.PENDING
+    link_domain: str | None = None
+    classification_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +114,15 @@ class SourcePreviewResult:
     failure_reason_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
     items: tuple[SourcePreviewItem, ...] = ()
     error: str | None = None
+    fetch_status: str = "success"
+    parse_status: str = "success"
+    primary_type_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+    verification_status_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+    review_status_counts: dict[str, int] = field(default_factory=_empty_reason_counts)
+    valid_title_ratio: float = 0.0
+    valid_date_ratio: float = 0.0
+    valid_link_ratio: float = 0.0
+    external_link_ratio: float = 0.0
 
     @property
     def primary_rejection_reason(self) -> str | None:

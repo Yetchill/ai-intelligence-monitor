@@ -1,5 +1,7 @@
 # 分类系统
 
+> 阶段八 B 后，本页描述的旧 `category` 只作为兼容和人工历史保留。新的业务事实来源是 [taxonomy v2](taxonomy-v2.md)：单一 `primary_type` 加多选 topic/industry tags、可信/审核状态和案例完整度。旧分类只做确定性迁移，会议不再是业务分类。
+
 ## 当前范围
 
 分类器保持纯逻辑：消费不可变 `CollectedItem`，返回 `ClassificationResult`，不访问数据库、

@@ -1,5 +1,13 @@
 # 正式信息源体系
 
+## 阶段八 B 来源边界
+
+正式来源清单不再散落于 seed 和 UI；以 [source-catalog.md](source-catalog.md) 为准。OpenAI RSS、Google Blog RSS、Qwen-Agent 旧 Releases 和百度智能云客户案例已退休，原因是本产品聚焦国内权威来源、稳定语义及可验收质量；百度智能云新闻继续保留。通用 `RSSCollector`、`GitHubReleaseCollector` 和 Fetcher 没有删除，GitHub Release 仍是非默认备用能力。
+
+业务数据删除不放在 Alembic：Schema migration 应可重复、可回滚，不能在升级时不可逆删除用户收藏、人工分类或历史 Item。使用备份门控的 `sources purge-retired`，且只在正式数据库副本执行确认。
+
+新角色包括 official_product/policy/industry、opportunity_and_award_hub、official_case_hub、report_hub、media_discovery 与 fallback；规则和完整目录见来源目录文档。
+
 本文记录阶段八 A 的首批正式来源。最近一次人工可访问性验证日期为 **2026-07-19**。
 正式来源配置位于 `app/config/preset_sources.yaml`，通过 `sources seed-formal` 命令或来源页按钮
 幂等导入；URL 已存在时不覆盖名称、启停状态或用户修改。唯一兼容提升是阶段七原始 AIIA

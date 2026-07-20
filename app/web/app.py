@@ -19,21 +19,35 @@ from app.classifiers.manual import ManualCategoryError
 from app.config import Settings, get_settings
 from app.config.settings import PROJECT_ROOT
 from app.domain.collection import Fetcher
-from app.domain.enums import Category, CrawlStatus, DiscoveryStatus, RunTrigger, SourceType, Weekday
+from app.domain.enums import (
+    Category,
+    CrawlStatus,
+    DiscoveryStatus,
+    PrimaryType,
+    RunTrigger,
+    SourceType,
+    Weekday,
+)
 from app.domain.exports import ExportError, ExportGenerationError
 from app.domain.scheduling import SchedulerStatus
+from app.exporters.common import PRIMARY_TYPE_LABELS
 from app.services.application_factory import update_pipeline_context
 from app.services.error_sanitization import sanitize_error
 from app.services.schedule_settings_service import ScheduleValidationError
 from app.services.scheduler_service import SchedulerClock, SchedulerReloadError
 from app.services.source_discovery import DiscoveryTokenError, DiscoveryTokenStore
+from app.services.source_lifecycle_service import SourceActivationError
 from app.services.source_management import (
     ManagedSourceNotFoundError,
     SourceAlreadyExistsError,
     SourceManagementError,
 )
 from app.services.source_url_security import SourceUrlGuard, SourceUrlSecurityError
-from app.services.update_pipeline import SourceDisabledError, SourceNotFoundError
+from app.services.update_pipeline import (
+    SourceCandidateError,
+    SourceDisabledError,
+    SourceNotFoundError,
+)
 from app.services.web_data_service import EntityNotFoundError, SourceStateError
 from app.storage.database import Database
 from app.utils.logging import configure_logging
@@ -183,6 +197,7 @@ def _templates() -> Jinja2Templates:
     )
     globals_mapping = cast(dict[str, object], environment.globals)
     globals_mapping["category_label"] = _category_label
+    globals_mapping["primary_type_label"] = _primary_type_label
     globals_mapping["status_label"] = _status_label
     globals_mapping["format_time"] = _format_time
     globals_mapping["discovery_status_label"] = _discovery_status_label
@@ -202,6 +217,13 @@ def _format_time(value: object) -> str:
 
 def _category_label(value: Category | str) -> str:
     return CATEGORY_LABELS.get(Category(value), "待分类")
+
+
+def _primary_type_label(value: PrimaryType | str) -> str:
+    try:
+        return PRIMARY_TYPE_LABELS.get(PrimaryType(value), "待确认")
+    except ValueError:
+        return "待确认"
 
 
 def _status_label(value: CrawlStatus | str) -> str:
@@ -283,11 +305,13 @@ def _register_error_handlers(application: FastAPI, templates: Jinja2Templates) -
     application.add_exception_handler(SourceUrlSecurityError, input_error)
     application.add_exception_handler(SourceManagementError, input_error)
     application.add_exception_handler(SourceStateError, input_error)
+    application.add_exception_handler(SourceActivationError, input_error)
     application.add_exception_handler(DiscoveryTokenError, input_error)
     application.add_exception_handler(ManualCategoryError, input_error)
     application.add_exception_handler(ExportError, input_error)
     application.add_exception_handler(ExportGenerationError, unexpected_error)
     application.add_exception_handler(SourceDisabledError, input_error)
+    application.add_exception_handler(SourceCandidateError, input_error)
     application.add_exception_handler(ScheduleValidationError, input_error)
     application.add_exception_handler(SchedulerReloadError, scheduler_reload_error)
     application.add_exception_handler(RequestValidationError, request_validation_error)

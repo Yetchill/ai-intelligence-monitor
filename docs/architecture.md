@@ -1,5 +1,13 @@
 # 阶段八 A 正式来源与内容准入架构
 
+## 阶段八 B 边界
+
+正式处理链现在是 `Collector -> normalize -> BasicAdmissionPolicy -> ClassificationService -> VerificationService -> PublicationPolicy -> persistence`。来源 lifecycle 只回答能否运行；BasicAdmission 和 Classification 回答是否值得保留；Verification、review 与 PublicationPolicy 回答是否正式发布。站点解析留在 Collector，角色词表位于严格 YAML，UpdatePipeline 不承载站点特例。
+
+Source Catalog 是配置事实，数据库 Source 是可运行及可管理投影。同步是保守的：受管 fingerprint 不一致即 conflict，paused 和人工激活状态不会被目录静默覆盖。详情见 [source-catalog.md](source-catalog.md)。
+
+`CrawlRun` 继续汇总整次运行，`CrawlSourceExecution` 保存来源子执行；清理某个来源不会删除仍含其他执行的 run。`ItemReviewEvent` 是人工覆盖审计。Item 自关联支持 report/case，见 [report-case-model.md](report-case-model.md)。
+
 ## 范围
 
 当前架构覆盖基础设施、基础采集器、纯逻辑分类子系统，以及更新流水线、分类持久化与运行

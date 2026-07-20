@@ -62,8 +62,21 @@ class ExportService:
                     is_favorite=item.is_favorite,
                     classification_score=item.classification_score,
                     classification_reason=item.classification_reason,
+                    primary_type=item.primary_type,
+                    manual_primary_type=item.manual_primary_type,
+                    topic_tags=tuple(item.manual_topic_tags or item.topic_tags),
+                    industry_tags=tuple(item.manual_industry_tags or item.industry_tags),
+                    verification_status=item.verification_status,
+                    review_status=item.review_status,
+                    source_role=source_role,
+                    discovery_url=(
+                        item.discovery_url if is_http_url(item.discovery_url or "") else None
+                    ),
+                    official_url=(
+                        item.official_url if is_http_url(item.official_url or "") else None
+                    ),
                 )
-                for item, source_name, source_kind in rows
+                for item, source_name, source_kind, source_role in rows
             )
 
         generated_at = datetime.now(UTC)

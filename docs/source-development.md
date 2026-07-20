@@ -1,5 +1,11 @@
 # Collector 与来源配置开发
 
+## 阶段八 B 开发流程
+
+新增来源需要：严格 catalog entry、合适 source role 规则、受限 Collector 配置、FakeFetcher fixture、无落库 preview、生命周期测试及文档状态。普通列表优先复用 `html_list`；单页日志复用 `single_page_changelog`；报告和案例通过 DocumentHub/CaseHub 接口扩展。不得把站点 selector 或例外堆入 UpdatePipeline。
+
+`crawl_mode=rsshub` 只是未来自建适配点。本阶段不引入 Node.js、Docker、公共 RSSHub、Playwright、验证码绕过或私人接口。
+
 ## 边界
 
 Collector 的职责是从一个已确认来源发现列表项并返回 `CollectedItem`。它不保存数据库、不分类、不执行更新流水线、不进入详情页，也不处理登录、验证码或浏览器渲染。

@@ -37,7 +37,9 @@ def test_alembic_initializes_database(tmp_path: Path) -> None:
         assert set(inspector.get_table_names()) == {
             "alembic_version",
             "crawl_runs",
+            "crawl_source_executions",
             "intelligence_items",
+            "item_review_events",
             "item_revisions",
             "schedule_settings",
             "sources",
@@ -219,15 +221,15 @@ def test_stage_seven_database_upgrade_and_formal_seed_preserve_history(
         seed = SourceSeedService(lambda: RepositoryUnitOfWork(upgraded))
         first = seed.seed()
         second = seed.seed()
-        assert (first.created, first.promoted, first.conflicts) == (6, 1, 0)
-        assert (second.created, second.promoted, second.existing) == (0, 0, 7)
+        assert (first.created, first.promoted, first.conflicts) == (27, 0, 1)
+        assert (second.created, second.promoted, second.existing, second.conflicts) == (0, 0, 27, 1)
         with RepositoryUnitOfWork(upgraded) as uow:
             final_sources = uow.sources.list()
             aiia = uow.sources.get_by_start_url("https://www.aiiaorg.cn/")
             qwen = uow.sources.get(3)
-        assert len(final_sources) == 9
-        assert sum(source.source_kind is SourceKind.FORMAL for source in final_sources) == 7
-        assert aiia is not None and aiia.allow_external_links is True
+        assert len(final_sources) == 30
+        assert sum(source.source_kind is SourceKind.FORMAL for source in final_sources) == 27
+        assert aiia is not None and aiia.allow_external_links is False
         assert aiia.enabled is False
         assert qwen is not None
         assert (

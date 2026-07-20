@@ -1,5 +1,11 @@
 # 内容准入策略
 
+## Basic admission 与 taxonomy v2
+
+原 `ContentAdmissionPolicy` 名称仅保留兼容 alias；职责实体为 `BasicAdmissionPolicy`。它不决定 primary type，也不按 `allowed_primary_types` 在分类前做循环判断。普通会议、演讲、参展、招聘、培训、促销、登录/导航、无实质短内容及来源 include/exclude 在这里处理。
+
+分类、可信和发布分别由独立服务处理，详见 [taxonomy-v2.md](taxonomy-v2.md) 与 [source-review.md](source-review.md)。角色包采用不同规则，官方权威不等于所有栏目内容自动通过；媒体只提供线索。
+
 ## 所在层级与流程
 
 `ContentAdmissionPolicy` 位于 application service 层，领域结果位于 `app/domain/admission.py`。

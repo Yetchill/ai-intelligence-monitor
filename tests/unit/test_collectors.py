@@ -353,7 +353,14 @@ def test_registry_constructs_by_collector_name_and_accepts_extensions() -> None:
     registry = default_collector_registry()
 
     assert isinstance(registry.create(source, fetcher), RSSCollector)
-    assert registry.names() == ("github_release", "html_list", "rss")
+    assert registry.names() == (
+        "case_hub",
+        "document_hub",
+        "github_release",
+        "html_list",
+        "rss",
+        "single_page_changelog",
+    )
 
     custom_registry = CollectorRegistry()
     custom_registry.register("rss", RSSCollector)

@@ -1,5 +1,20 @@
 # AI 行业动态与成果申报情报工具
 
+> 阶段八 B 已引入完整来源目录、来源生命周期、taxonomy v2、可信/审核状态、候选 preview/激活门槛以及报告-案例父子模型。完整说明见 [来源目录](docs/source-catalog.md)、[分类体系](docs/taxonomy-v2.md)、[生命周期](docs/source-lifecycle.md) 和 [审核发布](docs/source-review.md)。
+
+常用的阶段八 B 运维命令：
+
+```bash
+uv run alembic upgrade head
+uv run python -m app.cli sources sync-catalog
+uv run python -m app.cli sources preview <slug> --max-items 20 --no-persist
+uv run python -m app.cli sources activate <slug> --confirm
+uv run python -m app.cli sources purge-retired --dry-run
+uv run python -m app.cli sources purge-retired --confirm --backup /safe/path/before-purge.db
+```
+
+目录同步将 28 条 active/candidate 来源全部写入数据库；candidate 不参加批量更新。清理 confirm 必须在数据库副本上运行并先创建显式备份。
+
 这是一个面向公司内部使用的本地信息聚合工具。当前已完成基础数据库、采集器、规则分类，
 以及 **阶段八 A：正式信息源体系与内容准入过滤**。
 

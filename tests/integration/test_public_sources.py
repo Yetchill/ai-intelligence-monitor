@@ -3,7 +3,6 @@
 import pytest
 
 from app.collectors.html_list import HTMLListCollector
-from app.collectors.rss import RSSCollector
 from app.domain.collection import CollectContext, CollectedItem
 from app.fetchers.http import HttpFetcher
 
@@ -18,23 +17,12 @@ def _assert_valid(items: list[CollectedItem]) -> None:
 
 
 @pytest.mark.asyncio
-async def test_openai_official_news_rss_live() -> None:
-    async with HttpFetcher(timeout_seconds=30, request_interval_seconds=0) as fetcher:
-        items = await RSSCollector(fetcher).collect(
-            CollectContext(source_url="https://openai.com/news/rss.xml", config={"max_items": 20})
-        )
-
-    _assert_valid(items)
-    assert all(item.published_at is not None or item.summary for item in items)
-    print(f"OpenAI official RSS collected {len(items)} items")
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("url", "config"),
     [
         (
-            "https://www.nda.gov.cn/sjj/zwgk/zcfb/list/index_pc_1.html",
+            "https://www.nda.gov.cn/sjj/swdt/list/index_pc_1.html",
             {
                 "allowed_domains": ["www.nda.gov.cn"],
                 "discovery": {"mode": "selectors", "max_pages": 1, "max_depth": 0},
@@ -47,7 +35,7 @@ async def test_openai_official_news_rss_live() -> None:
             },
         ),
         (
-            "https://www.cac.gov.cn/wxzw/wxfb/A093702index_1.htm",
+            "https://www.cac.gov.cn/wxzw/zcfg/A093703index_1.htm",
             {
                 "allowed_domains": ["www.cac.gov.cn"],
                 "discovery": {"mode": "selectors", "max_pages": 1, "max_depth": 0},
@@ -69,6 +57,18 @@ async def test_openai_official_news_rss_live() -> None:
                     "title_selector": "h3",
                     "link_selector": "a",
                     "date_selector": ".msg span",
+                },
+            },
+        ),
+        (
+            "https://cloud.baidu.com/news/news",
+            {
+                "allowed_domains": ["cloud.baidu.com"],
+                "discovery": {
+                    "mode": "link_filter",
+                    "max_pages": 1,
+                    "max_depth": 0,
+                    "include_url_patterns": ["/news/news_"],
                 },
             },
         ),

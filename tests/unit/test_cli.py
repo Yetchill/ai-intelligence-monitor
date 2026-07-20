@@ -20,6 +20,17 @@ class DisposableDatabase:
         self.disposed = True
 
 
+def test_taxonomy_reclassify_accepts_explicit_dry_run() -> None:
+    arguments = cli._parser().parse_args(  # pyright: ignore[reportPrivateUsage]
+        ["taxonomy", "reclassify", "--dry-run"]
+    )
+
+    assert arguments.command == "taxonomy"
+    assert arguments.taxonomy_command == "reclassify"
+    assert arguments.dry_run is True
+    assert arguments.confirm is False
+
+
 def test_update_exception_returns_nonzero_without_traceback_or_secret(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

@@ -8,7 +8,7 @@
       <p>集中查看已采集的行业动态，并按需要收藏或修正分类。</p>
     </div>
     <form action="/updates" method="post" data-update-form>
-      <button class="button primary" type="submit" data-processing-text="正在更新…">更新全部正式来源</button>
+      <button class="button primary" type="submit" data-processing-text="正在更新…">更新全部 active 来源</button>
     </form>
   </section>
 
@@ -23,6 +23,18 @@
           <option value="{{ category.value }}" {% if filters.category == category %}selected{% endif %}>{{ category_label(category) }}</option>
         {% endfor %}
       </select>
+    </label>
+    <label>主要信息形态
+      <select name="primary_type">
+        <option value="">全部形态</option>
+        {% for primary_type in primary_types %}<option value="{{ primary_type.value }}" {% if filters.primary_type == primary_type %}selected{% endif %}>{{ primary_type_label(primary_type) }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>可信状态
+      <select name="verification_status"><option value="">全部</option>{% for status in verification_statuses %}<option value="{{ status.value }}" {% if filters.verification_status == status %}selected{% endif %}>{{ status.value }}</option>{% endfor %}</select>
+    </label>
+    <label>审核状态
+      <select name="review_status"><option value="">全部</option>{% for status in review_statuses %}<option value="{{ status.value }}" {% if filters.review_status == status %}selected{% endif %}>{{ status.value }}</option>{% endfor %}</select>
     </label>
     <label>来源
       <select name="source_id">
@@ -39,6 +51,7 @@
         <option value="non_formal" {% if filters.source_scope == 'non_formal' %}selected{% endif %}>非正式来源</option>
         <option value="fallback" {% if filters.source_scope == 'fallback' %}selected{% endif %}>备用技术来源</option>
         <option value="disabled" {% if filters.source_scope == 'disabled' %}selected{% endif %}>已停用来源历史</option>
+        <option value="industry_leads" {% if filters.source_scope == 'industry_leads' %}selected{% endif %}>行业线索 / 待审核</option>
       </select>
     </label>
     <label>收藏
@@ -100,9 +113,12 @@
         <article class="item-card">
           <div class="item-topline">
             <span class="category-badge {% if item.effective_category.value == 'unclassified' %}pending{% endif %}">{{ category_label(item.effective_category) }}</span>
+            <span class="category-badge {% if item.effective_primary_type.value == 'unclassified' %}pending{% endif %}">{{ primary_type_label(item.effective_primary_type) }}</span>
             <span class="origin-badge">{{ item.category_origin }}</span>
             {% if item.is_favorite %}<span class="favorite-badge">已收藏</span>{% endif %}
             <span class="origin-badge">{{ item.source_kind.value }}</span>
+            <span class="origin-badge">{{ item.verification_status.value }}</span>
+            <span class="origin-badge">{{ item.review_status.value }}</span>
           </div>
           <h2>
             {% if item.original_url %}
@@ -115,12 +131,21 @@
             <span>发现：{{ format_time(item.discovered_at) }}</span>
           </div>
           {% if item.summary %}<p class="summary">{{ item.summary }}</p>{% endif %}
+          {% if item.topic_tags or item.industry_tags %}<p class="muted">主题：{{ item.topic_tags|join(', ') or '—' }}；行业：{{ item.industry_tags|join(', ') or '—' }}；案例完整度：{{ item.case_completeness.value }}</p>{% endif %}
           <div class="item-actions">
             {% if item.original_url %}<a class="text-link" href="{{ item.original_url }}" target="_blank" rel="noopener noreferrer">查看原文</a>{% endif %}
             <form action="/items/{{ item.id }}/favorite" method="post">
               <input type="hidden" name="favorite" value="{{ 'false' if item.is_favorite else 'true' }}">
               <input type="hidden" name="return_to" value="{{ return_to }}">
               <button class="button small" type="submit">{{ '取消收藏' if item.is_favorite else '收藏' }}</button>
+            </form>
+            <form class="category-form" action="/items/{{ item.id }}/review" method="post">
+              <input type="hidden" name="return_to" value="{{ return_to }}">
+              <select name="primary_type">{% for primary_type in primary_types %}<option value="{{ primary_type.value }}" {% if item.effective_primary_type == primary_type %}selected{% endif %}>{{ primary_type_label(primary_type) }}</option>{% endfor %}</select>
+              <select name="verification_status">{% for status in verification_statuses %}<option value="{{ status.value }}" {% if item.verification_status == status %}selected{% endif %}>{{ status.value }}</option>{% endfor %}</select>
+              <select name="review_status">{% for status in review_statuses %}<option value="{{ status.value }}" {% if item.review_status == status %}selected{% endif %}>{{ status.value }}</option>{% endfor %}</select>
+              <input name="official_url" value="{{ item.official_url or '' }}" placeholder="官方原文 URL（可空）">
+              <button class="button small" type="submit">保存审核</button>
             </form>
             <form class="category-form" action="/items/{{ item.id }}/category" method="post">
               <input type="hidden" name="return_to" value="{{ return_to }}">
@@ -143,7 +168,7 @@
       <p>默认首页只显示已启用正式来源中通过准入的内容。若尚未初始化正式来源，请先前往来源页；若更新后仍为空，请查看更新记录中的抓取失败与准入拒绝原因。</p>
       <div><a class="button subtle" href="/">清除筛选</a><a class="button subtle" href="/sources">检查或初始化来源</a></div>
       <form action="/updates" method="post" data-update-form>
-        <button class="button primary" type="submit" data-processing-text="正在更新…">立即更新全部正式来源</button>
+        <button class="button primary" type="submit" data-processing-text="正在更新…">立即更新全部 active 来源</button>
       </form>
     </section>
   {% endif %}

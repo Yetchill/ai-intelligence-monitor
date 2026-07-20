@@ -9,13 +9,17 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
+from app.classifiers.rule_based import RuleBasedClassifier
+from app.collectors.registry import default_collector_registry
 from app.config.settings import PROJECT_ROOT
 from app.domain.enums import Category, CrawlStatus, RunTrigger, SourceScope
 from app.domain.exports import ExportFormat, ExportQuery
 from app.domain.queries import ItemFilter
 from app.domain.update import UpdateMode, UpdateResult
 from app.services.application_factory import build_export_service, update_pipeline_context
+from app.services.classification_service import ClassificationService
 from app.services.error_sanitization import sanitize_error
+from app.services.retired_source_purge import RetiredSourcePurgeService
 from app.services.schedule_settings_service import (
     ScheduleSettingsService,
     next_scheduled_run,
@@ -23,7 +27,8 @@ from app.services.schedule_settings_service import (
     parse_weekdays,
 )
 from app.services.scheduler_service import SchedulerService
-from app.services.source_seed_service import SourceSeedService
+from app.services.source_catalog_service import SourceCatalogService
+from app.services.source_lifecycle_service import SourceLifecycleService
 from app.services.update_execution_service import UpdateExecutionService, UpdateLock
 from app.services.update_pipeline import UpdatePipeline
 from app.storage.database import Database
@@ -42,7 +47,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             _print_runs(database, arguments.limit)
             return 0
         if arguments.command == "sources":
-            _seed_sources(database)
+            return asyncio.run(_run_sources_command(database, arguments))
+        if arguments.command == "taxonomy":
+            _run_taxonomy_command(database, arguments)
             return 0
         if arguments.command == "export":
             _run_export(database, arguments)
@@ -71,7 +78,7 @@ async def _run_update(database: Database, arguments: argparse.Namespace) -> int:
         trigger=RunTrigger.MANUAL_CLI,
         source_id=arguments.source_id,
         allow_disabled=arguments.allow_disabled,
-        formal_only=arguments.source_id is None and not arguments.all_enabled,
+        formal_only=False,
         mode=UpdateMode(arguments.mode),
         max_pages=arguments.max_pages,
         max_items=arguments.max_items,
@@ -82,12 +89,151 @@ async def _run_update(database: Database, arguments: argparse.Namespace) -> int:
     return 1 if result.status is CrawlStatus.FAILED else 0
 
 
-def _seed_sources(database: Database) -> None:
-    service = SourceSeedService(lambda: RepositoryUnitOfWork(database))
-    result = service.seed()
+async def _run_sources_command(database: Database, arguments: argparse.Namespace) -> int:
+    action = arguments.source_command
+    catalog = SourceCatalogService(lambda: RepositoryUnitOfWork(database))
+    if action in {"seed-formal", "seed", "sync-catalog"}:
+        result = catalog.sync()
+        implementation = " ".join(
+            f"{key}={value}" for key, value in sorted(result.implementation_counts.items())
+        )
+        print(
+            f"catalog total={result.total} created={result.created} updated={result.updated} "
+            f"existing={result.existing} conflicts={result.conflicts} active={result.active} "
+            f"candidate={result.candidate} paused={result.paused} {implementation}"
+        )
+        return 1 if result.conflicts else 0
+    if action == "catalog":
+        entries = catalog.load()
+        with RepositoryUnitOfWork(database) as uow:
+            by_slug = {source.slug: source for source in uow.sources.list()}
+        selected = 0
+        for entry in entries:
+            source = by_slug.get(entry.slug)
+            state = source.lifecycle_state.value if source is not None else "not_synced"
+            implementation = (
+                source.implementation_status.value
+                if source is not None
+                else entry.implementation_status.value
+            )
+            if arguments.state and state != arguments.state:
+                continue
+            if arguments.role and entry.source_role.value != arguments.role:
+                continue
+            if (
+                arguments.implementation_status
+                and implementation != arguments.implementation_status
+            ):
+                continue
+            selected += 1
+            reason = (
+                source.implementation_reason if source is not None else entry.implementation_reason
+            )
+            print(
+                f"{entry.slug}\t{state}\t{entry.source_role.value}\t{entry.crawl_mode.value}\t"
+                f"{implementation}\t{entry.url}\t{reason}"
+            )
+        print(f"catalog rows={selected}/{len(entries)}")
+        return 0
+    registry = default_collector_registry()
+    lifecycle = SourceLifecycleService(lambda: RepositoryUnitOfWork(database), registry.names())
+    if action in {"preview", "activate"}:
+        source = lifecycle.get_by_slug(arguments.slug)
+        execution = UpdateExecutionService(
+            database,
+            lambda target: update_pipeline_context(target, UpdatePipeline),
+            UpdateLock(),
+        )
+        result = await execution.preview(source.id, max_items=arguments.max_items)
+        lifecycle.record_preview(arguments.slug, result)
+        _print_preview(result, max_samples=arguments.max_items)
+        if action == "activate":
+            activated = lifecycle.activate(arguments.slug, result, confirm=arguments.confirm)
+            print(
+                f"activated slug={activated.slug} lifecycle={activated.lifecycle_state.value} "
+                f"enabled={str(activated.enabled).lower()}"
+            )
+        return 1 if result.status.value == "failed" else 0
+    if action == "purge-retired":
+        service = RetiredSourcePurgeService(database, lambda: RepositoryUnitOfWork(database))
+        result = (
+            service.purge(confirm=True, backup_path=arguments.backup)
+            if arguments.confirm
+            else service.plan()
+        )
+        _print_purge(result)
+        return 0
+    raise ValueError(f"unknown sources command: {action}")
+
+
+def _print_preview(result: object, *, max_samples: int) -> None:
+    from app.domain.update import SourcePreviewResult
+
+    preview = result if isinstance(result, SourcePreviewResult) else None
+    if preview is None:
+        raise TypeError("invalid preview result")
     print(
-        f"formal sources: created={result.created} promoted={result.promoted} "
-        f"existing={result.existing} conflicts={result.conflicts} expected={result.expected}"
+        f"preview source={preview.source_id}:{preview.source_name} status={preview.status.value} "
+        f"fetch={preview.fetch_status} parse={preview.parse_status} extracted={preview.fetched} "
+        f"normalized={preview.normalized} accepted={preview.accepted} rejected={preview.rejected} "
+        f"failed={preview.failed}"
+    )
+    print(
+        f"primary_types={preview.primary_type_counts} "
+        f"verification={preview.verification_status_counts} "
+        f"review={preview.review_status_counts} valid_title={preview.valid_title_ratio:.1%} "
+        f"valid_date={preview.valid_date_ratio:.1%} valid_link={preview.valid_link_ratio:.1%} "
+        f"external_link={preview.external_link_ratio:.1%}"
+    )
+    print(
+        f"rejection_reasons={preview.rejection_reason_counts} "
+        f"failure_reasons={preview.failure_reason_counts}"
+    )
+    for index, item in enumerate(preview.items[:max_samples], start=1):
+        print(
+            f"sample={index} date={item.published_at.isoformat() if item.published_at else '-'} "
+            f"type={item.primary_type.value} domain={item.link_domain or '-'} "
+            f"accepted={str(item.accepted).lower()} reason={item.reason} title={item.title}"
+        )
+
+
+def _print_purge(result: object) -> None:
+    from app.services.retired_source_purge import RetiredSourcePurgeResult
+
+    purge = result if isinstance(result, RetiredSourcePurgeResult) else None
+    if purge is None:
+        raise TypeError("invalid purge result")
+    print(f"purge mode={'dry-run' if purge.dry_run else 'confirm'} targets={len(purge.impacts)}")
+    for impact in purge.impacts:
+        print(
+            f"source={impact.source_id}:{impact.slug or '-'} "
+            f"name={impact.name} url={impact.start_url} "
+            f"items={impact.item_count} related={impact.related_record_count} "
+            f"revisions={impact.revision_count} review_events={impact.review_event_count} "
+            f"crawl_executions={impact.crawl_execution_count} "
+            f"discovery_references={impact.discovery_reference_count}"
+        )
+    if not purge.dry_run:
+        print(
+            f"deleted sources={purge.deleted_sources} items={purge.deleted_items} "
+            f"executions={purge.deleted_executions} empty_runs={purge.deleted_empty_runs} "
+            f"cleaned_discoveries={purge.cleaned_discovery_references} backup={purge.backup_path}"
+        )
+
+
+def _run_taxonomy_command(database: Database, arguments: argparse.Namespace) -> None:
+    service = ClassificationService(
+        RuleBasedClassifier.from_yaml(), lambda: RepositoryUnitOfWork(database)
+    )
+    summary = (
+        service.apply_v2_reclassification(source_id=arguments.source_id)
+        if arguments.confirm
+        else service.preview_v2_reclassification(source_id=arguments.source_id)
+    )
+    print(
+        f"taxonomy reclassify mode={'confirm' if summary.applied else 'dry-run'} "
+        f"total={summary.total} changed={summary.changed} unclassified={summary.unclassified} "
+        f"preserved_manual={summary.preserved_manual}"
     )
 
 
@@ -231,7 +377,11 @@ def _run_export(database: Database, arguments: argparse.Namespace) -> None:
                 discovered_from=discovered_from,
                 discovered_to=discovered_to,
                 unclassified=arguments.unclassified,
-                source_scope=SourceScope.FORMAL_EXPORT,
+                source_scope=(
+                    SourceScope.INDUSTRY_LEADS
+                    if arguments.industry_leads
+                    else SourceScope.FORMAL_EXPORT
+                ),
             ),
             limit=arguments.limit,
         ),
@@ -321,6 +471,31 @@ def _parser() -> argparse.ArgumentParser:
     source_commands = sources.add_subparsers(dest="source_command", required=True)
     source_commands.add_parser("seed-formal", help="idempotently initialize formal sources")
     source_commands.add_parser("seed", help=argparse.SUPPRESS)
+    source_commands.add_parser("sync-catalog", help="sync every catalog source into the database")
+    catalog = source_commands.add_parser(
+        "catalog", help="show catalog and database lifecycle state"
+    )
+    catalog.add_argument("--state", choices=["active", "candidate", "paused", "not_synced"])
+    catalog.add_argument("--role")
+    catalog.add_argument("--implementation-status")
+    preview = source_commands.add_parser(
+        "preview", help="preview one source without item persistence"
+    )
+    preview.add_argument("slug")
+    preview.add_argument("--max-items", type=_positive_int, default=20)
+    preview.add_argument(
+        "--no-persist",
+        action="store_true",
+        help="explicitly document that preview never writes items or a formal crawl run",
+    )
+    activate = source_commands.add_parser("activate", help="preview then activate one candidate")
+    activate.add_argument("slug")
+    activate.add_argument("--max-items", type=_positive_int, default=20)
+    activate.add_argument("--confirm", action="store_true")
+    purge = source_commands.add_parser("purge-retired", help="purge exact retired source records")
+    purge.add_argument("--confirm", action="store_true")
+    purge.add_argument("--dry-run", action="store_true")
+    purge.add_argument("--backup", type=Path)
     export = commands.add_parser("export", help="export filtered intelligence")
     export_formats = export.add_subparsers(dest="export_format", required=True)
     for export_format in ExportFormat:
@@ -337,6 +512,11 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--unclassified", action="store_const", const=True, default=None)
         command.add_argument("--limit", type=_positive_int)
         command.add_argument("--force", action="store_true")
+        command.add_argument(
+            "--industry-leads",
+            action="store_true",
+            help="explicitly export the industry-lead/review queue with verification metadata",
+        )
     schedule = commands.add_parser("schedule", help="view or manage runtime scheduling")
     schedule_commands = schedule.add_subparsers(dest="schedule_command", required=True)
     schedule_commands.add_parser("show", help="show current schedule settings")
@@ -346,6 +526,13 @@ def _parser() -> argparse.ArgumentParser:
     enable.add_argument("--timezone", help="IANA timezone; preserves current value when omitted")
     schedule_commands.add_parser("disable", help="disable scheduling")
     schedule_commands.add_parser("run", help="run the scheduler in the foreground")
+    taxonomy = commands.add_parser("taxonomy", help="taxonomy-v2 maintenance")
+    taxonomy_commands = taxonomy.add_subparsers(dest="taxonomy_command", required=True)
+    reclassify = taxonomy_commands.add_parser("reclassify", help="dry-run/apply taxonomy v2")
+    reclassify.add_argument("--source-id", type=_positive_int)
+    reclassify_mode = reclassify.add_mutually_exclusive_group()
+    reclassify_mode.add_argument("--dry-run", action="store_true")
+    reclassify_mode.add_argument("--confirm", action="store_true")
     return parser
 
 

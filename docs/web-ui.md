@@ -1,5 +1,11 @@
 # 阶段七本地网页 UI
 
+## 阶段八 B 页面
+
+来源管理页显示 catalog 的全部 active/candidate/paused，而不是只显示可运行项；candidate 显示技术阻碍、preview 信息和入口。active media 明示“采集行业线索、默认不进首页和正式导出”。
+
+首页使用 PublicationPolicy 的正式资格。导航新增最小“行业线索”视图，可筛选 industry_signal、media_only、rumor 和 pending。人工 taxonomy/review 修改记录审计事件。整体视觉结构保持原有页面，不做全站重构。
+
 ## 当前范围
 
 阶段七提供本地服务端渲染页面、Office 导出和运行设置：

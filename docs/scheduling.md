@@ -1,5 +1,9 @@
 # 运行设置与轻量定时更新
 
+## 来源生命周期
+
+调度触发与手工 update all 使用同一 active 来源选择。candidate 和 paused 永不被默认调度；目录同步不会把 paused 重新启用。active media 可被调度采集，但发布仍受 Verification、review 和 PublicationPolicy 控制。
+
 ## 能力与边界
 
 阶段七为本地单进程应用提供内置定时更新。它不是系统服务、守护进程或分布式调度器，不使用

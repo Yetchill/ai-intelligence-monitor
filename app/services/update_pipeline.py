@@ -5,13 +5,14 @@ import logging
 import traceback
 from collections import Counter
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import cast
+from urllib.parse import urlsplit
 
 from app.domain.classification import ClassificationResult
 from app.domain.collection import CollectedItem
-from app.domain.enums import Category, RunTrigger
+from app.domain.enums import Category, LifecycleState, RunTrigger
 from app.domain.models import Source
 from app.domain.update import (
     SourcePreviewItem,
@@ -23,12 +24,14 @@ from app.domain.update import (
 )
 from app.fetchers.errors import FetchError
 from app.services.classification_service import ClassificationService
-from app.services.content_admission import ContentAdmissionPolicy
+from app.services.content_admission import BasicAdmissionPolicy, ContentAdmissionPolicy
 from app.services.crawl_run_service import CrawlRunService
 from app.services.crawl_service import CrawlService
 from app.services.error_sanitization import sanitize_error
 from app.services.item_normalization import ItemNormalizationError, normalize_collected_item
 from app.services.item_persistence_service import ClassifiedItem, ItemPersistenceService
+from app.services.publication_policy import PublicationPolicy
+from app.services.verification_service import VerificationService
 from app.storage.repositories import RepositoryUnitOfWork
 
 LOGGER = logging.getLogger("app.crawler.pipeline")
@@ -43,6 +46,10 @@ class SourceDisabledError(ValueError):
     """Raised when a disabled source is explicitly requested without permission."""
 
 
+class SourceCandidateError(ValueError):
+    """Raised when a candidate tries to bypass preview/activation via update."""
+
+
 class UpdatePipeline:
     """Coordinate source selection, collection, normalization, classification, and persistence."""
 
@@ -55,13 +62,17 @@ class UpdatePipeline:
         persistence_service: ItemPersistenceService | None = None,
         crawl_run_service: CrawlRunService | None = None,
         admission_policy: ContentAdmissionPolicy | None = None,
+        verification_service: VerificationService | None = None,
+        publication_policy: PublicationPolicy | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._crawl_service = crawl_service
         self._classification_service = classification_service
         self._persistence_service = persistence_service or ItemPersistenceService(uow_factory)
         self._crawl_run_service = crawl_run_service or CrawlRunService(uow_factory)
-        self._admission_policy = admission_policy or ContentAdmissionPolicy()
+        self._admission_policy = admission_policy or BasicAdmissionPolicy()
+        self._verification_service = verification_service or VerificationService()
+        self._publication_policy = publication_policy or PublicationPolicy()
 
     async def update(
         self,
@@ -127,13 +138,25 @@ class UpdatePipeline:
         with self._uow_factory() as uow:
             if source_id is None:
                 if allow_disabled:
-                    return uow.sources.list()
+                    return [
+                        source
+                        for source in uow.sources.list()
+                        if source.lifecycle_state is not LifecycleState.CANDIDATE
+                    ]
                 if formal_only:
-                    return uow.sources.list_enabled_formal()
-                return uow.sources.list_enabled()
+                    return [
+                        source
+                        for source in uow.sources.list_enabled_formal()
+                        if source.lifecycle_state is LifecycleState.ACTIVE
+                    ]
+                return uow.sources.list_active()
             source = uow.sources.get(source_id)
             if source is None:
                 raise SourceNotFoundError(f"source {source_id} does not exist")
+            if source.lifecycle_state is LifecycleState.CANDIDATE:
+                raise SourceCandidateError(
+                    f"source {source_id} is candidate; preview and activate it before updating"
+                )
             if not source.enabled and not allow_disabled:
                 raise SourceDisabledError(
                     f"source {source_id} is disabled; pass allow_disabled=True to update it"
@@ -141,9 +164,12 @@ class UpdatePipeline:
             return [source]
 
     async def preview(self, source_id: int, *, max_items: int = 10) -> SourcePreviewResult:
-        """Run bounded collection and admission without classification or persistence."""
+        """Run collection, admission, taxonomy and verification without persistence."""
 
-        source = self._select_sources(source_id=source_id, allow_disabled=True)[0]
+        with self._uow_factory() as uow:
+            source = uow.sources.get(source_id)
+            if source is None:
+                raise SourceNotFoundError(f"source {source_id} does not exist")
         failures: Counter[str] = Counter()
         rejections: Counter[str] = Counter()
         try:
@@ -161,6 +187,13 @@ class UpdatePipeline:
         items: list[SourcePreviewItem] = []
         normalized_count = 0
         keep_query_params = _keep_query_params(source)
+        primary_counts: Counter[str] = Counter()
+        verification_counts: Counter[str] = Counter()
+        review_counts: Counter[str] = Counter()
+        valid_dates = 0
+        valid_links = 0
+        external_links = 0
+        source_host = (urlsplit(source.start_url).hostname or "").casefold()
         for collected_item in collected:
             try:
                 item = normalize_collected_item(collected_item, keep_query_params=keep_query_params)
@@ -171,6 +204,23 @@ class UpdatePipeline:
             decision = self._admission_policy.admit(item, source)
             if not decision.accepted:
                 rejections[decision.reason] += 1
+            taxonomy = self._classification_service.classify_v2(
+                item, source_role=source.source_role
+            )
+            verification = self._verification_service.verify(item, source)
+            self._publication_policy.decide(
+                source=source,
+                admission_accepted=decision.accepted,
+                taxonomy=taxonomy,
+                verification=verification,
+            )
+            primary_counts[taxonomy.primary_type.value] += 1
+            verification_counts[verification.verification_status.value] += 1
+            review_counts[verification.review_status.value] += 1
+            valid_dates += item.published_at is not None
+            host = (urlsplit(item.original_url).hostname or "").casefold()
+            valid_links += bool(host)
+            external_links += bool(host and host != source_host)
             items.append(
                 SourcePreviewItem(
                     title=item.title,
@@ -178,8 +228,15 @@ class UpdatePipeline:
                     accepted=decision.accepted,
                     reason=decision.reason,
                     quality_score=decision.quality_score,
+                    published_at=item.published_at,
+                    primary_type=taxonomy.primary_type,
+                    verification_status=verification.verification_status,
+                    review_status=verification.review_status,
+                    link_domain=host or None,
+                    classification_reason=taxonomy.reason,
                 )
             )
+        denominator = normalized_count or 1
         return SourcePreviewResult(
             source_id=source.id,
             source_name=source.name,
@@ -196,6 +253,13 @@ class UpdatePipeline:
             rejection_reason_counts=dict(rejections),
             failure_reason_counts=dict(failures),
             items=tuple(items),
+            primary_type_counts=dict(primary_counts),
+            verification_status_counts=dict(verification_counts),
+            review_status_counts=dict(review_counts),
+            valid_title_ratio=normalized_count / denominator,
+            valid_date_ratio=valid_dates / denominator,
+            valid_link_ratio=valid_links / denominator,
+            external_link_ratio=external_links / denominator,
         )
 
     async def _update_source(
@@ -223,8 +287,15 @@ class UpdatePipeline:
                 source,
                 mode=mode,
                 max_pages=max_pages,
-                max_items=max_items,
-                published_from=published_from,
+                max_items=max_items or source.max_items_per_run,
+                published_from=(
+                    published_from
+                    or (
+                        datetime.now(UTC) - timedelta(days=source.lookback_days)
+                        if mode is UpdateMode.INCREMENTAL and source.lookback_days > 0
+                        else None
+                    )
+                ),
                 published_to=published_to,
             )
             discovered = len(collected)
@@ -303,6 +374,16 @@ class UpdatePipeline:
                         item,
                         source_default=source.default_category,
                     )
+                    taxonomy = self._classification_service.classify_v2(
+                        item, source_role=source.source_role
+                    )
+                    verification = self._verification_service.verify(item, source)
+                    self._publication_policy.decide(
+                        source=source,
+                        admission_accepted=True,
+                        taxonomy=taxonomy,
+                        verification=verification,
+                    )
                     classified_count += 1
                 except Exception as exc:
                     failed_count += 1
@@ -317,7 +398,13 @@ class UpdatePipeline:
                         reason=f"classification failed: {sanitize_error(exc)}",
                         provider="classification_error",
                     )
-                classified_items.append(ClassifiedItem(item, classification))
+                    taxonomy = self._classification_service.classify_v2(
+                        item, source_role=source.source_role
+                    )
+                    verification = self._verification_service.verify(item, source)
+                classified_items.append(
+                    ClassifiedItem(item, classification, taxonomy, verification)
+                )
 
             phase = "persistence"
             stats = self._persistence_service.persist_source(

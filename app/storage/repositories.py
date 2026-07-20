@@ -2,19 +2,31 @@
 
 from collections.abc import Mapping
 from types import TracebackType
-from typing import Any
+from typing import Any, cast
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, delete, exists, func, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.domain.enums import SourceAudience, SourceKind, SourceScope
+from app.domain.enums import (
+    LifecycleState,
+    PrimaryType,
+    ReviewStatus,
+    SourceAudience,
+    SourceKind,
+    SourceRole,
+    SourceScope,
+    VerificationStatus,
+)
 from app.domain.models import (
     Base,
     CrawlRun,
+    CrawlSourceExecution,
     IntelligenceItem,
+    ItemReviewEvent,
     ItemRevision,
     ScheduleSettings,
     Source,
@@ -76,6 +88,9 @@ class SourceRepository(BaseRepository[Source]):
     def get_by_start_url(self, start_url: str) -> Source | None:
         return self._session.scalar(select(Source).where(Source.start_url == start_url))
 
+    def get_by_slug(self, slug: str) -> Source | None:
+        return self._session.scalar(select(Source).where(Source.slug == slug))
+
     def list_enabled(self) -> list[Source]:
         statement = select(Source).where(Source.enabled.is_(True)).order_by(Source.id)
         return list(self._session.scalars(statement))
@@ -88,19 +103,36 @@ class SourceRepository(BaseRepository[Source]):
         )
         return list(self._session.scalars(statement))
 
-    def list_options(self) -> list[tuple[int, str, SourceKind, bool]]:
-        statement = select(Source.id, Source.name, Source.source_kind, Source.enabled).order_by(
-            Source.name, Source.id
-        )
-        return [
-            (source_id, name, source_kind, enabled)
-            for source_id, name, source_kind, enabled in self._session.execute(statement)
-        ]
-
-    def paginate(self, *, page: int, per_page: int) -> tuple[list[Source], int]:
-        total = self._session.scalar(select(func.count(Source.id))) or 0
+    def list_active(self) -> list[Source]:
         statement = (
             select(Source)
+            .where(
+                Source.enabled.is_(True),
+                Source.lifecycle_state == LifecycleState.ACTIVE,
+            )
+            .order_by(Source.id)
+        )
+        return list(self._session.scalars(statement))
+
+    def list_options(self) -> list[tuple[int, str, SourceKind, bool, LifecycleState]]:
+        statement = select(
+            Source.id, Source.name, Source.source_kind, Source.enabled, Source.lifecycle_state
+        ).order_by(Source.name, Source.id)
+        return [
+            (source_id, name, source_kind, enabled, lifecycle_state)
+            for source_id, name, source_kind, enabled, lifecycle_state in self._session.execute(
+                statement
+            )
+        ]
+
+    def paginate(
+        self, *, page: int, per_page: int, catalog_filter: str = "all"
+    ) -> tuple[list[Source], int]:
+        filters = _source_catalog_filters(catalog_filter)
+        total = self._session.scalar(select(func.count(Source.id)).where(*filters)) or 0
+        statement = (
+            select(Source)
+            .where(*filters)
             .order_by(Source.name, Source.id)
             .offset((page - 1) * per_page)
             .limit(per_page)
@@ -123,6 +155,30 @@ class IntelligenceItemRepository(BaseRepository[IntelligenceItem]):
             .order_by(IntelligenceItem.id)
         )
         return list(self._session.scalars(statement))
+
+    def count_by_source(self, source_id: int) -> int:
+        return (
+            self._session.scalar(
+                select(func.count(IntelligenceItem.id)).where(
+                    IntelligenceItem.source_id == source_id
+                )
+            )
+            or 0
+        )
+
+    def list_children(self, parent_item_id: int) -> list[IntelligenceItem]:
+        statement = (
+            select(IntelligenceItem)
+            .where(IntelligenceItem.parent_item_id == parent_item_id)
+            .order_by(IntelligenceItem.id)
+        )
+        return list(self._session.scalars(statement))
+
+    def delete_by_source(self, source_id: int) -> int:
+        result = self._session.execute(
+            delete(IntelligenceItem).where(IntelligenceItem.source_id == source_id)
+        )
+        return _affected_rows(result)
 
     def get_by_source_fingerprint(
         self,
@@ -157,7 +213,7 @@ class IntelligenceItemRepository(BaseRepository[IntelligenceItem]):
 
     def paginate_with_sources(
         self, query: ItemQuery
-    ) -> tuple[list[tuple[IntelligenceItem, str, SourceKind]], int]:
+    ) -> tuple[list[tuple[IntelligenceItem, str, SourceKind, SourceRole]], int]:
         total = self.count_filtered(query)
         rows = self.list_filtered_with_sources(
             query,
@@ -181,10 +237,10 @@ class IntelligenceItemRepository(BaseRepository[IntelligenceItem]):
         *,
         limit: int,
         offset: int = 0,
-    ) -> list[tuple[IntelligenceItem, str, SourceKind]]:
+    ) -> list[tuple[IntelligenceItem, str, SourceKind, SourceRole]]:
         filters = _item_filters(item_filter)
         statement = (
-            select(IntelligenceItem, Source.name, Source.source_kind)
+            select(IntelligenceItem, Source.name, Source.source_kind, Source.source_role)
             .join(Source, IntelligenceItem.source_id == Source.id)
             .where(*filters)
             .order_by(*_item_order())
@@ -192,8 +248,8 @@ class IntelligenceItemRepository(BaseRepository[IntelligenceItem]):
             .limit(limit)
         )
         return [
-            (item, source_name, source_kind)
-            for item, source_name, source_kind in self._session.execute(statement)
+            (item, source_name, source_kind, source_role)
+            for item, source_name, source_kind, source_role in self._session.execute(statement)
         ]
 
 
@@ -218,6 +274,24 @@ class CrawlRunRepository(BaseRepository[CrawlRun]):
         )
         return list(self._session.scalars(statement)), total
 
+    def delete_empty(self) -> int:
+        has_execution = exists(
+            select(CrawlSourceExecution.id).where(CrawlSourceExecution.crawl_run_id == CrawlRun.id)
+        )
+        result = self._session.execute(delete(CrawlRun).where(~has_execution))
+        return _affected_rows(result)
+
+    def delete_empty_ids(self, run_ids: set[int]) -> int:
+        if not run_ids:
+            return 0
+        has_execution = exists(
+            select(CrawlSourceExecution.id).where(CrawlSourceExecution.crawl_run_id == CrawlRun.id)
+        )
+        result = self._session.execute(
+            delete(CrawlRun).where(CrawlRun.id.in_(run_ids), ~has_execution)
+        )
+        return _affected_rows(result)
+
 
 class ItemRevisionRepository(BaseRepository[ItemRevision]):
     model = ItemRevision
@@ -229,6 +303,75 @@ class ItemRevisionRepository(BaseRepository[ItemRevision]):
             .order_by(ItemRevision.changed_at, ItemRevision.id)
         )
         return list(self._session.scalars(statement))
+
+    def count_by_source(self, source_id: int) -> int:
+        return (
+            self._session.scalar(
+                select(func.count(ItemRevision.id))
+                .join(IntelligenceItem, ItemRevision.item_id == IntelligenceItem.id)
+                .where(IntelligenceItem.source_id == source_id)
+            )
+            or 0
+        )
+
+
+class CrawlSourceExecutionRepository(BaseRepository[CrawlSourceExecution]):
+    model = CrawlSourceExecution
+
+    def get_by_run_source(self, crawl_run_id: int, source_id: int) -> CrawlSourceExecution | None:
+        return self._session.scalar(
+            select(CrawlSourceExecution).where(
+                CrawlSourceExecution.crawl_run_id == crawl_run_id,
+                CrawlSourceExecution.source_id == source_id,
+            )
+        )
+
+    def count_by_source(self, source_id: int) -> int:
+        return (
+            self._session.scalar(
+                select(func.count(CrawlSourceExecution.id)).where(
+                    CrawlSourceExecution.source_id == source_id
+                )
+            )
+            or 0
+        )
+
+    def run_ids_by_source(self, source_id: int) -> set[int]:
+        return set(
+            self._session.scalars(
+                select(CrawlSourceExecution.crawl_run_id).where(
+                    CrawlSourceExecution.source_id == source_id
+                )
+            )
+        )
+
+    def delete_by_source(self, source_id: int) -> int:
+        result = self._session.execute(
+            delete(CrawlSourceExecution).where(CrawlSourceExecution.source_id == source_id)
+        )
+        return _affected_rows(result)
+
+
+class ItemReviewEventRepository(BaseRepository[ItemReviewEvent]):
+    model = ItemReviewEvent
+
+    def list_by_item(self, item_id: int) -> list[ItemReviewEvent]:
+        statement = (
+            select(ItemReviewEvent)
+            .where(ItemReviewEvent.item_id == item_id)
+            .order_by(ItemReviewEvent.changed_at, ItemReviewEvent.id)
+        )
+        return list(self._session.scalars(statement))
+
+    def count_by_source(self, source_id: int) -> int:
+        return (
+            self._session.scalar(
+                select(func.count(ItemReviewEvent.id))
+                .join(IntelligenceItem, ItemReviewEvent.item_id == IntelligenceItem.id)
+                .where(IntelligenceItem.source_id == source_id)
+            )
+            or 0
+        )
 
 
 class ScheduleSettingsRepository(BaseRepository[ScheduleSettings]):
@@ -271,6 +414,8 @@ class RepositoryUnitOfWork:
         self.items: IntelligenceItemRepository
         self.crawl_runs: CrawlRunRepository
         self.revisions: ItemRevisionRepository
+        self.crawl_source_executions: CrawlSourceExecutionRepository
+        self.review_events: ItemReviewEventRepository
         self.schedule_settings: ScheduleSettingsRepository
 
     def __enter__(self) -> "RepositoryUnitOfWork":
@@ -280,6 +425,8 @@ class RepositoryUnitOfWork:
         self.items = IntelligenceItemRepository(session)
         self.crawl_runs = CrawlRunRepository(session)
         self.revisions = ItemRevisionRepository(session)
+        self.crawl_source_executions = CrawlSourceExecutionRepository(session)
+        self.review_events = ItemReviewEventRepository(session)
         self.schedule_settings = ScheduleSettingsRepository(session)
         return self
 
@@ -318,22 +465,26 @@ class RepositoryUnitOfWork:
 def _item_filters(query: ItemFilter) -> list[ColumnElement[bool]]:
     filters: list[ColumnElement[bool]] = [IntelligenceItem.is_active.is_(True)]
     if query.source_scope is SourceScope.LEADERSHIP:
+        publication_ready = _publication_ready()
         filters.extend(
             (
                 Source.enabled.is_(True),
-                Source.source_kind == SourceKind.FORMAL,
+                Source.lifecycle_state == LifecycleState.ACTIVE,
                 Source.homepage_visible.is_(True),
                 Source.audience.in_((SourceAudience.LEADERSHIP, SourceAudience.ALL)),
                 IntelligenceItem.admission_accepted.is_(True),
+                publication_ready,
             )
         )
     elif query.source_scope is SourceScope.FORMAL_EXPORT:
+        publication_ready = _publication_ready()
         filters.extend(
             (
                 Source.enabled.is_(True),
-                Source.source_kind == SourceKind.FORMAL,
+                Source.lifecycle_state == LifecycleState.ACTIVE,
                 Source.export_visible.is_(True),
                 IntelligenceItem.admission_accepted.is_(True),
+                publication_ready,
             )
         )
     elif query.source_scope is SourceScope.NON_FORMAL:
@@ -342,6 +493,22 @@ def _item_filters(query: ItemFilter) -> list[ColumnElement[bool]]:
         filters.append(Source.enabled.is_(False))
     elif query.source_scope is SourceScope.FALLBACK:
         filters.append(Source.source_kind == SourceKind.FALLBACK)
+    elif query.source_scope is SourceScope.INDUSTRY_LEADS:
+        filters.extend(
+            (
+                Source.lifecycle_state == LifecycleState.ACTIVE,
+                or_(
+                    IntelligenceItem.primary_type == PrimaryType.INDUSTRY_SIGNAL,
+                    IntelligenceItem.verification_status.in_(
+                        (
+                            VerificationStatus.MEDIA_ONLY,
+                            VerificationStatus.RUMOR_OR_PREDICTION,
+                        )
+                    ),
+                    IntelligenceItem.review_status == ReviewStatus.PENDING,
+                ),
+            )
+        )
     if query.keyword:
         escaped = _escape_like(query.keyword)
         pattern = f"%{escaped}%"
@@ -361,6 +528,20 @@ def _item_filters(query: ItemFilter) -> list[ColumnElement[bool]]:
                 ),
             )
         )
+    if query.primary_type is not None:
+        filters.append(
+            or_(
+                IntelligenceItem.manual_primary_type == query.primary_type,
+                and_(
+                    IntelligenceItem.manual_primary_type.is_(None),
+                    IntelligenceItem.primary_type == query.primary_type,
+                ),
+            )
+        )
+    if query.verification_status is not None:
+        filters.append(IntelligenceItem.verification_status == query.verification_status)
+    if query.review_status is not None:
+        filters.append(IntelligenceItem.review_status == query.review_status)
     if query.source_id is not None:
         filters.append(IntelligenceItem.source_id == query.source_id)
     if query.favorite is not None:
@@ -385,6 +566,36 @@ def _item_filters(query: ItemFilter) -> list[ColumnElement[bool]]:
     return filters
 
 
+def _source_allows_primary_type() -> ColumnElement[bool]:
+    values = func.json_each(Source.allowed_primary_types).table_valued("value")
+    return or_(
+        func.json_array_length(Source.allowed_primary_types) == 0,
+        exists(
+            select(1).select_from(values).where(values.c.value == IntelligenceItem.primary_type)
+        ),
+    )
+
+
+def _publication_ready() -> ColumnElement[bool]:
+    return or_(
+        IntelligenceItem.taxonomy_version != "v2",
+        and_(
+            IntelligenceItem.verification_status.in_(
+                (
+                    VerificationStatus.OFFICIAL_CONFIRMED,
+                    VerificationStatus.OFFICIAL_LINKED,
+                    VerificationStatus.MULTI_SOURCE_CONFIRMED,
+                )
+            ),
+            IntelligenceItem.review_status.in_((ReviewStatus.NOT_REQUIRED, ReviewStatus.APPROVED)),
+            IntelligenceItem.primary_type.not_in(
+                (PrimaryType.UNCLASSIFIED, PrimaryType.INDUSTRY_SIGNAL)
+            ),
+            _source_allows_primary_type(),
+        ),
+    )
+
+
 def _item_order() -> tuple[ColumnElement[Any], ...]:
     effective_date = func.coalesce(
         IntelligenceItem.published_at,
@@ -396,3 +607,25 @@ def _item_order() -> tuple[ColumnElement[Any], ...]:
 
 def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _affected_rows(result: object) -> int:
+    return max(0, cast(CursorResult[Any], result).rowcount or 0)
+
+
+def _source_catalog_filters(value: str) -> list[ColumnElement[bool]]:
+    if value in {state.value for state in LifecycleState}:
+        return [Source.lifecycle_state == LifecycleState(value)]
+    if value == "official":
+        return [Source.source_role.not_in((SourceRole.MEDIA_DISCOVERY, SourceRole.FALLBACK))]
+    if value == "media":
+        return [Source.source_role == SourceRole.MEDIA_DISCOVERY]
+    if value == "blocked":
+        from app.domain.enums import ImplementationStatus
+
+        return [Source.implementation_status == ImplementationStatus.BLOCKED_BY_JAVASCRIPT]
+    if value == "needs_custom":
+        from app.domain.enums import ImplementationStatus
+
+        return [Source.implementation_status == ImplementationStatus.NEEDS_CUSTOM_COLLECTOR]
+    return []

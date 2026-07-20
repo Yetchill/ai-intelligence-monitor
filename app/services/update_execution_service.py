@@ -78,9 +78,9 @@ class UpdateExecutionService:
         self._pipeline_context_factory = pipeline_context_factory
         self._lock = update_lock
 
-    async def preview(self, source_id: int) -> SourcePreviewResult:
+    async def preview(self, source_id: int, *, max_items: int = 10) -> SourcePreviewResult:
         async with self._pipeline_context_factory(self._database) as pipeline:
-            return await pipeline.preview(source_id)
+            return await pipeline.preview(source_id, max_items=max_items)
 
     async def update(
         self,
@@ -148,7 +148,7 @@ class UpdateExecutionService:
         try:
             return await self._execute(
                 trigger=RunTrigger.SCHEDULED,
-                formal_only=True,
+                formal_only=False,
                 before_update=before_update,
             )
         except UpdateInProgressError:

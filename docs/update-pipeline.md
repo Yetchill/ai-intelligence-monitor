@@ -1,5 +1,11 @@
 # 更新流水线
 
+## 阶段八 B 执行顺序
+
+批量和 scheduler 默认只选择 `lifecycle_state=active`。candidate 仅允许 preview，paused 保留历史但不运行。active media 会被采集，但其 Item 默认 industry_signal/media_only/pending，不会因来源 active 而正式发布。
+
+`allowed_primary_types` 在 Classification 之后由 PublicationPolicy 检查，消除了“分类前按分类准入”的循环。每个来源结果写入 `CrawlSourceExecution`，混合 CrawlRun 可在清理单个来源执行时安全保留。
+
 ## 入口与执行过程
 
 `UpdatePipeline` 是 UI、最小 CLI 和内置任务调度唯一调用的更新入口。它不硬编码来源或具体

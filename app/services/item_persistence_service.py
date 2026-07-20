@@ -9,6 +9,7 @@ from app.domain.classification import ClassificationResult
 from app.domain.collection import CollectedItem
 from app.domain.enums import Category
 from app.domain.models import IntelligenceItem, ItemRevision
+from app.domain.taxonomy import TaxonomyResult, VerificationResult
 from app.services.item_normalization import INTERNAL_DISCOVERIES_KEY
 from app.storage.repositories import RepositoryUnitOfWork
 from app.utils.fingerprint import generate_item_fingerprint
@@ -20,6 +21,8 @@ UnitOfWorkFactory = Callable[[], RepositoryUnitOfWork]
 class ClassifiedItem:
     item: CollectedItem
     classification: ClassificationResult
+    taxonomy: TaxonomyResult | None = None
+    verification: VerificationResult | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +71,7 @@ class ItemPersistenceService:
                     existing = uow.items.get_by_source_fingerprint(source_id, fingerprint)
 
                 if existing is None:
+                    parent_item_id = _parent_item_id(uow, source_id, normalized)
                     candidate = IntelligenceItem(
                         source_id=source_id,
                         title=normalized.title,
@@ -82,10 +86,12 @@ class ItemPersistenceService:
                         classification_reason=classified.classification.reason,
                         automatic_category_provider=classified.classification.provider,
                         manual_category=None,
+                        parent_item_id=parent_item_id,
                         fingerprint=fingerprint,
                         admission_accepted=True,
                         extra=dict(normalized.extra),
                     )
+                    _apply_v2(candidate, classified)
                     existing, inserted = uow.items.add_or_get_existing(candidate)
                     if existing.id in processed_item_ids:
                         duplicate_count += 1
@@ -176,6 +182,10 @@ class ItemPersistenceService:
             _apply_content(existing, classified.item, changes)
 
         _apply_classification(existing, classified.classification)
+        _apply_v2(existing, classified)
+        parent_item_id = _parent_item_id(uow, source_id, classified.item)
+        if parent_item_id is not None:
+            existing.parent_item_id = parent_item_id
         return "updated" if changes else "skipped"
 
 
@@ -226,6 +236,40 @@ def _apply_classification(
     existing.classification_score = result.score
     existing.classification_reason = result.reason
     existing.automatic_category_provider = result.provider
+
+
+def _apply_v2(existing: IntelligenceItem, classified: ClassifiedItem) -> None:
+    taxonomy = classified.taxonomy
+    if taxonomy is not None:
+        existing.primary_type = taxonomy.primary_type
+        existing.topic_tags = [tag.value for tag in taxonomy.topic_tags]
+        existing.industry_tags = [tag.value for tag in taxonomy.industry_tags]
+        existing.case_completeness = taxonomy.case_completeness
+        existing.taxonomy_version = taxonomy.taxonomy_version
+        existing.taxonomy_matched_rules = list(taxonomy.matched_rules)
+        existing.organizer = taxonomy.opportunity.organizer
+        existing.application_name = taxonomy.opportunity.application_name
+        existing.application_target = taxonomy.opportunity.application_target
+        existing.deadline_at = taxonomy.opportunity.deadline_at
+        existing.application_method = taxonomy.opportunity.application_method
+        existing.application_url = taxonomy.opportunity.application_url
+    verification = classified.verification
+    if verification is not None:
+        if not existing.verification_manually_set:
+            existing.verification_status = verification.verification_status
+            existing.discovery_url = verification.discovery_url
+            existing.official_url = verification.official_url
+            existing.origin_publisher = verification.origin_publisher
+        if not existing.review_manually_set:
+            existing.review_status = verification.review_status
+
+
+def _parent_item_id(uow: RepositoryUnitOfWork, source_id: int, item: CollectedItem) -> int | None:
+    raw = item.extra.get("parent_fingerprint")
+    if not isinstance(raw, str) or len(raw) != 64:
+        return None
+    parent = uow.items.get_by_source_fingerprint(source_id, raw)
+    return parent.id if parent is not None else None
 
 
 def _business_extra(extra: object) -> dict[str, object]:

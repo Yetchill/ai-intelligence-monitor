@@ -1,5 +1,16 @@
 # Changelog
 
+## Stage 8B - source catalog and taxonomy v2
+
+- 用 28 条严格受管记录的 `source_catalog.yaml` 替换旧 preset；所有 active/candidate 都同步入库和来源管理页。
+- 删除 OpenAI RSS、Google Blog RSS、Qwen-Agent Releases 与百度客户案例预设；保留通用 RSS 和 GitHub Release Collector。
+- 新增备份门控、精确标识、幂等的 `sources purge-retired`；migration 不删除业务数据。
+- 新增 primary type、主题/行业标签、可信/审核状态、案例完整度、机会字段、媒体/官方链接和 taxonomy version。
+- 将准入、分类、可信判断和发布策略拆为独立服务，取消会议业务分类。
+- 新增 lifecycle/source role/crawl mode/review policy/implementation status，以及 preview/activate CLI。
+- 新增 CrawlRun 来源执行明细、人工审核审计、报告-案例 parent 结构、DocumentHub/CaseHub 接口。
+- 首页与正式导出执行统一 PublicationPolicy；行业线索独立展示。
+
 本项目遵循语义化版本。所有重要变更记录在此文件。
 
 ## [Unreleased]

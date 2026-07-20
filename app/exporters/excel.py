@@ -13,6 +13,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from app.domain.exports import ExportFormat, ExportItem, ExportMetadata, RenderedExport
 from app.exporters.common import (
     CATEGORY_LABELS,
+    PRIMARY_TYPE_LABELS,
     excel_safe_text,
     format_time,
     safe_filename,
@@ -40,8 +41,16 @@ class ExcelExporter:
         "自动分类分数",
         "自动分类原因",
         "来源性质",
+        "主要信息形态",
+        "主题标签",
+        "行业标签",
+        "来源角色",
+        "可信状态",
+        "审核状态",
+        "发现链接",
+        "官方原文",
     )
-    _widths = (8, 44, 20, 12, 24, 19, 19, 60, 14, 12, 16, 48, 14)
+    _widths = (8, 44, 20, 12, 24, 19, 19, 60, 14, 12, 16, 48, 14, 20, 28, 24, 24, 22, 18, 14, 14)
 
     def render(
         self,
@@ -77,6 +86,14 @@ class ExcelExporter:
                         item.classification_score,
                         excel_safe_text(item.classification_reason or ""),
                         item.source_kind.value,
+                        PRIMARY_TYPE_LABELS[item.effective_primary_type],
+                        ", ".join(item.topic_tags),
+                        ", ".join(item.industry_tags),
+                        item.source_role.value,
+                        item.verification_status.value,
+                        item.review_status.value,
+                        "查看发现页" if safe_hyperlink(item.discovery_url) else "—",
+                        "查看官方原文" if safe_hyperlink(item.official_url) else "—",
                     )
                 )
                 row = index + 1
@@ -85,12 +102,18 @@ class ExcelExporter:
                     link_cell = cast(Cell, sheet.cell(row=row, column=9))
                     link_cell.hyperlink = link
                     link_cell.style = "Hyperlink"
+                for column, url in ((20, item.discovery_url), (21, item.official_url)):
+                    safe_url = safe_hyperlink(url)
+                    if safe_url is not None:
+                        url_cell = cast(Cell, sheet.cell(row=row, column=column))
+                        url_cell.hyperlink = safe_url
+                        url_cell.style = "Hyperlink"
                 for raw_cell in sheet[row]:
                     cell = cast(Cell, raw_cell)
                     cell.alignment = Alignment(vertical="top", wrap_text=True)
 
             sheet.freeze_panes = "A2"
-            sheet.auto_filter.ref = f"A1:M{len(items) + 1}"
+            sheet.auto_filter.ref = f"A1:U{len(items) + 1}"
             sheet.row_dimensions[1].height = 24
             for index, width in enumerate(self._widths, start=1):
                 sheet.column_dimensions[get_column_letter(index)].width = width

@@ -4,7 +4,15 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
-from app.domain.enums import Category, SourceKind, SourceScope
+from app.domain.enums import (
+    Category,
+    PrimaryType,
+    ReviewStatus,
+    SourceKind,
+    SourceRole,
+    SourceScope,
+    VerificationStatus,
+)
 from app.domain.queries import ItemFilter
 
 
@@ -37,6 +45,15 @@ class ExportItem:
     is_favorite: bool
     classification_score: float | None
     classification_reason: str | None
+    primary_type: PrimaryType = PrimaryType.UNCLASSIFIED
+    manual_primary_type: PrimaryType | None = None
+    topic_tags: tuple[str, ...] = ()
+    industry_tags: tuple[str, ...] = ()
+    verification_status: VerificationStatus = VerificationStatus.MEDIA_ONLY
+    review_status: ReviewStatus = ReviewStatus.PENDING
+    source_role: SourceRole = SourceRole.FALLBACK
+    discovery_url: str | None = None
+    official_url: str | None = None
 
     @property
     def effective_category(self) -> Category:
@@ -45,6 +62,10 @@ class ExportItem:
     @property
     def category_origin(self) -> str:
         return "人工" if self.manual_category is not None else "自动"
+
+    @property
+    def effective_primary_type(self) -> PrimaryType:
+        return self.manual_primary_type or self.primary_type
 
 
 @dataclass(frozen=True, slots=True)

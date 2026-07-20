@@ -1,5 +1,11 @@
 # Excel 与 Word 导出
 
+## Taxonomy v2 发布资格
+
+正式 Excel/Word 默认与领导首页使用相同资格：active、准入通过、可信状态为 official_confirmed/official_linked/multi_source_confirmed、审核为 not_required/approved、非 unclassified/industry_signal，并满足来源 export 开关和 allowed types。candidate、paused、media_only、pending 和 rumor 不进入正式导出。
+
+Excel 增加主要信息形态、主题/行业标签、来源角色、可信/审核状态、discovery URL 和 official URL。显式行业线索导出保留这些字段，使媒体证据边界可见。Word 按 primary type 分章。
+
 ## 范围与入口
 
 阶段六提供 Excel 和 Word 两种只读导出。导出不会创建更新运行、修订记录，也不会修改资讯、

@@ -4,7 +4,7 @@ import re
 import unicodedata
 from datetime import datetime
 
-from app.domain.enums import Category
+from app.domain.enums import Category, PrimaryType
 from app.utils.url import is_http_url
 
 CATEGORY_LABELS = {
@@ -17,6 +17,17 @@ CATEGORY_LABELS = {
     Category.UNCLASSIFIED: "待分类",
 }
 CATEGORY_ORDER = tuple(CATEGORY_LABELS)
+PRIMARY_TYPE_LABELS = {
+    PrimaryType.PRODUCT_UPDATE: "产品与模型更新",
+    PrimaryType.POLICY_STANDARD: "政策与标准",
+    PrimaryType.APPLICATION_OPPORTUNITY: "申报与征集机会",
+    PrimaryType.AWARD_RESULT: "奖项与入选结果",
+    PrimaryType.REPORT_RELEASE: "报告发布",
+    PrimaryType.CASE_ANALYSIS: "案例分析",
+    PrimaryType.INDUSTRY_SIGNAL: "行业线索",
+    PrimaryType.UNCLASSIFIED: "待确认",
+}
+PRIMARY_TYPE_ORDER = tuple(PRIMARY_TYPE_LABELS)
 
 _ILLEGAL_XML = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
 _FORMULA_PREFIXES = ("=", "+", "-", "@")

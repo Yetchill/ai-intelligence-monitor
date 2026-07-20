@@ -4,12 +4,21 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.domain.enums import (
+    CaseCompleteness,
     Category,
+    CrawlMode,
     CrawlStatus,
+    ImplementationStatus,
+    LifecycleState,
+    PrimaryType,
+    ReviewPolicy,
+    ReviewStatus,
     RunTrigger,
     SourceKind,
+    SourceRole,
     SourceScope,
     SourceType,
+    VerificationStatus,
 )
 
 
@@ -31,6 +40,9 @@ class ItemFilter:
 
     keyword: str | None = None
     category: Category | None = None
+    primary_type: PrimaryType | None = None
+    verification_status: VerificationStatus | None = None
+    review_status: ReviewStatus | None = None
     source_id: int | None = None
     favorite: bool | None = None
     published_from: datetime | None = None
@@ -62,6 +74,15 @@ class ItemListEntry:
     source_id: int
     source_name: str
     source_kind: SourceKind
+    primary_type: PrimaryType = PrimaryType.UNCLASSIFIED
+    manual_primary_type: PrimaryType | None = None
+    topic_tags: tuple[str, ...] = ()
+    industry_tags: tuple[str, ...] = ()
+    verification_status: VerificationStatus = VerificationStatus.MEDIA_ONLY
+    review_status: ReviewStatus = ReviewStatus.PENDING
+    case_completeness: CaseCompleteness = CaseCompleteness.NOT_CASE
+    discovery_url: str | None = None
+    official_url: str | None = None
 
     @property
     def effective_category(self) -> Category:
@@ -71,6 +92,10 @@ class ItemListEntry:
     def category_origin(self) -> str:
         return "人工" if self.manual_category is not None else "自动"
 
+    @property
+    def effective_primary_type(self) -> PrimaryType:
+        return self.manual_primary_type or self.primary_type
+
 
 @dataclass(frozen=True, slots=True)
 class SourceOption:
@@ -78,6 +103,7 @@ class SourceOption:
     name: str
     source_kind: SourceKind
     enabled: bool
+    lifecycle_state: LifecycleState = LifecycleState.ACTIVE
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +126,16 @@ class SourceListEntry:
     audience: str
     homepage_visible: bool
     export_visible: bool
+    slug: str | None = None
+    lifecycle_state: LifecycleState = LifecycleState.CANDIDATE
+    source_role: SourceRole = SourceRole.FALLBACK
+    crawl_mode: CrawlMode = CrawlMode.CUSTOM
+    review_policy: ReviewPolicy = ReviewPolicy.ALWAYS_REVIEW
+    implementation_status: ImplementationStatus = ImplementationStatus.RESEARCH_NEEDED
+    implementation_reason: str | None = None
+    last_preview_at: datetime | None = None
+    preview_item_count: int | None = None
+    allowed_primary_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

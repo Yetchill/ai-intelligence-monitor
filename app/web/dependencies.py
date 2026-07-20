@@ -17,6 +17,7 @@ from app.services.source_discovery import (
     SourceDiscoveryService,
     SourcePreviewService,
 )
+from app.services.source_lifecycle_service import SourceLifecycleService
 from app.services.source_management import SourceManagementService, SourceOnboardingService
 from app.services.source_seed_service import SourceSeedService
 from app.services.source_url_security import SafeHttpFetcher, SourceUrlGuard
@@ -46,7 +47,7 @@ class WebUpdateService:
         return await self._execution.update(
             trigger=RunTrigger.MANUAL_WEB,
             source_id=source_id,
-            formal_only=source_id is None,
+            formal_only=False,
         )
 
     async def preview(self, source_id: int) -> SourcePreviewResult:
@@ -69,6 +70,7 @@ class WebServices:
     onboarding: SourceOnboardingService
     sources: SourceManagementService
     source_seed: SourceSeedService
+    source_lifecycle: SourceLifecycleService
     token_store: DiscoveryTokenStore
     _owned_source_fetcher: SafeHttpFetcher | None = None
 
@@ -112,6 +114,9 @@ class WebServices:
             onboarding=SourceOnboardingService(discovery, preview, store),
             sources=SourceManagementService(uow_factory, store),
             source_seed=SourceSeedService(uow_factory),
+            source_lifecycle=SourceLifecycleService(
+                uow_factory, default_collector_registry().names()
+            ),
             token_store=store,
             _owned_source_fetcher=owned_fetcher,
         )

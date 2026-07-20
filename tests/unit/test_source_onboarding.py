@@ -800,7 +800,7 @@ def test_save_source_uses_server_state_rejects_duplicate_and_does_not_create_bus
         description="只保存服务器检测配置",
     )
 
-    assert saved.enabled is True
+    assert saved.enabled is False
     assert saved.origin is SourceOrigin.USER_ADDED
     with pytest.raises(DiscoveryTokenError):
         service.create_from_token(
@@ -830,7 +830,9 @@ def test_save_source_uses_server_state_rejects_duplicate_and_does_not_create_bus
         )
 
 
-def test_unrecognized_or_empty_preview_source_cannot_be_saved_enabled(database: Database) -> None:
+def test_unrecognized_or_empty_preview_source_is_saved_as_blocked_candidate(
+    database: Database,
+) -> None:
     store = DiscoveryTokenStore()
     unusable = DiscoverySession(
         DiscoveryResult(
@@ -848,19 +850,11 @@ def test_unrecognized_or_empty_preview_source_cannot_be_saved_enabled(database: 
         PreviewResult(()),
     )
     service = SourceManagementService(lambda: RepositoryUnitOfWork(database), store)
-    with pytest.raises(SourceManagementError):
-        service.create_from_token(
-            store.put(unusable),
-            name="复杂来源",
-            default_category=None,
-            enabled=True,
-            description=None,
-        )
     saved = service.create_from_token(
         store.put(unusable),
         name="复杂来源",
         default_category=None,
-        enabled=False,
+        enabled=True,
         description=None,
     )
     assert saved.enabled is False
@@ -1178,8 +1172,8 @@ def test_save_and_update_saves_first_and_uses_existing_update_service(
             },
         )
 
-    assert result.status_code == (500 if fail else 200)
-    assert pipeline.calls == [1]
+    assert result.status_code == 200
+    assert pipeline.calls == []
     with RepositoryUnitOfWork(database) as uow:
         sources = uow.sources.list()
         assert len(sources) == 1

@@ -38,7 +38,7 @@ from app.domain.exports import (
 )
 from app.domain.models import Base, IntelligenceItem, Source
 from app.domain.queries import ItemFilter, ItemQuery
-from app.exporters.common import CATEGORY_LABELS, CATEGORY_ORDER, excel_safe_text, safe_filename
+from app.exporters.common import CATEGORY_LABELS, excel_safe_text, safe_filename
 from app.exporters.excel import ExcelExporter
 from app.exporters.word import WordExporter
 from app.services.application_factory import build_export_service
@@ -193,7 +193,7 @@ def test_excel_normal_export_structure_and_safe_filename(database: Database) -> 
         assert result.filename.endswith(".xlsx") and "/" not in result.filename
         assert workbook.sheetnames == ["资讯列表", "导出说明"]  # type: ignore[attr-defined]
         assert sheet.freeze_panes == "A2"
-        assert sheet.auto_filter.ref == "A1:M5"
+        assert sheet.auto_filter.ref == "A1:U5"
         header_cells = [cast(Cell, cell) for cell in sheet[1]]
         assert [cell.value for cell in header_cells] == list(ExcelExporter._headers)
         assert all(cast(bool, cell.font.bold) for cell in header_cells)
@@ -384,12 +384,10 @@ def test_word_structure_group_order_no_empty_sections_and_hyperlinks(database: D
     assert result.media_type.endswith("wordprocessingml.document")
     assert "AI行业动态与成果申报情报汇总" in text
     assert "条目总数: 4" in text
-    assert text.index("大模型与技术") < text.index("企业成果与案例")
-    assert text.index("企业成果与案例") < text.index("奖项与优秀案例")
-    assert text.index("奖项与优秀案例") < text.index("待分类")
-    assert "智能体与产品" not in text
-    assert "征集与申报" not in text
-    assert "政策、标准与行业" not in text
+    assert "待确认" in text
+    assert "大模型与技术" not in text
+    assert "企业成果与案例" not in text
+    assert "奖项与优秀案例" not in text
     assert text.count("简介: ") == 3
     hyperlinks = [
         relationship
@@ -586,12 +584,7 @@ def test_excel_and_word_contain_same_items_with_documented_group_order(
         ]
     finally:
         workbook.close()  # type: ignore[attr-defined]
-    expected_word_order = [
-        title
-        for category in CATEGORY_ORDER
-        for title, label in excel_rows
-        if label == CATEGORY_LABELS[category]
-    ]
+    expected_word_order = [title for title, _label in excel_rows]
     assert _word_titles(word.content) == expected_word_order
     assert {title for title, _label in excel_rows} == set(_word_titles(word.content))
 

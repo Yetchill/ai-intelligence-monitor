@@ -1,11 +1,12 @@
 """Strict parsing for local Web list filters."""
 
 from datetime import UTC, date, datetime, time, timedelta
+from enum import Enum
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from app.domain.enums import Category, SourceScope
+from app.domain.enums import Category, PrimaryType, ReviewStatus, SourceScope, VerificationStatus
 from app.domain.queries import ItemFilter, ItemQuery
 
 MAX_DATABASE_ID = 9_223_372_036_854_775_807
@@ -39,6 +40,9 @@ class PageParams(BaseModel):
 class ItemQueryParams(PageParams):
     keyword: str | None = Field(default=None, max_length=200)
     category: Category | None = None
+    primary_type: PrimaryType | None = None
+    verification_status: VerificationStatus | None = None
+    review_status: ReviewStatus | None = None
     source_id: int | None = Field(default=None, ge=1, le=MAX_DATABASE_ID)
     favorite: Literal["all", "yes", "no"] = "all"
     published_from: date | None = None
@@ -46,12 +50,14 @@ class ItemQueryParams(PageParams):
     discovered_from: date | None = None
     discovered_to: date | None = None
     unclassified: Literal["all", "yes", "no"] = "all"
-    source_scope: Literal["leadership", "all", "non_formal", "disabled", "fallback"] = "leadership"
+    source_scope: Literal[
+        "leadership", "all", "non_formal", "disabled", "fallback", "industry_leads"
+    ] = "leadership"
 
     @field_validator("source_scope", mode="before")
     @classmethod
     def safe_source_scope(cls, value: object) -> object:
-        allowed = {"leadership", "all", "non_formal", "disabled", "fallback"}
+        allowed = {"leadership", "all", "non_formal", "disabled", "fallback", "industry_leads"}
         return value if value in allowed else "leadership"
 
     @field_validator("keyword", mode="before")
@@ -85,6 +91,9 @@ class ItemQueryParams(PageParams):
         return ItemQuery(
             keyword=item_filter.keyword,
             category=item_filter.category,
+            primary_type=item_filter.primary_type,
+            verification_status=item_filter.verification_status,
+            review_status=item_filter.review_status,
             source_id=item_filter.source_id,
             favorite=item_filter.favorite,
             published_from=item_filter.published_from,
@@ -104,6 +113,9 @@ class ItemQueryParams(PageParams):
         return ItemFilter(
             keyword=self.keyword,
             category=self.category,
+            primary_type=self.primary_type,
+            verification_status=self.verification_status,
+            review_status=self.review_status,
             source_id=self.source_id,
             favorite=_tri_state(self.favorite),
             published_from=_start(self.published_from),
@@ -119,6 +131,9 @@ class ItemQueryParams(PageParams):
         for key in (
             "keyword",
             "category",
+            "primary_type",
+            "verification_status",
+            "review_status",
             "source_id",
             "favorite",
             "published_from",
@@ -131,7 +146,7 @@ class ItemQueryParams(PageParams):
             value = getattr(self, key)
             if value is None or (value == "all" and key != "source_scope"):
                 continue
-            values[key] = value.value if isinstance(value, Category) else str(value)
+            values[key] = value.value if isinstance(value, Enum) else str(value)
         return values
 
     def export_values(self) -> dict[str, str]:

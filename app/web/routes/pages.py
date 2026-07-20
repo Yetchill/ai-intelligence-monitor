@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Form, Path, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from app.domain.enums import Category, Weekday
+from app.domain.enums import Category, PrimaryType, ReviewStatus, VerificationStatus, Weekday
 from app.domain.exports import ExportFormat, ExportQuery
 from app.domain.onboarding import DiscoverySession
 from app.domain.update import UpdateResult
@@ -39,6 +39,9 @@ async def items_page(request: Request) -> HTMLResponse:
             "filters": params,
             "source_options": services.data.source_options(),
             "categories": tuple(Category),
+            "primary_types": tuple(PrimaryType),
+            "verification_statuses": tuple(VerificationStatus),
+            "review_statuses": tuple(ReviewStatus),
             "previous_url": _page_url("/", params.query_values(), page.page - 1)
             if page.page > 1
             else None,
@@ -79,9 +82,23 @@ async def sources_page(request: Request) -> HTMLResponse:
     params = PageParams.parse(
         {key: value for key, value in request.query_params.items() if key in {"page", "per_page"}}
     )
-    page = request.app.state.services.data.list_sources(page=params.page, per_page=params.per_page)
+    catalog_filter = request.query_params.get("filter", "all")
+    if catalog_filter not in {
+        "all",
+        "active",
+        "candidate",
+        "paused",
+        "official",
+        "media",
+        "blocked",
+        "needs_custom",
+    }:
+        catalog_filter = "all"
+    page = request.app.state.services.data.list_sources(
+        page=params.page, per_page=params.per_page, catalog_filter=catalog_filter
+    )
     _require_existing_page(page.page, page.total_pages)
-    values = {"per_page": str(params.per_page)}
+    values = {"per_page": str(params.per_page), "filter": catalog_filter}
     return request.app.state.templates.TemplateResponse(
         request,
         "sources.html",
@@ -97,6 +114,7 @@ async def sources_page(request: Request) -> HTMLResponse:
             "seed_created": request.query_params.get("created"),
             "seed_promoted": request.query_params.get("promoted"),
             "seed_conflicts": request.query_params.get("conflicts"),
+            "catalog_filter": catalog_filter,
         },
     )
 
@@ -335,6 +353,27 @@ async def set_category(
     return RedirectResponse(_safe_return_to(return_to, default="/"), status_code=303)
 
 
+@router.post("/items/{item_id}/review", response_class=HTMLResponse)
+async def set_item_review(
+    request: Request,
+    item_id: Annotated[int, Path(ge=1, le=MAX_DATABASE_ID)],
+    primary_type: Annotated[str, Form(max_length=50)],
+    verification_status: Annotated[str, Form(max_length=50)],
+    review_status: Annotated[str, Form(max_length=50)],
+    official_url: Annotated[str, Form(max_length=2048)] = "",
+    return_to: Annotated[str, Form(max_length=2048)] = "/",
+) -> RedirectResponse:
+    request.app.state.services.data.set_taxonomy_review(
+        item_id,
+        primary_type=primary_type,
+        verification_status=verification_status,
+        review_status=review_status,
+        official_url=official_url or None,
+        actor_source="web_system_operator",
+    )
+    return RedirectResponse(_safe_return_to(return_to, default="/"), status_code=303)
+
+
 @router.post("/sources/{source_id}/enabled", response_class=HTMLResponse)
 async def set_source_enabled(
     request: Request,
@@ -369,10 +408,33 @@ async def preview_source(
     source_id: Annotated[int, Path(ge=1, le=MAX_DATABASE_ID)],
 ) -> HTMLResponse:
     result = await request.app.state.services.updates.preview(source_id)
+    source = request.app.state.services.sources.get_source(source_id)
+    if source.slug:
+        request.app.state.services.source_lifecycle.record_preview(source.slug, result)
     return request.app.state.templates.TemplateResponse(
         request,
         "source-preview.html",
         {"result": result},
+    )
+
+
+@router.post("/sources/{source_id}/activate", response_class=HTMLResponse)
+async def activate_source(
+    request: Request,
+    source_id: Annotated[int, Path(ge=1, le=MAX_DATABASE_ID)],
+    confirm: Annotated[str, Form(max_length=5)],
+) -> HTMLResponse:
+    if confirm != "true":
+        raise WebInputError("激活必须明确确认。")
+    source = request.app.state.services.sources.get_source(source_id)
+    if not source.slug:
+        raise WebInputError("来源缺少稳定 slug, 不能激活。")
+    result = await request.app.state.services.updates.preview(source_id)
+    request.app.state.services.source_lifecycle.activate(source.slug, result, confirm=True)
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "source-preview.html",
+        {"result": result, "activated": True},
     )
 
 

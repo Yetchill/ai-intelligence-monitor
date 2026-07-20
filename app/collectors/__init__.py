@@ -2,13 +2,19 @@
 
 from app.collectors.github_release import GitHubReleaseCollector
 from app.collectors.html_list import HTMLListCollector
+from app.collectors.hubs import CaseHubCollector, DocumentHubCollector, HubCollector
 from app.collectors.registry import CollectorRegistry, default_collector_registry
 from app.collectors.rss import RSSCollector
+from app.collectors.single_page_changelog import SinglePageChangelogCollector
 
 __all__ = [
+    "CaseHubCollector",
     "CollectorRegistry",
+    "DocumentHubCollector",
     "GitHubReleaseCollector",
     "HTMLListCollector",
+    "HubCollector",
     "RSSCollector",
+    "SinglePageChangelogCollector",
     "default_collector_registry",
 ]

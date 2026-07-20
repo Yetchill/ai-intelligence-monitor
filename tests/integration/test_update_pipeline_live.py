@@ -33,9 +33,9 @@ async def test_formal_sources_complete_pipeline_in_temporary_database(
 
         SourceSeedService(uow_factory).seed()
         selected = {
-            "国家数据局政策发布",
+            "国家数据局新闻动态",
             "中国互联网协会通知公告",
-            "OpenAI News RSS",
+            "百度智能云新闻",
         }
         with uow_factory() as uow:
             for source in uow.sources.list():

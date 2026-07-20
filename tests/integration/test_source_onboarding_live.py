@@ -32,14 +32,11 @@ async def test_django_weblog_rss_onboarding_live() -> None:
 
 
 @pytest.mark.asyncio
-async def test_qwen_agent_releases_preview_is_rejected_by_default() -> None:
-    discovery, preview = await _discover_and_preview(
-        "https://github.com/QwenLM/Qwen-Agent/releases"
-    )
+async def test_deepseek_changelog_onboarding_is_bounded() -> None:
+    discovery, preview = await _discover_and_preview("https://api-docs.deepseek.com/zh-cn/updates/")
 
-    assert discovery.source_type is SourceType.GITHUB_RELEASE
-    assert preview.items == ()
-    assert preview.errors
+    assert discovery.source_type in {SourceType.HTML_LIST, SourceType.CUSTOM}
+    assert len(preview.items) <= 10
 
 
 @pytest.mark.asyncio

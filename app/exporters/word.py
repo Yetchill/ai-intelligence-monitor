@@ -18,8 +18,8 @@ from docx.text.paragraph import Paragraph
 
 from app.domain.exports import ExportFormat, ExportItem, ExportMetadata, RenderedExport
 from app.exporters.common import (
-    CATEGORY_LABELS,
-    CATEGORY_ORDER,
+    PRIMARY_TYPE_LABELS,
+    PRIMARY_TYPE_ORDER,
     clean_text,
     format_time,
     safe_filename,
@@ -50,21 +50,24 @@ class WordExporter:
             intro.add_run(f"条目总数: {metadata.item_count}")
 
             grouped = {
-                category: [item for item in items if item.effective_category is category]
-                for category in CATEGORY_ORDER
+                primary_type: [
+                    item for item in items if item.effective_primary_type is primary_type
+                ]
+                for primary_type in PRIMARY_TYPE_ORDER
             }
             chapter_number = 0
-            for category in CATEGORY_ORDER:
-                category_items = grouped[category]
-                if not category_items:
+            for primary_type in PRIMARY_TYPE_ORDER:
+                type_items = grouped[primary_type]
+                if not type_items:
                     continue
                 chapter_number += 1
                 heading = document.add_heading(
-                    f"{_chinese_number(chapter_number)}、{CATEGORY_LABELS[category]}", level=1
+                    f"{_chinese_number(chapter_number)}、{PRIMARY_TYPE_LABELS[primary_type]}",
+                    level=1,
                 )
                 if chapter_number > 1:
                     heading.paragraph_format.page_break_before = True
-                for item_number, item in enumerate(category_items, start=1):
+                for item_number, item in enumerate(type_items, start=1):
                     document.add_heading(
                         f"{item_number}. {clean_text(item.title, limit=1_000)}", level=2
                     )
@@ -77,6 +80,16 @@ class WordExporter:
                     details.add_run(format_time(item.published_at) or "未知")
                     details.add_run("\n分类方式: ").bold = True
                     details.add_run(item.category_origin)
+                    details.add_run("\n可信状态: ").bold = True
+                    details.add_run(item.verification_status.value)
+                    details.add_run("\n审核状态: ").bold = True
+                    details.add_run(item.review_status.value)
+                    if item.topic_tags:
+                        details.add_run("\n主题标签: ").bold = True
+                        details.add_run(", ".join(item.topic_tags))
+                    if item.industry_tags:
+                        details.add_run("\n行业标签: ").bold = True
+                        details.add_run(", ".join(item.industry_tags))
                     if item.summary:
                         summary = document.add_paragraph()
                         summary.add_run("简介: ").bold = True
@@ -86,6 +99,11 @@ class WordExporter:
                         link_paragraph = document.add_paragraph()
                         link_paragraph.add_run("原文: ").bold = True
                         _add_hyperlink(link_paragraph, link, "查看原文")
+                    official_link = safe_hyperlink(item.official_url)
+                    if official_link is not None and official_link != link:
+                        official_paragraph = document.add_paragraph()
+                        official_paragraph.add_run("官方原文: ").bold = True
+                        _add_hyperlink(official_paragraph, official_link, "查看官方原文")
 
             document.save(buffer)
             date_stamp = metadata.generated_at.strftime("%Y%m%d")
@@ -149,4 +167,4 @@ def _add_hyperlink(paragraph: Paragraph, url: str, label: str) -> None:
 
 
 def _chinese_number(value: int) -> str:
-    return ("一", "二", "三", "四", "五", "六", "七")[value - 1]
+    return ("一", "二", "三", "四", "五", "六", "七", "八")[value - 1]

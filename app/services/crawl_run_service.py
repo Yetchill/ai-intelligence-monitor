@@ -5,7 +5,7 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
 from app.domain.enums import CrawlStatus, RunTrigger
-from app.domain.models import CrawlRun
+from app.domain.models import CrawlRun, CrawlSourceExecution
 from app.domain.update import SourceUpdateResult, SourceUpdateStatus, UpdateResult
 from app.services.error_sanitization import sanitize_error
 from app.storage.repositories import RepositoryUnitOfWork
@@ -83,6 +83,29 @@ class CrawlRunService:
             run.rejection_reason_counts = dict(reason_counts)
             run.failure_reason_counts = dict(failure_counts)
             run.error_summary = error_summary
+            for source_result in source_results:
+                execution = uow.crawl_source_executions.get_by_run_source(
+                    crawl_run_id, source_result.source_id
+                )
+                if execution is None:
+                    execution = uow.crawl_source_executions.add(
+                        CrawlSourceExecution(
+                            crawl_run_id=crawl_run_id,
+                            source_id=source_result.source_id,
+                            status=source_result.status.value,
+                        )
+                    )
+                execution.status = source_result.status.value
+                execution.discovered_count = source_result.discovered
+                execution.accepted_count = source_result.accepted
+                execution.rejected_count = source_result.rejected
+                execution.new_count = source_result.new
+                execution.updated_count = source_result.updated
+                execution.duplicate_count = source_result.duplicate
+                execution.failed_count = source_result.failed
+                execution.error = (
+                    sanitize_error(source_result.error, limit=1000) if source_result.error else None
+                )
             result = _to_result(run, source_results)
         return result
 

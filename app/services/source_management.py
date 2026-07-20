@@ -3,16 +3,22 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from hashlib import sha256
 from threading import Lock
 
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.domain.enums import (
     Category,
+    CrawlMode,
     DiscoveryStatus,
+    ImplementationStatus,
+    LifecycleState,
+    ReviewPolicy,
     SourceAudience,
     SourceKind,
     SourceOrigin,
+    SourceRole,
     SourceTier,
     SourceType,
 )
@@ -61,6 +67,13 @@ class SourceDetails:
     last_checked_at: datetime | None
     last_success_at: datetime | None
     last_error: str | None
+    slug: str | None
+    lifecycle_state: LifecycleState
+    source_role: SourceRole
+    crawl_mode: CrawlMode
+    review_policy: ReviewPolicy
+    implementation_status: ImplementationStatus
+    implementation_reason: str | None
 
 
 class SourceOnboardingService:
@@ -115,8 +128,6 @@ class SourceManagementService:
         try:
             if session.rediscover_source_id is not None:
                 raise SourceManagementError("该检测结果只用于重新检测, 不能创建新来源。")
-            if enabled and not session.can_enable:
-                raise SourceManagementError("当前预览不可用; 只能保存为停用的待处理来源。")
             cleaned_name = _name(name)
             cleaned_description = _description(description)
             category = _category(default_category)
@@ -133,11 +144,29 @@ class SourceManagementService:
                         raise SourceAlreadyExistsError(existing.id)
                     source = uow.sources.add(
                         Source(
+                            slug=f"user-{sha256(discovery.normalized_url.encode('utf-8')).hexdigest()[:16]}",
                             name=cleaned_name,
                             description=cleaned_description,
                             source_type=discovery.source_type,
                             start_url=discovery.normalized_url,
-                            enabled=enabled,
+                            enabled=False,
+                            lifecycle_state=LifecycleState.CANDIDATE,
+                            source_role=SourceRole.FALLBACK,
+                            crawl_mode=_crawl_mode(discovery.source_type),
+                            review_policy=ReviewPolicy.ALWAYS_REVIEW,
+                            allowed_primary_types=[],
+                            lookback_days=30,
+                            max_items_per_run=20,
+                            implementation_status=(
+                                ImplementationStatus.READY
+                                if session.can_enable
+                                else ImplementationStatus.NEEDS_CUSTOM_COLLECTOR
+                            ),
+                            implementation_reason=(
+                                "预览可用, 等待显式 activate。"
+                                if session.can_enable
+                                else "自动检测未获得可用条目, 需要自定义采集器或进一步研究。"
+                            ),
                             default_category=category,
                             collector_name=discovery.collector_name,
                             collector_config=dict(discovery.collector_config),
@@ -193,16 +222,14 @@ class SourceManagementService:
             source = uow.sources.get(source_id)
             if source is None:
                 raise ManagedSourceNotFoundError(f"来源 {source_id} 不存在。")
-            if enabled and (
-                source.requires_custom_collector
-                or source.discovery_status
-                in {"needs_configuration", "needs_custom_collector", "blocked", "unreachable"}
-            ):
-                raise SourceManagementError("该来源尚未通过可用预览, 不能启用。")
+            if enabled and source.lifecycle_state is LifecycleState.CANDIDATE:
+                raise SourceManagementError("candidate 必须通过 preview + activate, 不能直接启用。")
             source.name = cleaned_name
             source.description = cleaned_description
             source.default_category = category
-            source.enabled = enabled
+            if source.lifecycle_state is not LifecycleState.CANDIDATE:
+                source.enabled = enabled
+                source.lifecycle_state = LifecycleState.ACTIVE if enabled else LifecycleState.PAUSED
         return self.get_source(source_id)
 
     def confirm_rediscovery(self, source_id: int, token: str) -> SourceDetails:
@@ -255,7 +282,22 @@ def _details(source: Source) -> SourceDetails:
         last_checked_at=source.last_checked_at,
         last_success_at=source.last_success_at,
         last_error=source.last_error,
+        slug=source.slug,
+        lifecycle_state=source.lifecycle_state,
+        source_role=source.source_role,
+        crawl_mode=source.crawl_mode,
+        review_policy=source.review_policy,
+        implementation_status=source.implementation_status,
+        implementation_reason=source.implementation_reason,
     )
+
+
+def _crawl_mode(source_type: SourceType) -> CrawlMode:
+    return {
+        SourceType.RSS: CrawlMode.RSS,
+        SourceType.HTML_LIST: CrawlMode.HTML_LIST,
+        SourceType.JSON_API: CrawlMode.API,
+    }.get(source_type, CrawlMode.CUSTOM)
 
 
 def _name(value: str) -> str:

@@ -4,7 +4,9 @@ from collections.abc import Callable
 
 from app.collectors.github_release import GitHubReleaseCollector
 from app.collectors.html_list import HTMLListCollector
+from app.collectors.hubs import CaseHubCollector, DocumentHubCollector
 from app.collectors.rss import RSSCollector
+from app.collectors.single_page_changelog import SinglePageChangelogCollector
 from app.domain.collection import Collector, Fetcher
 from app.domain.models import Source
 
@@ -50,4 +52,7 @@ def default_collector_registry() -> CollectorRegistry:
     registry.register(RSSCollector.name, RSSCollector)
     registry.register(HTMLListCollector.name, HTMLListCollector)
     registry.register(GitHubReleaseCollector.name, GitHubReleaseCollector)
+    registry.register(SinglePageChangelogCollector.name, SinglePageChangelogCollector)
+    registry.register(DocumentHubCollector.name, DocumentHubCollector)
+    registry.register(CaseHubCollector.name, CaseHubCollector)
     return registry

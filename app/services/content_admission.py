@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 from app.domain.admission import AdmissionResult, AdmissionRuleMatch
 from app.domain.collection import CollectedItem
-from app.domain.enums import Category, SourceKind, SourceTier, SourceType
+from app.domain.enums import Category, PrimaryType, SourceKind, SourceRole, SourceTier, SourceType
 from app.domain.models import Source
 
 _REJECT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -72,9 +72,22 @@ _GITHUB_PRERELEASE = re.compile(
     r"(?:^|[.\-_\s])(?:alpha|beta|rc|nightly|pre[- ]?release)(?:$|[.\-_\s\d])", re.IGNORECASE
 )
 _SEMVER = re.compile(r"(?:^|\s|v)(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?")
+_MEETING = re.compile(r"会议|大会|峰会|论坛|演讲|展台|参展|亮相|嘉宾")
+_SUBSTANTIVE_EVENT = re.compile(
+    r"正式发布|发布(?:了|新)?|上线|重大升级|开源|退役|下线|政策|法规|标准|征求意见|"
+    r"征集|申报|报名|获奖|入选|名单|公示|白皮书|研究报告|行业报告"
+)
+_PRODUCT_DISALLOWED = re.compile(
+    r"峰会演讲|参展|展台|亮相|战略签约|普通合作|融资|股价|人物采访|招聘|使用教程|优惠|促销"
+)
+_POLICY_DISALLOWED = re.compile(r"培训|调研|领导活动|座谈会")
+_INDUSTRY_RELEVANCE = re.compile(
+    r"人工智能|大模型|智能体|Agent|高质量数据集|算力|数据.{0,5}AI|AI.{0,5}应用|AI.{0,5}治理",
+    re.IGNORECASE,
+)
 
 
-class ContentAdmissionPolicy:
+class BasicAdmissionPolicy:
     """Make auditable editorial admission decisions without classifying items."""
 
     def validate_source(self, source: Source) -> None:
@@ -125,6 +138,12 @@ class ContentAdmissionPolicy:
             match = pattern.search(title_and_summary)
             if match:
                 return _hard_reject(f"content.{rule_id}", "title", match.group(0))
+
+        if _MEETING.search(title_and_summary) and not _SUBSTANTIVE_EVENT.search(title_and_summary):
+            return _hard_reject("content.ordinary_meeting", "content")
+        role_rejection = _role_rejection(title_and_summary, source.source_role)
+        if role_rejection is not None:
+            return role_rejection
 
         if source.source_type == SourceType.GITHUB_RELEASE:
             github_rejection = _github_rejection(title_and_summary, config.allow_technical_updates)
@@ -298,6 +317,16 @@ def _validated_config(source: Source) -> _AdmissionConfig:
     }
     if overlap:
         raise ValueError("include_terms and exclude_terms overlap")
+    raw_allowed_primary_types = cast(object, source.allowed_primary_types)
+    allowed_primary_types = _string_list(
+        raw_allowed_primary_types if raw_allowed_primary_types is not None else [],
+        "allowed_primary_types",
+    )
+    unknown_primary_types = set(allowed_primary_types) - {value.value for value in PrimaryType}
+    if unknown_primary_types:
+        raise ValueError(
+            f"unknown allowed_primary_types values: {', '.join(sorted(unknown_primary_types))}"
+        )
     score = source.minimum_quality_score
     if isinstance(score, bool) or not math.isfinite(score):
         raise ValueError("minimum_quality_score must be a finite number")
@@ -315,6 +344,24 @@ def _validated_config(source: Source) -> _AdmissionConfig:
         allow_external_links=source.allow_external_links,
         allow_technical_updates=source.allow_technical_updates,
     )
+
+
+def _role_rejection(content: str, source_role: SourceRole) -> AdmissionResult | None:
+    if source_role is SourceRole.OFFICIAL_PRODUCT and (
+        match := _PRODUCT_DISALLOWED.search(content)
+    ):
+        return _hard_reject("role.official_product.non_product_activity", "content", match.group(0))
+    if source_role is SourceRole.OFFICIAL_POLICY and (match := _POLICY_DISALLOWED.search(content)):
+        return _hard_reject("role.official_policy.routine_activity", "content", match.group(0))
+    if source_role is SourceRole.OFFICIAL_INDUSTRY and not _INDUSTRY_RELEVANCE.search(content):
+        return _hard_reject("role.official_industry.ai_relevance_missing", "content")
+    if (
+        source_role is SourceRole.OPPORTUNITY_AND_AWARD_HUB
+        and "通知" in content
+        and not re.search(r"征集|申报|参评|报名|获奖|入选|名单|公示|政策|标准|报告", content)
+    ):
+        return _hard_reject("role.opportunity_hub.generic_notice", "content")
+    return None
 
 
 def _string_list(value: object, name: str) -> tuple[str, ...]:
@@ -378,3 +425,9 @@ def _decision(
     score: int,
 ) -> AdmissionResult:
     return AdmissionResult(accepted, reason, tuple(matches), max(0, min(100, score)))
+
+
+# Backward-compatible import name.  The stage-eight-B architecture and pipeline use
+# BasicAdmissionPolicy; older adapters and third-party extensions can migrate without
+# a flag day.
+ContentAdmissionPolicy = BasicAdmissionPolicy
