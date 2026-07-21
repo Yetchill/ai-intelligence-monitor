@@ -229,7 +229,7 @@ def test_catalog_sync_imports_every_entry_is_idempotent_and_preserves_paused(
     third = service.sync()
 
     assert first.total == len(catalog) == 26
-    assert (first.created, first.active, first.candidate) == (26, 11, 15)
+    assert (first.created, first.active, first.candidate) == (26, 18, 8)
     assert (second.existing, second.conflicts) == (26, 0)
     assert len(sources) == 26
     assert all(
@@ -397,7 +397,7 @@ def test_bulk_source_selection_includes_active_media_but_excludes_candidate_and_
 
     assert "cls-ai-subject" in selected
     assert "nda-news" not in selected
-    assert "qwen-official-blog" not in selected
+    assert "qwen-official-blog" in selected
 
 
 def test_report_parent_child_repository_query_and_unique_fingerprints(database: Database) -> None:
@@ -531,9 +531,14 @@ def test_domestic_media_sources_have_correct_unified_settings() -> None:
         assert entry.review_policy.value == "always_review", (
             f"{entry.slug}: review_policy should be always_review"
         )
-        assert entry.lifecycle_state.value == "candidate", (
-            f"{entry.slug}: lifecycle should be candidate"
-        )
+        if entry.slug == "ithome-ai":
+            assert entry.lifecycle_state.value == "active", (
+                f"{entry.slug}: lifecycle should be active"
+            )
+        else:
+            assert entry.lifecycle_state.value == "candidate", (
+                f"{entry.slug}: lifecycle should be candidate"
+            )
         assert entry.max_items_per_run is not None
         assert entry.max_items_per_run >= 1
 

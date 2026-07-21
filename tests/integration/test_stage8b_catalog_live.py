@@ -73,7 +73,7 @@ async def test_all_candidate_accessibility_and_technical_difficulty_live() -> No
     semaphore = asyncio.Semaphore(4)
     results = await asyncio.gather(*(_probe(entry, semaphore) for entry in entries))
 
-    assert len(results) == len(entries) == 15
+    assert len(results) == len(entries) == 8
     assert {result.slug for result in results} == {entry.slug for entry in entries}
     for result in results:
         print(result)
