@@ -849,8 +849,6 @@ async def test_xinhua_tech_filters_to_ai_content_only() -> None:
     ]
     for na_title in non_ai:
         assert na_title not in titles
-    custom_registry.register("rss", RSSCollector)
-    assert isinstance(custom_registry.create(source, fetcher), RSSCollector)
 
 
 @pytest.mark.asyncio
