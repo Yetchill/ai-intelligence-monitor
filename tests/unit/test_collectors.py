@@ -595,3 +595,128 @@ def test_registry_constructs_by_collector_name_and_accepts_extensions() -> None:
     custom_registry = CollectorRegistry()
     custom_registry.register("rss", RSSCollector)
     assert isinstance(custom_registry.create(source, fetcher), RSSCollector)
+
+
+@pytest.mark.asyncio
+async def test_hunyuan_product_updates_extracts_title_date_link_from_slate_table() -> None:
+    url = "https://cloud.tencent.com/document/product/1729/97765"
+    fetcher = FixtureFetcher({url: (FIXTURES / "hunyuan_product_updates.html").read_bytes()})
+
+    items = await SinglePageChangelogCollector(fetcher).collect(
+        CollectContext(
+            source_url=url,
+            config={
+                "content_selector": "div#doc-slate-root",
+                "date_heading_selector": "h2",
+                "entry_selector": "tbody tr",
+                "entry_title_cells": [0],
+                "entry_date_cell": 2,
+                "entry_summary_cell": 1,
+                "entry_link_cell": 3,
+                "exclude_entry_terms": ["动态名称"],
+            },
+        )
+    )
+
+    assert [item.title for item in items] == [
+        "Tencent HY 文生文旧版本模型下线",
+        "Tencent HY Vision 1.5 Instruct 上线",
+    ]
+    assert items[0].published_at is not None
+    assert items[0].published_at.date().isoformat() == "2026-06-22"  # type: ignore[union-attr]
+    assert items[1].published_at is not None
+    assert items[1].published_at.date().isoformat() == "2025-12-17"  # type: ignore[union-attr]
+    assert items[0].canonical_url.startswith("https://cloud.tencent.com/document/product/1729/97765?entry=")
+    assert items[1].canonical_url.startswith("https://cloud.tencent.com/document/product/1729/97765?entry=")
+    assert items[0].canonical_url != items[1].canonical_url
+    assert items[0].extra["detail_link"] == "/document/product/1729/131925"
+    assert items[1].extra["detail_link"] == "https://cloud.tencent.com/document/product/1729/104753"
+    assert items[0].summary is not None
+    assert "模型" in items[0].summary
+    assert items[1].summary is not None
+    assert "TurboS" in items[1].summary
+
+
+@pytest.mark.asyncio
+async def test_hunyuan_product_announcements_extracts_title_date_link_from_slate_table() -> None:
+    url = "https://cloud.tencent.com/document/product/1729/132069"
+    fetcher = FixtureFetcher({url: (FIXTURES / "hunyuan_product_announcements.html").read_bytes()})
+
+    items = await SinglePageChangelogCollector(fetcher).collect(
+        CollectContext(
+            source_url=url,
+            config={
+                "content_selector": "div#doc-slate-root",
+                "date_heading_selector": "h3",
+                "entry_selector": "tbody tr",
+                "entry_title_cells": [0],
+                "entry_date_cell": 1,
+                "entry_link_cell": 0,
+                "exclude_entry_terms": ["公告标题"],
+            },
+        )
+    )
+
+    assert [item.title for item in items] == [
+        "关于腾讯云混元多模态模型服务迁移通知",
+        "关于腾讯云混元旧版本模型下线的通知",
+    ]
+    assert items[0].published_at is not None
+    assert items[0].published_at.date().isoformat() == "2026-06-05"  # type: ignore[union-attr]
+    assert items[1].published_at is not None
+    assert items[1].published_at.date().isoformat() == "2026-05-22"  # type: ignore[union-attr]
+    assert items[0].canonical_url.startswith("https://cloud.tencent.com/document/product/1729/132069?entry=")
+    assert items[1].canonical_url.startswith("https://cloud.tencent.com/document/product/1729/132069?entry=")
+    assert items[0].canonical_url != items[1].canonical_url
+    assert items[0].extra["detail_link"] == "https://cloud.tencent.com/announce/detail/2310"
+    assert items[1].extra["detail_link"] == "https://cloud.tencent.com/announce/detail/2301"
+
+
+@pytest.mark.asyncio
+async def test_hunyuan_product_updates_skips_header_rows() -> None:
+    url = "https://cloud.tencent.com/document/product/1729/97765"
+    fetcher = FixtureFetcher({url: (FIXTURES / "hunyuan_product_updates.html").read_bytes()})
+
+    items = await SinglePageChangelogCollector(fetcher).collect(
+        CollectContext(
+            source_url=url,
+            config={
+                "content_selector": "div#doc-slate-root",
+                "date_heading_selector": "h2",
+                "entry_selector": "tbody tr",
+                "entry_title_cells": [0],
+                "entry_date_cell": 2,
+                "entry_summary_cell": 1,
+                "entry_link_cell": 3,
+                "exclude_entry_terms": ["动态名称", "公告标题"],
+            },
+        )
+    )
+
+    assert all("动态名称" not in item.title for item in items)
+    assert all("动态描述" not in item.title for item in items)
+    assert len(items) == 2
+
+
+@pytest.mark.asyncio
+async def test_hunyuan_product_announcements_works_without_date_headings() -> None:
+    url = "https://cloud.tencent.com/document/product/1729/132069"
+    fetcher = FixtureFetcher({url: (FIXTURES / "hunyuan_product_announcements.html").read_bytes()})
+
+    items = await SinglePageChangelogCollector(fetcher).collect(
+        CollectContext(
+            source_url=url,
+            config={
+                "content_selector": "div#doc-slate-root",
+                "date_heading_selector": "h3",
+                "entry_selector": "tbody tr",
+                "entry_title_cells": [0],
+                "entry_date_cell": 1,
+                "exclude_entry_terms": ["公告标题"],
+            },
+        )
+    )
+
+    assert len(items) == 2
+    assert all(item.published_at is not None for item in items)
+    assert all(item.title for item in items)

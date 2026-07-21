@@ -340,13 +340,13 @@ sources:
     lookback_days: 180
     max_items_per_run: 20
     implementation_status: research_needed
-    implementation_reason: 真实 preview HTTP 200 但通用单页 selector 抽取 0 条；需调查公开静态数据或专用文档分段。
+    implementation_reason: 真实 preview HTTP 200，页面为 Slate 编辑器渲染的数据表；需专用 date_heading + entry_title_cells 配置抽取。
     verified_at: null
     activation_evidence: null
     notes: 与产品公告保持独立入口。
     collector_name: single_page_changelog
-    collector_config: {section_selector: "article h2, article h3, main h2, main h3", keep_query_params: [entry]}
-    include_terms: [混元, 模型, API, 更新, 发布]
+    collector_config: {content_selector: "div#doc-slate-root", date_heading_selector: "h2", entry_selector: "tbody tr", entry_title_cells: [0], entry_date_cell: 2, entry_summary_cell: 1, entry_link_cell: 3, exclude_entry_terms: [动态名称], keep_query_params: [entry]}
+    include_terms: [hunyuan, 混元, 模型, API, 更新, 发布, 升级, 上线]
     exclude_terms: [教程]
     minimum_quality_score: 35
     allow_external_links: false
@@ -366,12 +366,12 @@ sources:
     lookback_days: 180
     max_items_per_run: 20
     implementation_status: research_needed
-    implementation_reason: 真实 preview HTTP 200 但通用单页 selector 抽取 0 条；需调查公开静态数据或专用文档分段。
+    implementation_reason: 真实 preview HTTP 200，页面为 Slate 编辑器渲染的数据表；需专用 entry_title_cells + entry_date_cell 配置抽取。
     verified_at: null
     activation_evidence: null
     notes: 与产品动态保持独立入口。
     collector_name: single_page_changelog
-    collector_config: {section_selector: "article h2, article h3, main h2, main h3", keep_query_params: [entry]}
+    collector_config: {content_selector: "div#doc-slate-root", date_heading_selector: "h3", entry_selector: "tbody tr", entry_title_cells: [0], entry_date_cell: 1, entry_link_cell: 0, exclude_entry_terms: [公告标题], keep_query_params: [entry]}
     include_terms: [混元, 模型, API, 公告, 更新, 发布, 下线]
     exclude_terms: [教程]
     minimum_quality_score: 35

@@ -82,6 +82,7 @@ def _dated_entries(
     title_cells = _integers(config.get("entry_title_cells"))
     date_cell = _optional_integer(config.get("entry_date_cell"))
     summary_cell = _optional_integer(config.get("entry_summary_cell"))
+    link_cell = _optional_integer(config.get("entry_link_cell"))
     include_terms = _strings(config.get("include_entry_terms"))
     exclude_terms = _strings(config.get("exclude_entry_terms"))
     replacements = _string_mapping(config.get("entry_title_replacements"))
@@ -95,7 +96,7 @@ def _dated_entries(
             continue
         if len(items) >= max_items:
             break
-        if current_date_text is None:
+        if current_date_text is None and date_cell is None and not item_date_selector:
             continue
         cells = node.select("th, td")
         title = (
@@ -137,7 +138,15 @@ def _dated_entries(
         if key in seen_keys:
             continue
         seen_keys.add(key)
+        cell_link = _cell_href(cells, link_cell) if link_cell is not None else None
         url = _entry_url(page_url, key)
+        extra: dict[str, object] = {
+            "changelog_entry_key": key,
+            "detail_fetched": True,
+            "original_time_text": raw_date or current_date_text,
+        }
+        if cell_link:
+            extra["detail_link"] = cell_link
         items.append(
             CollectedItem(
                 title=title[:500],
@@ -145,11 +154,7 @@ def _dated_entries(
                 canonical_url=url,
                 published_at=published_at,
                 summary=summary[:2_000] if summary else None,
-                extra={
-                    "changelog_entry_key": key,
-                    "detail_fetched": True,
-                    "original_time_text": raw_date or current_date_text,
-                },
+                extra=extra,
             )
         )
     return items
@@ -180,9 +185,9 @@ def _entry_url(page_url: str, key: str) -> str:
     return canonicalize_url(value, keep_query_params=tuple(query)) or value
 
 
-def _date_with_context(value: str | None, context: str) -> str:
-    candidate = value or context
-    if not _YEAR.search(candidate) and (year := _YEAR.search(context)):
+def _date_with_context(value: str | None, context: str | None) -> str:
+    candidate = value or context or ""
+    if not _YEAR.search(candidate) and context and (year := _YEAR.search(context)):
         candidate = f"{year.group(0)}年{candidate}"
     match = _DATE.search(candidate)
     return match.group(0) if match else candidate
@@ -196,7 +201,18 @@ def _selected_text(node: Tag, selector: str | None) -> str | None:
 def _node_text(node: Tag | None) -> str:
     if node is None:
         return ""
-    return " ".join(node.get_text(" ", strip=True).replace("\u200b", "").split())
+    raw = node.get_text(" ", strip=True).replace("\u200b", "").replace("\ufeff", "")
+    return " ".join(raw.split())
+
+
+def _cell_href(cells: list[Tag], index: int) -> str | None:
+    if index < 0 or index >= len(cells):
+        return None
+    anchor = cells[index].select_one("a[href]")
+    if anchor is None:
+        return None
+    href = anchor.get("href")
+    return href.strip() if isinstance(href, str) and href.strip() else None
 
 
 def _cell(cells: list[Tag], index: int) -> str | None:
