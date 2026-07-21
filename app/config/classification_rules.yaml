@@ -4,11 +4,10 @@ settings:
   title_weight: 2
   summary_weight: 1
   phrase_weight: 1.5
-
 global_negative_phrases:
   不涉及: -20
   没有任何: -20
-
+  招聘: -12
 categories:
   model_technology:
     priority: 60
@@ -74,7 +73,7 @@ categories:
       标准发布: -8
       案例征集: -10
       白皮书: -8
-
+      项目获奖: -8
   agent_product:
     priority: 55
     phrases:
@@ -127,7 +126,6 @@ categories:
       政策发布: -8
       标准立项: -6
       技术标准: -6
-
   enterprise_case:
     priority: 50
     phrases:
@@ -151,6 +149,7 @@ categories:
       落地验收: 7
       customer service: 6
       deploys: 5
+      利润增长: 6
     keywords:
       落地: 4
       应用: 3
@@ -165,12 +164,13 @@ categories:
       效率: 3
       部署: 3
       利润: 2
+      机构: 2
+      诊疗: 3
     negative_phrases:
       案例征集: -10
       优秀案例名单: -10
       入选示范名单: -10
       应用标准: -6
-
   award_case:
     priority: 90
     phrases:
@@ -220,7 +220,6 @@ categories:
       尚未公布: -20
       并未确认: -20
       未正式确认: -20
-
   solicitation:
     priority: 100
     phrases:
@@ -252,8 +251,9 @@ categories:
       submissions opens: 9
       registration is now open: 9
       在线填报: 6
+      公开征集: 8
     keywords:
-      征集: 5
+      征集: 6
       申报: 4
       参评: 5
       参赛: 4
@@ -288,7 +288,7 @@ categories:
       旧衣物: -12
       捐赠: -12
       场地征集: -12
-
+      获奖: -10
   policy_industry:
     priority: 70
     phrases:
