@@ -616,6 +616,40 @@ async def test_safe_fetcher_preserves_safe_redirect_path_spelling() -> None:
 
 
 @pytest.mark.asyncio
+async def test_safe_fetcher_post_does_not_follow_redirects() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            302, headers={"location": "http://evil.internal/leak"}, request=request
+        )
+
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver), transport=httpx.MockTransport(handler)
+    ) as fetcher:
+        result = await fetcher.post(
+            "https://example.com/api",
+            body='{"key":"value"}',
+        )
+
+    assert result.status_code == 302
+    assert result.headers.get("location") == "http://evil.internal/leak"
+
+
+@pytest.mark.asyncio
+async def test_safe_fetcher_post_rejects_invalid_url() -> None:
+    def ok(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200)
+
+    async with SafeHttpFetcher(
+        SourceUrlGuard(public_resolver), transport=httpx.MockTransport(ok)
+    ) as fetcher:
+        with pytest.raises(SourceUrlSecurityError):
+            await fetcher.post(
+                "http://127.0.0.1/internal",
+                body="{}",
+            )
+
+
+@pytest.mark.asyncio
 async def test_safe_fetcher_enforces_response_size_limit() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=b"x" * 2000, request=request)

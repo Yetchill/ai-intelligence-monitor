@@ -323,7 +323,7 @@ class SafeHttpFetcher:
         body: str,
         headers: Mapping[str, str] | None = None,
     ) -> FetchResult:
-        """Secure POST with the same URL validation as fetch, without redirect following."""
+        """Secure POST with the same URL validation as fetch. No redirects—API endpoints only."""
         requested_url = self._guard.normalize(url)
         await self._guard.validate(requested_url)
         safe_headers = {
@@ -342,7 +342,7 @@ class SafeHttpFetcher:
             request.headers.pop("cookie", None)
             request.headers.pop("authorization", None)
             request.headers.pop("proxy-authorization", None)
-            response = await self._client.send(request, stream=True, follow_redirects=True)
+            response = await self._client.send(request, stream=True, follow_redirects=False)
             try:
                 status = response.status_code
                 if status == 403:
