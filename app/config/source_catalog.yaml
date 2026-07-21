@@ -269,28 +269,28 @@ sources:
 
   - slug: minimax-news
     name: MiniMax 新闻资讯
-    url: https://www.minimaxi.com/news
+    url: https://www.minimaxi.com/api/news
     lifecycle_state: candidate
     source_role: official_product
     source_tier: official_company
     audience: leadership
-    crawl_mode: html_list
+    crawl_mode: api
     review_policy: auto_publish
     allowed_primary_types: [product_update, report_release, award_result]
     homepage_visible: true
     export_visible: true
     lookback_days: 60
     max_items_per_run: 20
-    implementation_status: research_needed
-    implementation_reason: 真实 preview 仅抽取 2 条，日期覆盖率 0%，两条均为 unclassified；需轻量列表适配并强过滤宣传稿。
-    verified_at: null
-    activation_evidence: null
-    notes: 第一批真实 preview。
-    collector_name: html_list
-    collector_config: {allowed_domains: [www.minimaxi.com], discovery: {mode: link_filter, max_pages: 1, max_depth: 0, max_items: 20, include_url_patterns: [/news/]}}
-    include_terms: [模型, 大模型, 智能体, Agent, API, MiniMax]
-    exclude_terms: [活动, 演讲, 参展, 合作, 招聘]
-    minimum_quality_score: 45
+    implementation_status: ready
+    implementation_reason: 公开 /api/news JSON 无需认证且实测 HTTP 200；专用 MiniMaxNewsCollector 解析，12 条真实数据含完整日期、详情链接和摘要。
+    verified_at: 2026-07-21T00:00:00+08:00
+    activation_evidence: 真实 API preview extracted=12，标题/日期/链接有效率均为 100%。
+    notes: 公开 API 入口，返回生态适配、产品发布和合规公告；少量合作类公告可通过 admission 过滤。
+    collector_name: minimax_news
+    collector_config: {max_items: 50}
+    include_terms: [模型, 大模型, 智能体, Agent, API, MiniMax, M3, M2, 开源, 发布]
+    exclude_terms: [活动, 演讲, 参展, 招聘]
+    minimum_quality_score: 40
     allow_external_links: false
 
   - slug: kimi-platform-changelog
@@ -599,11 +599,11 @@ sources:
     export_visible: false
     lookback_days: 30
     max_items_per_run: 20
-    implementation_status: research_needed
-    implementation_reason: 原 tech.news.cn HTTPS 入口直连 TLS 提前断开；已验证 www.news.cn/tech/index.html 可全程 HTTPS 公开直连，待真实 preview 验收。
-    verified_at: null
-    activation_evidence: null
-    notes: 技术可用后可 active 采集行业线索，但永不自动正式发布。
+    implementation_status: ready
+    implementation_reason: 真实 preview 抽取 7 条，标题/日期/链接有效率均为 100%；selector 与 include/exclude 在来源层过滤非 AI 内容。
+    verified_at: 2026-07-21T00:00:00+08:00
+    activation_evidence: 真实 selector preview extracted=7，accepted=5（AI 相关内容），2 条被 admission 拒绝（无 AI 关键词/会议报道）。
+    notes: 技术可用后可 active 采集行业线索，但永不自动正式发布。来源层 include/exclude 强过滤，排除消费电子、汽车、手机和泛科技导航。
     collector_name: html_list
     collector_config:
       allowed_domains: [www.news.cn]
@@ -613,11 +613,11 @@ sources:
         max_pages: 1
         max_depth: 0
         max_items: 20
-        include_text: [人工智能, 大模型, 智能体, AI, 算力]
-        exclude_text: [大会前瞻, 论坛, 人物, 采访]
+        include_text: [人工智能, 大模型, 智能体, AI, 算力, 开源, 模型, Agent, 算法]
+        exclude_text: [大会前瞻, 论坛开幕, 消费电子, 手机, 家电, 汽车, 新能源, 火箭, 快递, 物流, 二手车, 人物, 采访]
       extraction: {item_selector: .item, title_selector: .tit a, link_selector: .tit a, date_selector: .time}
-    include_terms: [人工智能, 大模型, 智能体, AI]
-    exclude_terms: [股价, 概念股, IPO, 人物八卦]
+    include_terms: [人工智能, 大模型, 智能体, AI, 模型, 开源, 算力]
+    exclude_terms: [股价, 概念股, IPO, 人物八卦, 消费电子, 家电, 手机, 汽车, 新能源车, 快递, 物流]
     minimum_quality_score: 30
     allow_external_links: false
 

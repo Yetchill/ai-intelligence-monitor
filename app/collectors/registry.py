@@ -6,6 +6,7 @@ from app.collectors.cls_topic import CLSTopicCollector
 from app.collectors.github_release import GitHubReleaseCollector
 from app.collectors.html_list import HTMLListCollector
 from app.collectors.hubs import CaseHubCollector, DocumentHubCollector
+from app.collectors.minimax_news import MiniMaxNewsCollector
 from app.collectors.rss import RSSCollector
 from app.collectors.single_page_changelog import SinglePageChangelogCollector
 from app.domain.collection import Collector, Fetcher
@@ -57,4 +58,5 @@ def default_collector_registry() -> CollectorRegistry:
     registry.register(DocumentHubCollector.name, DocumentHubCollector)
     registry.register(CaseHubCollector.name, CaseHubCollector)
     registry.register(CLSTopicCollector.name, CLSTopicCollector)
+    registry.register(MiniMaxNewsCollector.name, MiniMaxNewsCollector)
     return registry

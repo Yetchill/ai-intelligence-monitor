@@ -9,6 +9,7 @@ import pytest
 from app.collectors.cls_topic import CLSTopicCollector
 from app.collectors.github_release import GitHubReleaseCollector
 from app.collectors.html_list import HTMLListCollector
+from app.collectors.minimax_news import MiniMaxNewsCollector
 from app.collectors.registry import CollectorRegistry, default_collector_registry
 from app.collectors.rss import RSSCollector
 from app.collectors.single_page_changelog import SinglePageChangelogCollector
@@ -588,6 +589,7 @@ def test_registry_constructs_by_collector_name_and_accepts_extensions() -> None:
         "document_hub",
         "github_release",
         "html_list",
+        "minimax_news",
         "rss",
         "single_page_changelog",
     )
@@ -720,3 +722,108 @@ async def test_hunyuan_product_announcements_works_without_date_headings() -> No
     assert len(items) == 2
     assert all(item.published_at is not None for item in items)
     assert all(item.title for item in items)
+
+
+@pytest.mark.asyncio
+async def test_minimax_news_parses_public_json_api_with_dates_and_links() -> None:
+    url = "https://www.minimaxi.com/api/news"
+    fetcher = FixtureFetcher({url: (FIXTURES / "minimax_news.json").read_bytes()})
+
+    items = await MiniMaxNewsCollector(fetcher).collect(
+        CollectContext(source_url=url, config={"max_items": 50})
+    )
+
+    assert len(items) == 12
+    assert all(item.published_at is not None for item in items)
+    assert all(
+        item.canonical_url.startswith("https://www.minimaxi.com/news/") for item in items
+    )
+    assert all(item.extra.get("public_payload") == "api/news" for item in items)
+    assert items[0].title == "华为云与MiniMax最新模型M3完成适配"
+    assert items[0].extra.get("slug") == "huawei-cloud-minimax-m3-adaptation-copy"
+    assert items[0].published_at is not None
+    assert items[0].published_at.date().isoformat() == "2026-06-16"
+    assert items[0].summary is not None
+    assert len(items[0].summary) > 20
+    assert isinstance(items[0].extra.get("tags"), tuple)
+    extra_tags = items[0].extra.get("tags", ())
+    assert isinstance(extra_tags, tuple)
+    assert len(extra_tags) >= 1  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_minimax_news_enforces_configured_result_limit() -> None:
+    url = "https://www.minimaxi.com/api/news"
+    fetcher = FixtureFetcher({url: (FIXTURES / "minimax_news.json").read_bytes()})
+
+    items = await MiniMaxNewsCollector(fetcher).collect(
+        CollectContext(source_url=url, config={"max_items": 3})
+    )
+
+    assert len(items) == 3
+
+
+@pytest.mark.asyncio
+async def test_minimax_news_handles_invalid_json_gracefully() -> None:
+    url = "https://www.minimaxi.com/api/news"
+    fetcher = FixtureFetcher({url: b"not valid json"})
+
+    items = await MiniMaxNewsCollector(fetcher).collect(
+        CollectContext(source_url=url)
+    )
+
+    assert items == []
+
+
+@pytest.mark.asyncio
+async def test_xinhua_tech_filters_to_ai_content_only() -> None:
+    url = "https://www.news.cn/tech/index.html"
+    fetcher = FixtureFetcher({url: (FIXTURES / "xinhua_tech.html").read_bytes()})
+
+    items = await HTMLListCollector(fetcher).collect(
+        CollectContext(
+            source_url=url,
+            config={
+                "allowed_domains": ["www.news.cn"],
+                "filter_selector_items": True,
+                "discovery": {
+                    "mode": "selectors",
+                    "max_pages": 1,
+                    "max_depth": 0,
+                    "max_items": 20,
+                    "include_text": [
+                        "人工智能", "大模型", "智能体", "AI",
+                        "算力", "开源", "模型", "Agent", "算法",
+                    ],
+                    "exclude_text": [
+                        "大会前瞻", "论坛开幕", "消费电子", "手机", "家电",
+                        "汽车", "新能源", "火箭", "快递", "物流", "二手车",
+                        "人物", "采访",
+                    ],
+                },
+                "extraction": {
+                    "item_selector": ".item",
+                    "title_selector": ".tit a",
+                    "link_selector": ".tit a",
+                    "date_selector": ".time",
+                },
+            },
+        )
+    )
+
+    titles = [item.title for item in items]
+    assert len(items) >= 5
+    assert "推动人工智能嵌入日常生活" in titles
+    assert "AI迈入智能体时代 安全能力建设提速" in titles
+    assert "中国企业发布全球最大规模的开源模型Kimi K3" in titles
+    assert all(item.canonical_url.startswith("http") for item in items)
+    assert all(item.published_at is not None for item in items)
+    non_ai = [
+        "上半年规模以上工业增加值同比增5.4%",
+        "快递包装减量不等于防护降标",
+        "破解新能源汽车维修难题",
+        "二手车流通新生态加速成型",
+        "中国可回收火箭开辟竞争新赛道",
+    ]
+    for na_title in non_ai:
+        assert na_title not in titles
