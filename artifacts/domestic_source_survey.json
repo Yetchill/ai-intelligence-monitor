@@ -1,0 +1,72 @@
+[
+  {
+    "label": "百川智能官网",
+    "url": "https://www.baichuan-ai.com/",
+    "status": 200,
+    "content_type": "text/html; charset=utf-8",
+    "length": 13291,
+    "has_rss_hint": false,
+    "has_json_response": false,
+    "accessible": true,
+    "snippet": "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover\"/><link rel=\"stylesheet\" href=\"//cdn.baichuan-ai.com/build/_next/static/chunks/0n6u26x5l-vrb.css\" ",
+    "source_role": "official_product",
+    "value_description": "模型/产品发布、更新公告",
+    "checked_at": "2026-07-21T23:05:17.779999"
+  },
+  {
+    "label": "工信部人工智能",
+    "url": "https://www.miit.gov.cn/",
+    "status": 403,
+    "content_type": "",
+    "length": 2425,
+    "has_rss_hint": false,
+    "has_json_response": false,
+    "accessible": true,
+    "snippet": "<!DOCTYPE html> <html> <head> <meta charset=\"utf-8\" /> <style> body{ background:#eff1f0; font-family: microsoft yahei; color:#969696; font-size:12px;} .online-desc-con { text-align:center; } .r-tip01 { color: #969696; font-size: 16px; display: block; text-align: center; width: 600px; padding: 0 10px",
+    "source_role": "official_policy",
+    "value_description": "政策/标准/管理办法",
+    "checked_at": "2026-07-21T23:05:17.951973"
+  },
+  {
+    "label": "中国人工智能学会",
+    "url": "https://www.caai.cn/",
+    "status": 200,
+    "content_type": "text/html",
+    "length": 89038,
+    "has_rss_hint": false,
+    "has_json_response": false,
+    "accessible": true,
+    "snippet": "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\r <html xmlns=\"http://www.w3.org/1999/xhtml\">\r <head>   <title>中国人工智能学会</title>   <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />   <!-- 360极速模式浏览优先 -->   <m",
+    "source_role": "association",
+    "value_description": "学术动态/会议/评奖",
+    "checked_at": "2026-07-21T23:05:18.054058"
+  },
+  {
+    "label": "阿里巴巴通义千问",
+    "url": "https://tongyi.aliyun.com/",
+    "status": 200,
+    "content_type": "text/html; charset=utf-8",
+    "length": 130117,
+    "has_rss_hint": false,
+    "has_json_response": false,
+    "accessible": true,
+    "snippet": "\r <!DOCTYPE html><html lang=\"zh\" data-prefers-color=\"null\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><link rel=\"stylesheet\" href=\"/_next/static/css/69d142433709a69d.css\" data-precedence=\"next\"/><link rel=\"stylesheet\" href=\"/_next/static/css/0f4",
+    "source_role": "official_product",
+    "value_description": "产品更新/模型发布",
+    "checked_at": "2026-07-21T23:05:18.248742"
+  },
+  {
+    "label": "字节跳动豆包",
+    "url": "https://www.doubao.com/",
+    "status": 200,
+    "content_type": "text/html; charset=UTF-8",
+    "length": 362791,
+    "has_rss_hint": false,
+    "has_json_response": false,
+    "accessible": true,
+    "snippet": "<!DOCTYPE html><html data-theme=\"light\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,shrink-to-fit=no,viewport-fit=cover,minimum-scale=1,maximum-scale=1,user-scalable=no\"><meta http-equiv=\"x-ua-compatible\" content=\"ie=edge\"><meta name=\"renderer\" conte",
+    "source_role": "official_product",
+    "value_description": "模型/产品动态",
+    "checked_at": "2026-07-21T23:05:19.122379"
+  }
+]
