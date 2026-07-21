@@ -17,6 +17,7 @@ from app.classifiers import (
     RuleConfigError,
     load_classification_rules,
 )
+from app.classifiers.providers import DeepSeekProvider, LLMConfigError
 from app.domain.classification import ClassificationResult
 from app.domain.collection import CollectedItem
 from app.domain.enums import Category
@@ -257,12 +258,18 @@ async def test_reason_and_matches_are_stable_and_category_qualified() -> None:
     assert all(match.startswith(f"{first.category.value}.") for match in first.matched_rules)
 
 
-async def test_future_classifier_placeholders_fail_explicitly() -> None:
-    item = _item("普通消息")
-    with pytest.raises(NotImplementedError, match="尚未接入"):
-        await LLMClassifier().classify(item)
-    with pytest.raises(NotImplementedError, match="尚未启用"):
-        await HybridClassifier().classify(item)
+async def test_llm_and_hybrid_classifiers_are_importable_and_constructable() -> None:
+    """Verify LLMClassifier and HybridClassifier are real implementations, not placeholders."""
+    assert LLMClassifier.provider == "llm"
+    assert HybridClassifier.provider == "hybrid"
+
+    provider = DeepSeekProvider()
+    llm = LLMClassifier(provider)
+    assert llm.provider == "llm"
+
+    rule = RuleBasedClassifier.from_yaml()
+    hybrid = HybridClassifier(rule, provider)
+    assert hybrid.provider == "hybrid"
 
 
 @pytest.mark.parametrize(

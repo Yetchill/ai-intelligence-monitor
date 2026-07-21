@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     log_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1)
     log_backup_count: int = Field(default=5, ge=0)
 
+    classifier_mode: Literal["rule", "llm", "hybrid"] = "rule"
+    llm_base_url: str = "https://api.deepseek.com"
+    llm_api_key: str = ""
+    llm_model: str = "deepseek-chat"
+    llm_timeout_seconds: int = Field(default=30, ge=1)
+    llm_confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
