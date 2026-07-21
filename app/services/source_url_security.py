@@ -316,6 +316,81 @@ class SafeHttpFetcher:
                 raise FetchError(current_url, "无法安全访问该网页。") from exc
         raise FetchError(current_url, "网页重定向次数过多。")
 
+    async def post(
+        self,
+        url: str,
+        *,
+        body: str,
+        headers: Mapping[str, str] | None = None,
+    ) -> FetchResult:
+        """Secure POST with the same URL validation as fetch, without redirect following."""
+        requested_url = self._guard.normalize(url)
+        await self._guard.validate(requested_url)
+        safe_headers = {
+            key: value
+            for key, value in (headers or {}).items()
+            if key.casefold() in SAFE_REQUEST_HEADERS
+        }
+        try:
+            request = self._client.build_request(
+                "POST",
+                requested_url,
+                content=body,
+                headers=safe_headers,
+                timeout=self._timeout,
+            )
+            request.headers.pop("cookie", None)
+            request.headers.pop("authorization", None)
+            request.headers.pop("proxy-authorization", None)
+            response = await self._client.send(request, stream=True, follow_redirects=True)
+            try:
+                status = response.status_code
+                if status == 403:
+                    if response.headers.get("x-ratelimit-remaining") == "0":
+                        raise RateLimitFetchError(requested_url, "公开接口请求配额暂时耗尽。")
+                    raise ForbiddenFetchError(requested_url, "网站拒绝公开访问。")
+                if status == 404:
+                    raise NotFoundFetchError(requested_url, "网页不存在。")
+                if status == 429:
+                    raise RateLimitFetchError(requested_url, "网站请求频率受限。")
+                if 500 <= status <= 599:
+                    raise ServerFetchError(requested_url, "网站服务暂时不可用。")
+                if status >= 400:
+                    raise FetchError(requested_url, f"网页返回 HTTP {status}, 无法用于预览。")
+                declared = response.headers.get("content-length")
+                if (
+                    declared
+                    and declared.isdecimal()
+                    and int(declared) > self._max_response_bytes
+                ):
+                    raise ResponseTooLargeFetchError(
+                        requested_url, "网页响应内容超过预览大小限制。"
+                    )
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in response.aiter_bytes():
+                    total += len(chunk)
+                    if total > self._max_response_bytes:
+                        raise ResponseTooLargeFetchError(
+                            requested_url, "网页响应内容超过预览大小限制。"
+                        )
+                    chunks.append(chunk)
+                encoding = response.encoding or "utf-8"
+                return FetchResult(
+                    requested_url=requested_url,
+                    url=str(response.url),
+                    status_code=response.status_code,
+                    headers=dict(response.headers.items()),
+                    content=b"".join(chunks),
+                    encoding=encoding,
+                )
+            finally:
+                await response.aclose()
+        except httpx.TimeoutException as exc:
+            raise FetchTimeoutError(requested_url, "网页响应超时, 请稍后重试。") from exc
+        except httpx.RequestError as exc:
+            raise FetchError(requested_url, "无法安全访问该网页。") from exc
+
 
 def _parse_address(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     try:

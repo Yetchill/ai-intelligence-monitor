@@ -103,6 +103,31 @@ class HttpFetcher:
                         return await self._fetch_once(url, headers=headers)
         raise AssertionError("tenacity retry loop ended without a result")
 
+    async def post(
+        self,
+        url: str,
+        *,
+        body: str,
+        headers: Mapping[str, str] | None = None,
+    ) -> FetchResult:
+        """Post a JSON body, retrying timeouts, network errors, rate limits, and 5xx responses."""
+
+        self._validate_url(url)
+        retrying = AsyncRetrying(
+            stop=stop_after_attempt(self._max_retries + 1),
+            wait=wait_exponential(multiplier=0.5, min=0.5, max=8),
+            retry=retry_if_exception_type(RetryableFetchError),
+            reraise=True,
+        )
+        async for attempt in retrying:
+            with attempt:
+                domain_semaphore = self._domain_semaphore(url)
+                async with domain_semaphore:
+                    await self._wait_for_domain(url)
+                    async with self._global_semaphore:
+                        return await self._post_once(url, body=body, headers=headers)
+        raise AssertionError("tenacity retry loop ended without a result")
+
     @staticmethod
     def _validate_url(url: str) -> None:
         parts = urlsplit(url)
@@ -169,6 +194,63 @@ class HttpFetcher:
             )
         if 500 <= status <= 599:
             raise ServerFetchError(response_url, f"HTTP {status} while fetching {response_url}")
+        if status >= 400:
+            raise HttpStatusFetchError(response_url, status)
+
+        return FetchResult(
+            requested_url=url,
+            url=response_url,
+            status_code=status,
+            headers=dict(response.headers.items()),
+            content=response.content,
+            encoding=response.encoding or "utf-8",
+        )
+
+    async def _post_once(
+        self,
+        url: str,
+        *,
+        body: str,
+        headers: Mapping[str, str] | None,
+    ) -> FetchResult:
+        request_headers = {"User-Agent": self._user_agent}
+        if headers:
+            request_headers.update(headers)
+        try:
+            response = await self._client.post(
+                url,
+                content=body,
+                headers=request_headers,
+                timeout=self._timeout,
+                follow_redirects=True,
+            )
+        except httpx.TimeoutException as error:
+            raise FetchTimeoutError(url, f"Timeout while posting to {url}") from error
+        except httpx.RequestError as error:
+            msg = f"Network error while posting to {url}: {error}"
+            raise NetworkFetchError(url, msg) from error
+
+        status = response.status_code
+        response_url = str(response.url)
+        if status == 403:
+            if _is_rate_limit_response(response):
+                raise RateLimitFetchError(
+                    response_url,
+                    f"Rate limit exhausted while posting to {response_url}",
+                    response.headers.get("retry-after")
+                    or response.headers.get("x-ratelimit-reset"),
+                )
+            raise ForbiddenFetchError(response_url, f"HTTP 403 while posting to {response_url}")
+        if status == 404:
+            raise NotFoundFetchError(response_url, f"HTTP 404 while posting to {response_url}")
+        if status == 429:
+            raise RateLimitFetchError(
+                response_url,
+                f"HTTP 429 while posting to {response_url}",
+                response.headers.get("retry-after"),
+            )
+        if 500 <= status <= 599:
+            raise ServerFetchError(response_url, f"HTTP {status} while posting to {response_url}")
         if status >= 400:
             raise HttpStatusFetchError(response_url, status)
 

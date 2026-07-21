@@ -41,6 +41,16 @@ class ScenarioFetcher:
         del url, headers
         raise AssertionError("ScenarioCollector does not perform transport fetches")
 
+    async def post(
+        self,
+        url: str,
+        *,
+        body: str,
+        headers: Mapping[str, str] | None = None,
+    ) -> FetchResult:
+        del url, body, headers
+        raise AssertionError("ScenarioCollector does not perform transport POST")
+
 
 class ScenarioCollector:
     name = "scenario"

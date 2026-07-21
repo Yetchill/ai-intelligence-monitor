@@ -243,7 +243,7 @@ sources:
 
   - slug: qwen-official-blog
     name: Qwen 官方博客
-    url: https://qwen.ai/blog/
+    url: https://qwen.ai/api/v2/article/retrieval
     lifecycle_state: candidate
     source_role: official_product
     source_tier: official_company
@@ -256,12 +256,20 @@ sources:
     lookback_days: 180
     max_items_per_run: 20
     implementation_status: needs_custom_collector
-    implementation_reason: RSSHub route 证实官方公开 /api/v2/article/retrieval 可用且实测 HTTP 200；单响应约 4 MB，需有界 public JSON adapter，不能继续使用 html_list。
+    implementation_reason: 官方公开 GET JSON API 已确认可用（type=qwen_ai&language=zh-CN），单响应约 5 MB；已实现有界 public_json adapter，限制响应大小 6 MB、最多 50 条。
     verified_at: null
     activation_evidence: null
     notes: 不复制 RSSHub route；不引入 Playwright。
     collector_name: public_json
-    collector_config: {max_items: 20, response_limit_note: official endpoint currently exceeds 2 MiB preview bound}
+    collector_config:
+      query_params: type=qwen_ai&language=zh-CN
+      max_items: 32
+      response_limit_bytes: 6291456
+      items_field: data.articles
+      link_template: https://qwen.ai/blog/{path}
+      date_field: date
+      date_nested_in: extra
+      date_format: iso
     include_terms: [Qwen, 模型, Agent, 发布, 开源]
     exclude_terms: [活动]
     minimum_quality_score: 40
@@ -662,12 +670,16 @@ sources:
     lookback_days: 30
     max_items_per_run: 20
     implementation_status: needs_custom_collector
-    implementation_reason: RSSHub route 指向官方公开 topic/getInfo 与 article/getList POST API；getInfo 已实测 HTTP 200、无需登录，需独立 public JSON adapter。
+    implementation_reason: 官方公开 POST API 已确认可用（topic/getInfo + article/getList），已实现专用 infoq_ai adapter；POST 端点与请求体锁定为来源专用，不暴露通用 POST 机制。
     verified_at: null
     activation_evidence: null
-    notes: 不复制 RSSHub route；本轮限定五个来源后停止实现。
-    collector_name: public_json
-    collector_config: {max_items: 20, topic_alias: 'AI&LLM'}
+    notes: 不复制 RSSHub route；POST 端点/请求体/分页均锁定在 Collector 代码内。
+    collector_name: infoq_ai
+    collector_config:
+      topic_alias: AI&LLM
+      max_pages: 3
+      max_items: 30
+      response_limit_bytes: 2097152
     include_terms: [人工智能, 大模型, 智能体, AI, LLM]
     exclude_terms: [招聘, 课程]
     minimum_quality_score: 25

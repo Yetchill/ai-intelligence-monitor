@@ -73,6 +73,24 @@ class FakeFetcher:
             raise result
         return result
 
+    async def post(
+        self,
+        url: str,
+        *,
+        body: str,
+        headers: Mapping[str, str] | None = None,
+    ) -> FetchResult:
+        """POST lookup using the same results mapping with key f'{url}|{body}'."""
+        del headers
+        key = f"{url}|{body}"
+        self.calls.append(key)
+        result = self.results.get(key)
+        if result is None:
+            raise FetchError(key, "not configured")
+        if isinstance(result, Exception):
+            raise result
+        return result
+
 
 class DummyNetworkStream(httpcore.AsyncNetworkStream):
     async def read(self, max_bytes: int, timeout: float | None = None) -> bytes:

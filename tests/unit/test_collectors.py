@@ -9,7 +9,9 @@ import pytest
 from app.collectors.cls_topic import CLSTopicCollector
 from app.collectors.github_release import GitHubReleaseCollector
 from app.collectors.html_list import HTMLListCollector
+from app.collectors.infoq import InfoQAICollector
 from app.collectors.minimax_news import MiniMaxNewsCollector
+from app.collectors.public_json import PublicJsonCollector
 from app.collectors.registry import CollectorRegistry, default_collector_registry
 from app.collectors.rss import RSSCollector
 from app.collectors.single_page_changelog import SinglePageChangelogCollector
@@ -25,6 +27,7 @@ class FixtureFetcher:
     def __init__(self, responses: Mapping[str, bytes]) -> None:
         self.responses = responses
         self.requests: list[tuple[str, Mapping[str, str] | None]] = []
+        self.post_requests: list[tuple[str, str, Mapping[str, str] | None]] = []
 
     async def fetch(
         self,
@@ -39,6 +42,23 @@ class FixtureFetcher:
             status_code=200,
             headers={},
             content=self.responses[url],
+        )
+
+    async def post(
+        self,
+        url: str,
+        *,
+        body: str,
+        headers: Mapping[str, str] | None = None,
+    ) -> FetchResult:
+        self.post_requests.append((url, body, headers))
+        key = f"{url}|{body}"
+        return FetchResult(
+            requested_url=url,
+            url=url,
+            status_code=200,
+            headers={},
+            content=self.responses[key],
         )
 
 
@@ -589,7 +609,9 @@ def test_registry_constructs_by_collector_name_and_accepts_extensions() -> None:
         "document_hub",
         "github_release",
         "html_list",
+        "infoq_ai",
         "minimax_news",
+        "public_json",
         "rss",
         "single_page_changelog",
     )
@@ -827,3 +849,155 @@ async def test_xinhua_tech_filters_to_ai_content_only() -> None:
     ]
     for na_title in non_ai:
         assert na_title not in titles
+    custom_registry.register("rss", RSSCollector)
+    assert isinstance(custom_registry.create(source, fetcher), RSSCollector)
+
+
+@pytest.mark.asyncio
+async def test_public_json_collector_extracts_qwen_blog_articles_with_bounds() -> None:
+    url = "https://qwen.ai/api/v2/article/retrieval?type=qwen_ai&language=zh-CN"
+    fetcher = FixtureFetcher({url: (FIXTURES / "qwen_blog.json").read_bytes()})
+
+    items = await PublicJsonCollector(fetcher).collect(
+        CollectContext(
+            source_url="https://qwen.ai/api/v2/article/retrieval",
+            config={
+                "query_params": "type=qwen_ai&language=zh-CN",
+                "max_items": 20,
+                "items_field": "data.articles",
+                "link_template": "https://qwen.ai/blog/{path}",
+                "date_field": "date",
+                "date_nested_in": "extra",
+                "date_format": "iso",
+            },
+        )
+    )
+
+    assert len(items) == 4
+    assert [item.title for item in items] == [
+        "Qwen DeepResearch: 当灵感不再需要理由",
+        "SAPO：一种稳定且高性能的大语言模型强化学习方法",  # noqa: RUF001
+        "Qwen-Image-Edit-2511: 一致性再提升",
+        "Qwen-Image-Layered: 面向内在可编辑性的图层分解",
+    ]
+    assert [item.canonical_url for item in items] == [
+        "https://qwen.ai/blog/qwen-deepresearch",
+        "https://qwen.ai/blog/sapo",
+        "https://qwen.ai/blog/qwen-image-edit-2511",
+        "https://qwen.ai/blog/qwen-image-layered",
+    ]
+    assert all(item.published_at is not None for item in items)
+    assert items[0].published_at is not None
+    assert items[0].published_at.year == 2025
+    assert items[0].published_at.month == 11
+    assert items[0].published_at.day == 12
+    assert items[0].extra == {"collector": "public_json"}
+
+
+@pytest.mark.asyncio
+async def test_public_json_collector_enforces_item_limit() -> None:
+    url = "https://qwen.ai/api/v2/article/retrieval?type=qwen_ai&language=zh-CN"
+    fetcher = FixtureFetcher({url: (FIXTURES / "qwen_blog.json").read_bytes()})
+
+    items = await PublicJsonCollector(fetcher).collect(
+        CollectContext(
+            source_url="https://qwen.ai/api/v2/article/retrieval",
+            config={
+                "query_params": "type=qwen_ai&language=zh-CN",
+                "max_items": 2,
+                "items_field": "data.articles",
+                "link_template": "https://qwen.ai/blog/{path}",
+                "date_field": "date",
+                "date_nested_in": "extra",
+                "date_format": "iso",
+            },
+        )
+    )
+
+    assert len(items) == 2
+
+
+@pytest.mark.asyncio
+async def test_public_json_collector_rejects_oversized_response() -> None:
+    url = "https://qwen.ai/api/v2/article/retrieval?type=qwen_ai&language=zh-CN"
+    raw = (FIXTURES / "qwen_blog.json").read_bytes()
+    fetcher = FixtureFetcher({url: raw})
+
+    with pytest.raises(ValueError, match="exceeds the limit"):
+        await PublicJsonCollector(fetcher).collect(
+            CollectContext(
+                source_url="https://qwen.ai/api/v2/article/retrieval",
+                config={
+                    "query_params": "type=qwen_ai&language=zh-CN",
+                    "max_items": 20,
+                    "response_limit_bytes": 1024,
+                    "items_field": "data.articles",
+                    "link_template": "https://qwen.ai/blog/{path}",
+                    "date_field": "date",
+                    "date_nested_in": "extra",
+                    "date_format": "iso",
+                },
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_infoq_collector_uses_post_api_and_filters_non_articles() -> None:
+    topic_body = '{"alias": "AI&LLM"}'
+    topic_key = f"https://www.infoq.cn/public/v1/topic/getInfo|{topic_body}"
+    article_body = '{"id": 31, "page": 1, "size": 10}'
+    article_key = f"https://www.infoq.cn/public/v1/article/getList|{article_body}"
+
+    responses = {
+        topic_key: (FIXTURES / "infoq_topic.json").read_bytes(),
+        article_key: (FIXTURES / "infoq_articles.json").read_bytes(),
+    }
+    fetcher = FixtureFetcher(responses)
+
+    items = await InfoQAICollector(fetcher).collect(
+        CollectContext(
+            source_url="https://www.infoq.cn/topic/AI%26LLM",
+            config={
+                "topic_alias": "AI&LLM",
+                "max_pages": 1,
+                "max_items": 10,
+            },
+        )
+    )
+
+    # 6 articles in fixture but sub_type=4 (index 3) should be filtered
+    assert len(items) >= 4
+    titles = [item.title for item in items]
+    assert "GMI Cloud  " in titles[0] or "GMI Cloud" in titles[0]
+    assert "无问芯穹" not in " ".join(titles)
+    assert all(item.canonical_url.startswith("https://www.infoq.cn/article/") for item in items)
+    assert all(item.published_at is not None for item in items)
+    assert all(item.extra.get("collector") == "infoq_ai" for item in items)
+    assert len(fetcher.post_requests) >= 2
+
+
+@pytest.mark.asyncio
+async def test_infoq_collector_enforces_page_limit() -> None:
+    topic_body = '{"alias": "AI&LLM"}'
+    topic_key = f"https://www.infoq.cn/public/v1/topic/getInfo|{topic_body}"
+    article_body_p1 = '{"id": 31, "page": 1, "size": 5}'
+    article_key_p1 = f"https://www.infoq.cn/public/v1/article/getList|{article_body_p1}"
+
+    responses = {
+        topic_key: (FIXTURES / "infoq_topic.json").read_bytes(),
+        article_key_p1: (FIXTURES / "infoq_articles.json").read_bytes(),
+    }
+    fetcher = FixtureFetcher(responses)
+
+    items = await InfoQAICollector(fetcher).collect(
+        CollectContext(
+            source_url="https://www.infoq.cn/topic/AI%26LLM",
+            config={
+                "topic_alias": "AI&LLM",
+                "max_pages": 1,
+                "max_items": 5,
+            },
+        )
+    )
+
+    assert len(items) <= 5
