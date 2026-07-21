@@ -1,0 +1,13 @@
+=== update run summary ===
+run=3 status=success trigger=manual_cli started=2026-07-21T08:40:38.919248 finished=2026-07-21T08:40:43.585475 sources=1/1 new=13 updated=0 skipped=0
+run=2 status=success trigger=manual_cli started=2026-07-21T08:40:33.350978 finished=2026-07-21T08:40:35.477049 sources=1/1 new=10 updated=0 skipped=0
+run=1 status=success trigger=manual_cli started=2026-07-21T08:37:10.103392 finished=2026-07-21T08:37:20.722294 sources=16/16 new=77 updated=0 skipped=0
+
+=== category distribution (temp db) ===
+('model_technology', 41)
+('unclassified', 39)
+('policy_industry', 11)
+('agent_product', 5)
+('enterprise_case', 3)
+('solicitation', 1)
+TOTAL 100

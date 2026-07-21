@@ -1,0 +1,352 @@
+===== nda-news =====
+preview source=1:国家数据局新闻动态 status=success fetch=success parse=success extracted=20 normalized=20 accepted=0 rejected=20 failed=0
+primary_types={'unclassified': 18, 'policy_standard': 2} verification={'official_confirmed': 20} review={'not_required': 20} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={'source.exclude_term': 8, 'role.official_industry.ai_relevance_missing': 10, 'content.ordinary_meeting': 2} failure_reasons={}
+sample=1 date=2026-07-17T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=source.exclude_term title=全国数据资源开发利用培训班在大连成功举办
+sample=2 date=2026-07-15T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=source.exclude_term title=国家数据局召开网络安全、数据安全研究机构和企业座谈会
+sample=3 date=2026-07-14T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=role.official_industry.ai_relevance_missing title=刘烈宏出席2026中国数字经济发展和治理学术年会并开展学术交流
+sample=4 date=2026-07-10T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=source.exclude_term title=刘烈宏赴中国科学院调研
+sample=5 date=2026-07-07T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=content.ordinary_meeting title=刘烈宏出席“2026年全球数字经济大会”开幕式及“数据要素发展论坛”并致辞
+sample=6 date=2026-07-17T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=role.official_industry.ai_relevance_missing title=国家发展改革委 国家数据局将在2026年APEC数字周期间举办数据领域系列活动
+sample=7 date=2026-07-10T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=content.ordinary_meeting title=国家数据局国际数据治理合作司负责人在“亚太经合组织（APEC）2026年数字和人工智能部长会议及数字周相关活动新闻通气会”上答记者问
+sample=8 date=2026-07-06T00:00:00+00:00 type=policy_standard domain=www.nda.gov.cn accepted=false reason=role.official_industry.ai_relevance_missing title=文字实录 | 国家数据局举办2026年“数据要素×”新闻发布会（第二场）
+sample=9 date=2026-07-06T00:00:00+00:00 type=policy_standard domain=www.nda.gov.cn accepted=false reason=role.official_industry.ai_relevance_missing title=新闻发布会 | 国家数据局举办2026年“数据要素×”新闻发布会（第二场）
+sample=10 date=2026-06-18T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=source.exclude_term title=国家数据局召开系列座谈会研究上半年数字经济形势
+sample=11 date=2026-07-17T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=source.exclude_term title=全国数据资源开发利用培训班在大连成功举办
+sample=12 date=2026-07-15T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=source.exclude_term title=国家数据局召开网络安全、数据安全研究机构和企业座谈会
+sample=13 date=2026-07-06T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=role.official_industry.ai_relevance_missing title=国家数据要素综合试验区医疗数据流通利用专题现场会在北京召开
+sample=14 date=2026-06-27T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=role.official_industry.ai_relevance_missing title=国家数据局专题研究国家数据专家咨询委员意见建议
+sample=15 date=2026-06-11T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=source.exclude_term title=国家数据局召开“完善数据相关规则 赋能人工智能创新发展”座谈会
+sample=16 date=2026-07-12T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=role.official_industry.ai_relevance_missing title=地方动态 | 刘烈宏在第三十九期山东干部讲堂作报告
+sample=17 date=2026-07-10T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=role.official_industry.ai_relevance_missing title=地方动态 | 汇数成流，治数有方——山东交通书写数据要素流通与安全治理新篇章
+sample=18 date=2026-07-09T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=source.exclude_term title=地方动态 | 天津市数据局举办2026年“数据要素×”大赛天津分赛培训会
+sample=19 date=2026-07-07T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=role.official_industry.ai_relevance_missing title=地方动态 | 全域数字化转型提速，广东智慧城市建设迈入新阶段
+sample=20 date=2026-07-07T00:00:00+00:00 type=unclassified domain=www.nda.gov.cn accepted=false reason=role.official_industry.ai_relevance_missing title=地方动态 | 强统筹 促流通 守底线 浙江交通数据安全治理实践与探索
+===== cac-policy-regulations =====
+preview source=2:国家网信办政策法规 status=success fetch=success parse=success extracted=20 normalized=20 accepted=12 rejected=8 failed=0
+primary_types={'policy_standard': 11, 'unclassified': 9} verification={'official_confirmed': 20} review={'not_required': 20} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={'source.include_term_missing': 8} failure_reasons={}
+sample=1 date=2026-07-03T00:00:00+00:00 type=policy_standard domain=www.cac.gov.cn accepted=false reason=source.include_term_missing title=专家解读｜夯实互联网信息服务治理法治根基 护航网络生态健康发展
+sample=2 date=2026-07-03T00:00:00+00:00 type=unclassified domain=www.cac.gov.cn accepted=false reason=source.include_term_missing title=专家解读｜制度革新引领互联网信息服务发展新航向
+sample=3 date=2026-06-18T00:00:00+00:00 type=unclassified domain=www.cac.gov.cn accepted=true reason=quality.threshold_met title=专家解读｜建立健全数据安全风险评估制度 筑牢国家数据安全屏障
+sample=4 date=2026-06-18T00:00:00+00:00 type=policy_standard domain=www.cac.gov.cn accepted=true reason=quality.threshold_met title=专家解读｜高质量开展网络数据安全风险评估 推动网络数据安全治理长效发展
+sample=5 date=2026-06-18T00:00:00+00:00 type=policy_standard domain=www.cac.gov.cn accepted=false reason=source.include_term_missing title=专家解读｜统筹网络发展和安全 完善数据治理体系
+sample=6 date=2026-06-18T00:00:00+00:00 type=policy_standard domain=www.cac.gov.cn accepted=true reason=quality.threshold_met title=专家解读｜完善网络数据安全风险评估制度 提升网络数据安全治理能力
+sample=7 date=2026-06-18T00:00:00+00:00 type=policy_standard domain=www.cac.gov.cn accepted=true reason=quality.threshold_met title=专家解读｜以风险评估为制度牵引 构建数据安全治理新格局
+sample=8 date=2026-06-18T00:00:00+00:00 type=unclassified domain=www.cac.gov.cn accepted=true reason=quality.threshold_met title=网络数据安全风险评估办法
+sample=9 date=2026-06-03T00:00:00+00:00 type=unclassified domain=www.cac.gov.cn accepted=true reason=quality.threshold_met title=以“小快灵”立法规范人工智能拟人化互动服务
+sample=10 date=2026-05-29T00:00:00+00:00 type=unclassified domain=www.cac.gov.cn accepted=false reason=source.include_term_missing title=专家解读｜推动互联网信息内容多渠道分发服务在法治轨道上行稳致远
+sample=11 date=2026-05-29T00:00:00+00:00 type=policy_standard domain=www.cac.gov.cn accepted=false reason=source.include_term_missing title=专家解读｜构建促进互联网信息内容多渠道分发服务健康发展的制度规范
+sample=12 date=2026-05-29T00:00:00+00:00 type=unclassified domain=www.cac.gov.cn accepted=false reason=source.include_term_missing title=互联网信息内容多渠道分发服务管理规定
+sample=13 date=2026-05-23T00:00:00+00:00 type=unclassified domain=www.cac.gov.cn accepted=false reason=source.include_term_missing title=专家解读｜秉持以人为本 统筹发展与安全
+sample=14 date=2026-05-23T00:00:00+00:00 type=unclassified domain=www.cac.gov.cn accepted=false reason=source.include_term_missing title=专家解读｜筑牢智能向善的伦理安全基石
+sample=15 date=2026-05-22T00:00:00+00:00 type=policy_standard domain=www.cac.gov.cn accepted=true reason=quality.threshold_met title=专家解读｜强化伦理安全标准 引导人工智能规范发展
+sample=16 date=2026-05-22T00:00:00+00:00 type=policy_standard domain=www.cac.gov.cn accepted=true reason=quality.threshold_met title=专家解读｜推动人工智能创新发展行稳致远 筑牢伦理安全治理屏障
+sample=17 date=2026-05-08T00:00:00+00:00 type=policy_standard domain=www.cac.gov.cn accepted=true reason=quality.threshold_met title=一图读懂《智能体规范应用与创新发展实施意见》
+sample=18 date=2026-05-08T00:00:00+00:00 type=policy_standard domain=www.cac.gov.cn accepted=true reason=quality.threshold_met title=专家解读｜为智能体发展树立规范、留足空间
+sample=19 date=2026-05-08T00:00:00+00:00 type=policy_standard domain=www.cac.gov.cn accepted=true reason=quality.threshold_met title=专家解读｜统筹高质量发展与高水平安全：从《智能体规范应用与创新发展实施意见》看AI产业新图景
+sample=20 date=2026-05-08T00:00:00+00:00 type=unclassified domain=www.cac.gov.cn accepted=true reason=quality.threshold_met title=专家解读｜顺应新一轮科技革命与产业变革趋势，推动智能体高质量发展
+===== isc-notices =====
+preview source=3:中国互联网协会通知公告 status=success fetch=success parse=success extracted=20 normalized=20 accepted=3 rejected=17 failed=0
+primary_types={'policy_standard': 13, 'unclassified': 2, 'application_opportunity': 5} verification={'official_confirmed': 20} review={'not_required': 20} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={'source.include_term_missing': 15, 'role.opportunity_hub.generic_notice': 2} failure_reasons={}
+sample=1 date=2026-07-21T10:13:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=标准丨关于《城市级数字化设施集约型运营中心 第1部分：通用要求》团体标准公开征求意见的通知
+sample=2 date=2026-07-21T10:05:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=true reason=quality.threshold_met title=标准丨关于发布《医疗健康行业智能体应用技术要求：呼吸内科AI医生》等11项团体标准立项的公告
+sample=3 date=2026-07-16T17:31:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=标准丨关于《智能身份伪造防范认证规范》团体标准公开征求意见的通知
+sample=4 date=2026-07-15T12:50:00+00:00 type=unclassified domain=www.isc.org.cn accepted=false reason=role.opportunity_hub.generic_notice title=通知丨关于举办2026中国国际服务贸易交易会雄安新区AI＋创新应用生态展览的通知
+sample=5 date=2026-07-13T14:41:00+00:00 type=application_opportunity domain=www.isc.org.cn accepted=true reason=quality.threshold_met title=通知丨关于开展2026年度行业智能体应用实践案例征集活动的通知
+sample=6 date=2026-07-09T11:31:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=标准丨关于发布《互联网接入服务提供者、小程序及快应用运行平台代履行互联网信息服务核准管理规范》团体标准立项的公告
+sample=7 date=2026-07-07T10:51:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=标准丨关于《智慧城市城镇综合管廊环境气体监测预警技术规程》等2项团体标准公开征求意见的通知
+sample=8 date=2026-07-06T18:54:00+00:00 type=application_opportunity domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=通知丨中国互联网协会关于征集《外卖平台补贴行为规范十条（征求意见稿）》意见的通知
+sample=9 date=2026-07-03T10:03:00+00:00 type=application_opportunity domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=通知丨关于征集《小程序生态健康发展自律公约》 签署单位的通知
+sample=10 date=2026-07-02T14:12:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=标准丨关于《安全可信智能云平台能力分级方法》等2项团体标准公开征求意见的通知
+sample=11 date=2026-07-01T16:16:00+00:00 type=application_opportunity domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=分支机构动态丨网络文化与数字传媒工作委员会：关于征集《“智能向善 品质向上”共同推动网络文化高质量发展倡议书》响应单位的通知
+sample=12 date=2026-07-01T15:07:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=false reason=role.opportunity_hub.generic_notice title=通知丨小程序生态健康发展自律公约 （征求意见稿）
+sample=13 date=2026-07-01T14:57:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=标准丨关于发布《数字人产品功能质量分级评估规范》等3项团体标准立项的公告
+sample=14 date=2026-07-01T14:52:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=标准丨关于《视联网通用技术能力》团体标准公开征求意见的通知
+sample=15 date=2026-06-29T10:44:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=true reason=quality.threshold_met title=标准丨关于《数字安全大模型应用能力成熟度评估规范》等2项团体标准公开征求意见的通知
+sample=16 date=2026-06-26T15:24:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=标准丨关于发布《自主移动机器人导航性能通用规范》等6项团体标准立项的公告
+sample=17 date=2026-06-24T14:16:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=标准丨关于《面向民航航司园区智慧低碳运营管理指南》团体标准公开征求意见的通知
+sample=18 date=2026-06-24T10:03:00+00:00 type=policy_standard domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=标准丨关于发布《面向XR内容应用的空间计算技术要求》等3项团体标准立项的公告
+sample=19 date=2026-06-18T17:05:00+00:00 type=application_opportunity domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=通知丨关于启动2026“直通乌镇”全球互联网大赛网络报名的通知
+sample=20 date=2026-06-18T10:53:00+00:00 type=unclassified domain=www.isc.org.cn accepted=false reason=source.include_term_missing title=金灵光杯丨2026（第三届）“金灵光杯” 中国互联网创新大赛赛道赛拟获奖名单公示
+===== baidu-cloud-news =====
+preview source=5:百度智能云新闻 status=success fetch=success parse=success extracted=10 normalized=10 accepted=5 rejected=5 failed=0
+primary_types={'unclassified': 7, 'product_update': 3} verification={'official_confirmed': 10} review={'not_required': 10} valid_title=100.0% valid_date=0.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={'source.include_term_missing': 4, 'source.exclude_term': 1} failure_reasons={}
+sample=1 date=- type=unclassified domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=09 / 07 月 2026 AI游戏用百度智能云：全栈AI基础设施 护航数十亿玩家奔赴热爱 百度智能云已成为超半数主流游戏厂商落地大模型之选，助力100+游戏企业、支撑1000+游戏进行AI创新，确立了“AI游戏第一云”的行业身位。 查看详情
+sample=2 date=- type=unclassified domain=cloud.baidu.com accepted=false reason=source.include_term_missing title=03 / 02 月 2026 手机也能用OpenClaw了！百度智能云发布移动端接入方案 通过百度智能云旗下的云端手机服务——红手指Operator，用户现在可以在手机等移动设备上深度体验OpenClaw，正式激活移动设备的“自主能动性”。 查看详情
+sample=3 date=- type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=23 / 01 月 2026 正式发布！文心5.0上线百度千帆 1月22日，百度发布并上线原生全模态大模型文心5.0正式版。 查看详情
+sample=4 date=- type=unclassified domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=07 / 01 月 2026 百度百舸面向百度天池超节点的大模型推理引擎优化，持续降低昆仑芯 XPU 的 token 成本 百度百舸针对百度天池超节点（32 张昆仑芯 XPU）优化大模型推理引擎，通过 PD 分离架构、并行策略、算子与通信优化等技术，在满足 SLA 约束下，显著提升推理吞吐量，降低 Token 成本，验证软硬协同优势，支撑大模型规模化落地 查看详情
+sample=5 date=- type=product_update domain=cloud.baidu.com accepted=false reason=source.include_term_missing title=07 / 01 月 2026 百度百舸支持具身智能最大规模无本体数据集开源 首批开源数据集已在百度百舸AI计算平台同步上线，支持一键启动分布式具身模型训练，将为更多具身智能企业及开发者提供标准化的数据及AI基础设施，助力具身智能机器人多场景泛化落地。 查看详情
+sample=6 date=- type=unclassified domain=cloud.baidu.com accepted=false reason=source.include_term_missing title=29 / 12 月 2025 超节点选型：跳出性能迷局，聚焦稳定与落地价值 超节点处于早期发展阶段，技术路线多元、行业规范未统一。企业选型需综合考量业务贴合度、基础设施兼容性，从性能转化、稳定性、可落地性多维度评估，才能让高性能算力平稳转化为可持续的业务价值。 查看详情
+sample=7 date=- type=unclassified domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=29 / 12 月 2025 昆仑芯超节点创新设计：1U4卡高密算力，无缝适配各类机房环境 百度智能云昆仑芯超节点，1U4 卡高密算力 + 混合散热设计，卡间带宽提升 8 倍，支持万卡集群部署，适配风冷 / 液冷机房，为大模型训练推理提供高效易运维的 AI 基础设施。 查看详情
+sample=8 date=- type=unclassified domain=cloud.baidu.com accepted=false reason=source.include_term_missing title=25 / 12 月 2025 企业人员安全意识｜知行合一：打造全方位人员安全意识解决方案 百度安全深耕多年，融合实战经验与 AI 技术，构建起一套 “认知 - 实践 - 反馈 - 优化” 的全流程闭环的企业人员安全意识解决方案，让安全意识从 “被动接收” 转为 “主动践行”，真正实现知行合一。 查看详情
+sample=9 date=- type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=23 / 12 月 2025 国内第一！文心5.0 Preview登榜LMArena 12月23日，LMArena大模型竞技场发布最新排名，文心新模型ERNIE-5.0-Preview-1203以1451分登上LMArena文本榜，排名中国第一。 查看详情
+sample=10 date=- type=unclassified domain=cloud.baidu.com accepted=false reason=source.exclude_term title=19 / 12 月 2025 企业人员安全意识｜双轨并行：多维培训活动筑牢安全思维 百度安全基于长期实践给出的答案是：不止于培训，更是一套“双轨并行”的安全文化体系——通过系统化知识、趣味化运营、常态化机制相结合，让安全意识真正融入办公日常。 查看详情
+===== deepseek-api-updates =====
+preview source=6:DeepSeek API 更新日志 status=success fetch=success parse=success extracted=18 normalized=18 accepted=18 rejected=0 failed=0
+primary_types={'product_update': 18} verification={'official_confirmed': 18} review={'not_required': 18} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={} failure_reasons={}
+sample=1 date=2026-04-24T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=DeepSeek-V4：DeepSeek API 已支持 V4-Pro 与 V4-Flash，支持 OpenAI ChatCompletions 接口与 Anthropic 接口
+sample=2 date=2025-12-01T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=DeepSeek-V3.2：deepseek-chat 和 deepseek-reasoner 都已升级为 DeepSeek-V3.2. deepseek-chat 对应 DeepSeek-V3.2 的 非思考模式 deepse
+sample=3 date=2025-12-01T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=DeepSeek-V3.2-Speciale：我们非正式部署了 DeepSeek-V3.2-Speciale 的 API 服务，API 用户可以通过设置 base_url="https://api.deepseek.com/v3.2_specia
+sample=4 date=2025-09-29T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=DeepSeek-V3.2-Exp：deepseek-chat 和 deepseek-reasoner 都已经升级为 DeepSeek-V3.2-Exp
+sample=5 date=2025-09-22T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=DeepSeek-V3.1-Terminus：deepseek-chat 和 deepseek-reasoner 都已经升级为 DeepSeek-V3.1-Terminus
+sample=6 date=2025-08-21T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=DeepSeek-V3.1：deepseek-chat 和 deepseek-reasoner 都已经升级为 DeepSeek-V3.1
+sample=7 date=2025-05-28T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=deepseek-reasoner：deepseek-reasoner 模型升级为 DeepSeek-R1-0528： 推理能力增强 基准测试提升显著（Pass@1） AIME 2025: 70.0→ 87.5 (+17.5) GPQA
+sample=8 date=2025-03-24T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=deepseek-chat：deepseek-chat 模型升级为 DeepSeek-V3-0324： 推理能力增强 基准测试提升显著 MMLU-Pro: 75.9 → 81.2 (+5.3) GPQA: 59.1 → 68.4
+sample=9 date=2025-01-20T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=deepseek-reasoner：deepseek-reasoner 是我们的新模型 DeepSeek-R1. 可以通过指定 model=deepseek-reasoner 调用
+sample=10 date=2024-12-26T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=deepseek-chat：deepseek-chat 模型升级为 DeepSeek-V3，接口不变，可以通过指定 model=deepseek-chat 调用
+sample=11 date=2024-12-10T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=deepseek-chat：deepseek-chat 模型升级为 DeepSeek-V2.5-1210，模型各项能力提升，相关基准测试： 数学能力：在 MATH-500 基准测试中的表现从 74.8% 提升至 82.8% 代码
+sample=12 date=2024-09-05T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=deepseek-coder & deepseek-chat 升级为 DeepSeek V2.5 模型
+sample=13 date=2024-08-02T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=API 上线硬盘缓存技术
+sample=14 date=2024-07-25T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=API 接口更新
+sample=15 date=2024-07-24T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=deepseek-coder：deepseek-coder 模型升级为 DeepSeek-Coder-V2-0724
+sample=16 date=2024-06-28T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=deepseek-chat：deepseek-chat 模型升级为 DeepSeek-V2-0628，模型推理能力提升，相关基准测试： 代码，HumanEval Pass@1 79.88% -> 84.76% 数学，MATH A
+sample=17 date=2024-06-14T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=deepseek-coder：deepseek-coder 模型升级为 DeepSeek-Coder-V2-0614，代码能力显著提升，在代码生成、代码理解、代码修复和代码补全上达到了 GPT-4-Turbo-0409 的水平，并
+sample=18 date=2024-05-17T00:00:00+00:00 type=product_update domain=api-docs.deepseek.com accepted=true reason=quality.threshold_met title=deepseek-chat：deepseek-chat 模型升级为 DeepSeek-V2-0517，模型在指令跟随方面的性能得到了显著提升，IFEval Benchmark Prompt-Level 准确率从 63.9% 跃升
+===== zhipu-research =====
+preview source=7:智谱研究与模型发布 status=success fetch=success parse=success extracted=15 normalized=15 accepted=14 rejected=1 failed=0
+primary_types={'unclassified': 10, 'product_update': 5} verification={'official_confirmed': 15} review={'not_required': 15} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={'source.include_term_missing': 1} failure_reasons={}
+sample=1 date=2026-06-16T00:00:00+00:00 type=unclassified domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=GLM-5.2上线并开源：专注Coding与长程任务
+sample=2 date=2026-05-20T00:00:00+00:00 type=unclassified domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=下一代大模型推理网络架构：ZCube如何有效破解网络瓶颈？
+sample=3 date=2026-04-29T00:00:00+00:00 type=unclassified domain=www.zhipuai.cn accepted=false reason=source.include_term_missing title=Scaling Pain：超大规模Coding Agent推理实践
+sample=4 date=2026-04-07T00:00:00+00:00 type=product_update domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=GLM-5.1开源：一个独立工作8小时的模型
+sample=5 date=2026-04-01T00:00:00+00:00 type=product_update domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=GLM-5V-Turbo发布：多模态Coding基座模型
+sample=6 date=2026-03-15T00:00:00+00:00 type=unclassified domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=GLM-5-Turbo：龙虾增强的基座模型
+sample=7 date=2026-02-21T00:00:00+00:00 type=unclassified domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=GLM-5技术报告
+sample=8 date=2026-02-11T00:00:00+00:00 type=product_update domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=GLM-5开源：从代码到工程，Agentic Engineering时代最好的开源模型
+sample=9 date=2026-02-02T00:00:00+00:00 type=unclassified domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=GLM-OCR发布：性能SOTA，搞定复杂文档
+sample=10 date=2026-01-19T00:00:00+00:00 type=unclassified domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=GLM-4.7-Flash开源、免费
+sample=11 date=2026-01-13T00:00:00+00:00 type=product_update domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=智谱联合华为开源国产芯片训练的多模态SOTA模型
+sample=12 date=2025-12-10T00:00:00+00:00 type=unclassified domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=GLM-TTS：基于多奖励融合强化学习，实现工业级语音合成
+sample=13 date=2025-12-09T00:00:00+00:00 type=unclassified domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=GLM-ASR-Nano：面向真实世界的高鲁棒性语音识别
+sample=14 date=2025-12-08T00:00:00+00:00 type=unclassified domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=AutoGLM开源：每台手机，都可以成为AI手机
+sample=15 date=2025-12-07T00:00:00+00:00 type=product_update domain=www.zhipuai.cn accepted=true reason=quality.threshold_met title=GLM-4.6V：支持原生工具调用的开源多模态模型
+===== baidu-qianfan-model-updates =====
+preview source=8:百度千帆模型更新记录 status=success fetch=success parse=success extracted=20 normalized=20 accepted=20 rejected=0 failed=0
+primary_types={'product_update': 20} verification={'official_confirmed': 20} review={'not_required': 20} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={} failure_reasons={}
+sample=1 date=2026-07-09T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=Kimi-K2.5 — 退役
+sample=2 date=2026-07-09T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=MiniMax-M2.5 — 退役
+sample=3 date=2026-06-17T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=GLM-5.2 — 正式发布
+sample=4 date=2026-04-24T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=DeepSeek-V4-Pro — 正式发布
+sample=5 date=2026-04-24T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=DeepSeek-V4-Flash — 正式发布
+sample=6 date=2026-04-08T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=GLM-5.1 — 正式发布
+sample=7 date=2026-02-12T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=GLM-5 — 正式发布
+sample=8 date=2026-02-12T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=Kimi-K2.5 — 正式发布
+sample=9 date=2026-02-12T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=MiniMax-M2.1 — 正式发布
+sample=10 date=2026-02-10T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=Qianfan-OCR-Fast — 正式发布
+sample=11 date=2026-02-10T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=GLM-4.7 — 正式发布
+sample=12 date=2025-12-12T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=PP-StructureV3 — 正式发布
+sample=13 date=2025-11-28T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=PaddleOCR-VL — 正式发布
+sample=14 date=2025-11-21T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=DeepSeek-OCR — 正式发布
+sample=15 date=2025-11-13T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=ERNIE 5.0 — 正式发布
+sample=16 date=2025-10-30T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=Qwen3-VL — 正式发布
+sample=17 date=2025-10-23T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=Qwen3-VL — 正式发布
+sample=18 date=2025-10-21T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=Qianfan-PublicOpinion-Classification — 退役
+sample=19 date=2025-10-21T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=DeepSeek-R1-Distill系列 — 退役
+sample=20 date=2025-10-16T00:00:00+00:00 type=product_update domain=cloud.baidu.com accepted=true reason=quality.threshold_met title=Qwen3-VL — 正式发布
+===== kimi-platform-changelog =====
+preview source=11:Kimi 开放平台更新日志 status=success fetch=success parse=success extracted=8 normalized=8 accepted=8 rejected=0 failed=0
+primary_types={'product_update': 6, 'unclassified': 2} verification={'official_confirmed': 8} review={'not_required': 8} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={} failure_reasons={}
+sample=1 date=2025-11-06T00:00:00+00:00 type=product_update domain=platform.kimi.com accepted=true reason=quality.threshold_met title=Kimi K2 Think 模型及其 turbo 版本模型正式发布
+sample=2 date=2025-09-05T00:00:00+00:00 type=product_update domain=platform.kimi.com accepted=true reason=quality.threshold_met title=kimi-k2-0905-preview 模型上线发布
+sample=3 date=2025-07-17T00:00:00+00:00 type=product_update domain=platform.kimi.com accepted=true reason=quality.threshold_met title=Kimi Playground 正式发布
+sample=4 date=2025-02-17T00:00:00+00:00 type=product_update domain=platform.kimi.com accepted=true reason=quality.threshold_met title=kimi-latest 模型上线
+sample=5 date=2025-01-13T00:00:00+00:00 type=product_update domain=platform.kimi.com accepted=true reason=quality.threshold_met title=moonshot-v1-vision-preview 模型上线
+sample=6 date=2024-11-04T00:00:00+00:00 type=unclassified domain=platform.kimi.com accepted=true reason=quality.threshold_met title=Context Caching 功能已放开给全量用户
+sample=7 date=2024-09-30T00:00:00+00:00 type=unclassified domain=platform.kimi.com accepted=true reason=quality.threshold_met title=上线联网搜索功能
+sample=8 date=2024-08-28T00:00:00+00:00 type=product_update domain=platform.kimi.com accepted=true reason=quality.threshold_met title=Kimi 企业级 API 发布
+===== cls-ai-subject =====
+preview source=18:财联社人工智能专题 status=success fetch=success parse=success extracted=20 normalized=20 accepted=15 rejected=5 failed=0
+primary_types={'industry_signal': 20} verification={'rumor_or_prediction': 4, 'media_only': 16} review={'pending': 20} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={'source.include_term_missing': 2, 'source.exclude_term': 2, 'content.ordinary_meeting': 1} failure_reasons={}
+sample=1 date=2026-07-21T07:54:30+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=腾讯云：将大规模部署国产化算力和NPO（近封装光学）超级节点
+sample=2 date=2026-07-21T07:36:36+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=OpenAI广告收入被过分高估？最新分析：只有创造历史才能达成目标
+sample=3 date=2026-07-21T06:55:30+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=瑞银：历史级别抛售后 建议逐步重建人工智能与半导体股票头寸
+sample=4 date=2026-07-21T06:54:15+00:00 type=industry_signal domain=www.cls.cn accepted=false reason=source.include_term_missing title=阿里千问发布 Qwen-Image-3.0
+sample=5 date=2026-07-21T06:51:49+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=月之暗面黄震昕：用户需求远超预期 正通过模型效能优化、算力补充缓解资源压力
+sample=6 date=2026-07-21T06:39:19+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=申真谞决胜局战胜围棋AI 逆转赢得人机大战
+sample=7 date=2026-07-21T06:33:38+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=月之暗面黄震昕：B端收入中API调用占比达70% 已形成可持续的正向循环
+sample=8 date=2026-07-21T06:24:42+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=国务院国资委：培育开放更多标志性场景 牵引带动模型迭代、算力升级
+sample=9 date=2026-07-21T06:14:45+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=锁定万亿订单就能躺赚？这可能是AI产业链条上最大的“伪命题”！
+sample=10 date=2026-07-21T06:07:52+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=马斯克称将超越Kimi 月之暗面：欢迎一起掰一掰手腕
+sample=11 date=2026-07-21T05:52:59+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=阿里云函数计算云沙箱全新计费模式上线
+sample=12 date=2026-07-21T05:50:58+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=机构：2026年全球芯片设备销售额有望增长23.2% 到2028年达2295亿美元
+sample=13 date=2026-07-21T05:43:03+00:00 type=industry_signal domain=www.cls.cn accepted=false reason=source.exclude_term title=SpaceX首份财报将至：紧盯星链业务与算力开支，千亿解禁能否平稳落地？
+sample=14 date=2026-07-21T05:26:23+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=AI超级周期持续爆发！韩国7月上中旬半导体出口同比增1.8倍
+sample=15 date=2026-07-21T04:38:00+00:00 type=industry_signal domain=www.cls.cn accepted=false reason=source.include_term_missing title=月之暗面回应马斯克“隔空喊话”：可能Kimi确实给到他一点震撼
+sample=16 date=2026-07-21T03:42:10+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=摩根大通：下半年美股或涨幅有限 四大风险恐扰乱市场
+sample=17 date=2026-07-21T03:39:37+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=抛售已近尾声？瑞银喊话：逢低买入AI与半导体股时机已到
+sample=18 date=2026-07-21T03:28:41+00:00 type=industry_signal domain=www.cls.cn accepted=false reason=content.ordinary_meeting title=中国移动：将建设高质量算力基础设施 提升智算供给与绿色运营能力
+sample=19 date=2026-07-21T03:17:56+00:00 type=industry_signal domain=www.cls.cn accepted=true reason=quality.threshold_met title=财联社7月21日电，港股智谱持续走高现涨超23%，消息面上，智谱落地1GW级国产AI算力数据中心，完成收购中科加禾。
+sample=20 date=2026-07-21T02:54:16+00:00 type=industry_signal domain=www.cls.cn accepted=false reason=source.exclude_term title=三年AI牛市走到拐点？华尔街两大对立观点全面交锋
+===== qbitai =====
+preview source=21:量子位 status=success fetch=success parse=success extracted=10 normalized=10 accepted=7 rejected=3 failed=0
+primary_types={'industry_signal': 10} verification={'media_only': 10} review={'pending': 10} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={'source.include_term_missing': 2, 'content.ordinary_meeting': 1} failure_reasons={}
+sample=1 date=2026-07-21T06:03:10+00:00 type=industry_signal domain=www.qbitai.com accepted=false reason=source.include_term_missing title=国内首个！阿里健康氢离子达成NEJM、JAMA、BMJ三大医学顶刊内容合作
+sample=2 date=2026-07-21T05:44:29+00:00 type=industry_signal domain=www.qbitai.com accepted=false reason=source.include_term_missing title=阿里Qoder上线全新安全能力，为每位用户配备一位专属安全工程师
+sample=3 date=2026-07-20T10:42:09+00:00 type=industry_signal domain=www.qbitai.com accepted=false reason=content.ordinary_meeting title=WAIC 2026收官｜范式大会亮点集锦，见证AI 2.0从技术突破走向产业实践
+sample=4 date=2026-07-20T10:33:23+00:00 type=industry_signal domain=www.qbitai.com accepted=true reason=quality.threshold_met title=不同模型厂同一家Agentic Infra，AGI时代的地基终于浮出水面
+sample=5 date=2026-07-20T09:54:33+00:00 type=industry_signal domain=www.qbitai.com accepted=true reason=quality.threshold_met title=当AI进入最依赖“人”的行业：一家四线城市康复机构利润增长40%
+sample=6 date=2026-07-20T09:41:49+00:00 type=industry_signal domain=www.qbitai.com accepted=true reason=quality.threshold_met title=全球首发技术路线+全域联盟双轮破局，AI for ADANES释放先进核能新质生产力
+sample=7 date=2026-07-20T09:21:30+00:00 type=industry_signal domain=www.qbitai.com accepted=true reason=quality.threshold_met title=启鸣达人首发《世界模型驱动的教育AGI白皮书》| WAIC 2026
+sample=8 date=2026-07-20T09:05:06+00:00 type=industry_signal domain=www.qbitai.com accepted=true reason=quality.threshold_met title=AI语音进入“表演时代”：阿里Qwen-Audio-3.0-TTS登顶全球权威榜单
+sample=9 date=2026-07-20T09:03:23+00:00 type=industry_signal domain=www.qbitai.com accepted=true reason=quality.threshold_met title=WAIC之后，重新理解与爱为舞：一家AI原生企业的学习场景验证
+sample=10 date=2026-07-20T08:52:26+00:00 type=industry_signal domain=www.qbitai.com accepted=true reason=quality.threshold_met title=GMI Cloud “无界造物节”在WAIC圆满完赛，“MaaS+创意”赋能 AI 创作新生态！
+===== 36kr-newsflashes =====
+preview source=22:36 氪快讯 status=success fetch=success parse=success extracted=2 normalized=2 accepted=1 rejected=1 failed=0
+primary_types={'industry_signal': 2} verification={'media_only': 2} review={'pending': 2} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={'source.include_term_missing': 1} failure_reasons={}
+sample=1 date=2026-07-21T07:54:43.238275+00:00 type=industry_signal domain=36kr.com accepted=false reason=source.include_term_missing title=腾讯云：将大规模部署国产化算力和NPO超级节点
+sample=2 date=2026-07-21T07:31:43.238275+00:00 type=industry_signal domain=36kr.com accepted=true reason=quality.threshold_met title=腾讯智慧零售、腾讯地图携手Chinagoods平台打造的“Chinagoods AI导航”上线
+===== qwen-official-blog =====
+preview source=9:Qwen 官方博客 status=success fetch=success parse=success extracted=20 normalized=20 accepted=20 rejected=0 failed=0
+primary_types={'unclassified': 19, 'product_update': 1} verification={'official_confirmed': 20} review={'not_required': 20} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={} failure_reasons={}
+sample=1 date=2025-11-12T20:59:26+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen DeepResearch: 当灵感不再需要理由
+sample=2 date=2025-12-04T20:00:00+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=SAPO：一种稳定且高性能的大语言模型强化学习方法
+sample=3 date=2025-12-23T05:08:30+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen-Image-Edit-2511: 一致性再提升
+sample=4 date=2025-12-19T05:08:30+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen-Image-Layered: 面向内在可编辑性的图层分解
+sample=5 date=2025-12-22T16:00:45+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3-TTS 全面升级: 音色设计与音色克隆！
+sample=6 date=2026-01-07T20:00:00+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3-VL-Embedding & Qwen3-VL-Reranker：统一多模态表征与排序
+sample=7 date=2026-01-21T16:00:04+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3-TTS全家桶开源: 语音设计，克隆与生成！
+sample=8 date=2025-12-04T16:00:04+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3-TTS 全面升级！49种音色 + 10种语言 + 9种方言
+sample=9 date=2025-12-08T21:00:00+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3-Omni-Flash-2025-12-01：声形意合，令出智随！
+sample=10 date=2025-12-31T05:08:30+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen-Image-2512: 更细腻，更真实
+sample=11 date=2026-03-18T20:00:00+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3.5-Max-Preview 现已登陆 Arena 平台
+sample=12 date=2026-01-28T16:00:04+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3-ASR & Qwen3-ForcedAligner现已开源：够稳定，能流式，多语言！
+sample=13 date=2026-02-02T20:00:00+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3-Coder-Next：推动小型混合模型在智能体编程上的边界
+sample=14 date=2026-01-25T20:00:00+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=突破极限：Qwen3-Max-Thinking 的能力跃迁
+sample=15 date=2026-04-18T02:00:00+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3.6-Max-Preview：更强知识，更强编程，持续进化
+sample=16 date=2026-02-10T05:08:30+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen-Image-2.0: 专业信息图，细腻真实感
+sample=17 date=2026-02-15T20:00:00+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3.5：迈向原生多模态智能体
+sample=18 date=2026-03-29T20:00:00+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3.5-Omni：新一代大规模原生全模态大模型
+sample=19 date=2026-04-01T20:00:00+00:00 type=unclassified domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3.6-Plus：走向现实世界智能体
+sample=20 date=2026-04-15T02:00:00+00:00 type=product_update domain=qwen.ai accepted=true reason=quality.threshold_met title=Qwen3.6-35B-A3B：智能体编程利器，现已开源
+===== minimax-news =====
+preview source=10:MiniMax 新闻资讯 status=success fetch=success parse=success extracted=12 normalized=12 accepted=12 rejected=0 failed=0
+primary_types={'product_update': 4, 'unclassified': 8} verification={'official_confirmed': 12} review={'not_required': 12} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={} failure_reasons={}
+sample=1 date=2026-06-16T12:00:00+00:00 type=product_update domain=www.minimaxi.com accepted=true reason=quality.threshold_met title=华为云与MiniMax最新模型M3完成适配
+sample=2 date=2026-06-16T12:00:00+00:00 type=product_update domain=www.minimaxi.com accepted=true reason=quality.threshold_met title=Day0适配丨壁仞科技率先支持MiniMax M3大模型​
+sample=3 date=2026-06-16T12:00:00+00:00 type=unclassified domain=www.minimaxi.com accepted=true reason=quality.threshold_met title=Day0极速适配！海光DCU解锁MiniMax M3满血能力
+sample=4 date=2026-06-16T12:00:00+00:00 type=product_update domain=www.minimaxi.com accepted=true reason=quality.threshold_met title=Day-0支持｜摩尔线程率先完成MiniMax M3大模型适配​
+sample=5 date=2026-06-16T12:00:00+00:00 type=unclassified domain=www.minimaxi.com accepted=true reason=quality.threshold_met title=沐曦股份曦云C系列GPU Day 0 适配 MiniMax M3，国产算力支撑前沿Coding与Agentic能力
+sample=6 date=2026-06-16T12:00:00+00:00 type=product_update domain=www.minimaxi.com accepted=true reason=quality.threshold_met title=极速适配，生态共赢：昆仑芯高效支持MiniMax M3模型​
+sample=7 date=2026-05-15T12:00:00+00:00 type=unclassified domain=www.minimaxi.com accepted=true reason=quality.threshold_met title=开展"清朗·整治AI应用乱象"专项公告
+sample=8 date=2026-04-11T16:00:00+00:00 type=unclassified domain=www.minimaxi.com accepted=true reason=quality.threshold_met title=昇腾0Day支持MiniMaxM2.7，共同开启模型自我进化新范式
+sample=9 date=2026-04-11T16:00:00+00:00 type=unclassified domain=www.minimaxi.com accepted=true reason=quality.threshold_met title=Day 0支持｜昆仑芯完成MiniMax M2.7模型极速适配
+sample=10 date=2026-04-11T16:00:00+00:00 type=unclassified domain=www.minimaxi.com accepted=true reason=quality.threshold_met title=Day 0 实现 MiniMax M2.7 六芯落地，众智FlagOS 又双叒叕让大模型多芯可用了！
+sample=11 date=2026-04-11T16:00:00+00:00 type=unclassified domain=www.minimaxi.com accepted=true reason=quality.threshold_met title=沐曦股份曦云C系列GPU Day 0适配MiniMax M2.7 澎湃算力支持自进化大模型
+sample=12 date=2026-04-11T16:00:00+00:00 type=unclassified domain=www.minimaxi.com accepted=true reason=quality.threshold_met title=Day-0支持｜摩尔线程率先完成MiniMax M2.7大模型适配
+===== tencent-hunyuan-product-updates =====
+preview source=12:腾讯混元产品动态 status=success fetch=success parse=success extracted=20 normalized=20 accepted=20 rejected=0 failed=0
+primary_types={'product_update': 16, 'unclassified': 4} verification={'official_confirmed': 20} review={'not_required': 20} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={} failure_reasons={}
+sample=1 date=2026-06-22T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=Tencent HY 文生文旧版本模型下线
+sample=2 date=2025-12-17T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=Tencent HY Vision 1.5 Instruct 上线
+sample=3 date=2025-11-09T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=Tencent HY 2.0 Think 上线
+sample=4 date=2025-11-11T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=Tencent HY 2.0 Instruct 上线
+sample=5 date=2025-10-14T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-translation 模型版本更新
+sample=6 date=2025-09-24T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-large-role-latest 上线
+sample=7 date=2025-09-16T00:00:00+00:00 type=unclassified domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-t1-vision-20250916
+sample=8 date=2025-08-22T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-t1-latest 模型版本更新
+sample=9 date=2025-07-28T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-turbos-vision-video 上线
+sample=10 date=2025-07-16T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-turbos-20250716
+sample=11 date=2025-07-11T00:00:00+00:00 type=unclassified domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-t1-20250711
+sample=12 date=2025-06-25T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-a13b 上线
+sample=13 date=2025-06-19T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-t1-vision-20250619 上线
+sample=14 date=2025-06-19T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-turbos-vision-20250619 上线
+sample=15 date=2025-06-06T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-translation-lite 模型版本更新
+sample=16 date=2025-06-04T00:00:00+00:00 type=unclassified domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-turbos-20250604 上线
+sample=17 date=2025-05-29T00:00:00+00:00 type=unclassified domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-t1-20250529 上线
+sample=18 date=2025-05-28T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-t1-latest 模型版本更新
+sample=19 date=2025-05-26T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-large-vision 上线
+sample=20 date=2025-05-23T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=hunyuan-turbos-vision-v1.1更新
+===== tencent-hunyuan-product-announcements =====
+preview source=13:腾讯混元产品公告 status=success fetch=success parse=success extracted=2 normalized=2 accepted=2 rejected=0 failed=0
+primary_types={'unclassified': 1, 'product_update': 1} verification={'official_confirmed': 2} review={'not_required': 2} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={} failure_reasons={}
+sample=1 date=2026-06-05T00:00:00+00:00 type=unclassified domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=关于腾讯云混元多模态模型服务迁移通知
+sample=2 date=2026-05-22T00:00:00+00:00 type=product_update domain=cloud.tencent.com accepted=true reason=quality.threshold_met title=关于腾讯云混元旧版本模型下线的通知
+===== xinhua-tech =====
+preview source=17:新华科技 status=success fetch=success parse=success extracted=8 normalized=8 accepted=7 rejected=1 failed=0
+primary_types={'industry_signal': 8} verification={'media_only': 8} review={'pending': 8} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={'content.ordinary_meeting': 1} failure_reasons={}
+sample=1 date=2026-07-21T00:00:00+00:00 type=industry_signal domain=www.news.cn accepted=true reason=quality.threshold_met title=把算力中心搬上天
+sample=2 date=2026-07-21T00:00:00+00:00 type=industry_signal domain=www.news.cn accepted=true reason=quality.threshold_met title=推动人工智能嵌入日常生活
+sample=3 date=2026-07-21T00:00:00+00:00 type=industry_signal domain=www.news.cn accepted=true reason=quality.threshold_met title=拓宽新兴领域人工智能就业新空间
+sample=4 date=2026-07-20T00:00:00+00:00 type=industry_signal domain=www.news.cn accepted=true reason=quality.threshold_met title=AI产业链携手推动词元降本增效
+sample=5 date=2026-07-20T00:00:00+00:00 type=industry_signal domain=www.news.cn accepted=true reason=quality.threshold_met title=AI迈入智能体时代 安全能力建设提速
+sample=6 date=2026-07-20T00:00:00+00:00 type=industry_signal domain=www.news.cn accepted=false reason=content.ordinary_meeting title=世界人工智能大会勾勒三大发展主线
+sample=7 date=2026-07-20T00:00:00+00:00 type=industry_signal domain=www.news.cn accepted=true reason=quality.threshold_met title=AI爆火背后，统计学扮演重要角色
+sample=8 date=2026-07-17T00:00:00+00:00 type=industry_signal domain=www.news.cn accepted=true reason=quality.threshold_met title=中国企业发布全球最大规模的开源模型Kimi K3
+===== infoq-ai-llm =====
+preview source=19:InfoQ AI 与大模型 status=success fetch=success parse=success extracted=19 normalized=19 accepted=13 rejected=6 failed=0
+primary_types={'industry_signal': 19} verification={'media_only': 19} review={'pending': 19} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={'source.include_term_missing': 4, 'content.ordinary_meeting': 2} failure_reasons={}
+sample=1 date=2026-07-21T08:14:20.519000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=Hugging Face遭攻击后，只能靠GLM 5.2救场？白宫AI顾问急眼喊话：“我们要没竞争力了”
+sample=2 date=2026-07-21T07:22:44.752000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=OpenSQZ Glass：让端侧全双工全模态模型进入第一视角的可穿戴世界
+sample=3 date=2026-07-21T06:53:28.398000+00:00 type=industry_signal domain=www.infoq.cn accepted=false reason=source.include_term_missing title=16 万 Star 的 OpenCode 彻底重写：API 全部重做、Bun 换 Node、桌面端迁移 Electron
+sample=4 date=2026-07-21T06:48:02.431000+00:00 type=industry_signal domain=www.infoq.cn accepted=false reason=source.include_term_missing title=龙虾之父一条推文，Loop 时代终结？
+sample=5 date=2026-07-21T06:43:49.525000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=所有Harness终将长成“龙虾”，但最后活下来的只有几只
+sample=6 date=2026-07-21T06:40:10.993000+00:00 type=industry_signal domain=www.infoq.cn accepted=false reason=source.include_term_missing title=马斯克连夜开源Grok Build，但84万行代码里还留着上传用户整个代码库的痕迹
+sample=7 date=2026-07-21T06:31:37.700000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=微软跟进谷歌支持 Go 语言开发 AI 智能体，OpenAI 与 Anthropic 落后一步
+sample=8 date=2026-07-21T06:15:00.618000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=DoorDash 如何打造了一款不完全依赖大型语言模型（LLM）的 AI 购物助手
+sample=9 date=2026-07-21T06:14:54.916000+00:00 type=industry_signal domain=www.infoq.cn accepted=false reason=content.ordinary_meeting title=回应时代之问：WAIC UP！思享会在沪举行，多国嘉宾共议AI时代人生坐标
+sample=10 date=2026-07-21T05:09:59.573000+00:00 type=industry_signal domain=www.infoq.cn accepted=false reason=content.ordinary_meeting title=让智能不断向上，让技术始终向善｜云知声携U-Model家族亮相 WAIC 2026
+sample=11 date=2026-07-21T02:58:42.695000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=GMI Cloud “无界造物节”在WAIC圆满完赛，“MaaS+创意”赋能 AI 创作新生态！
+sample=12 date=2026-07-20T11:59:20.798000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=神州数码发布企业AI流程系统与智算产品，尝试打通应用和算力两端
+sample=13 date=2026-07-20T11:51:30.438000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=国产GPU分水岭时刻：当别家还在卷参数，摩尔线程早已训练出了世界模型
+sample=14 date=2026-07-20T07:07:06.123000+00:00 type=industry_signal domain=www.infoq.cn accepted=false reason=source.include_term_missing title=专访孙元浩：乘坐星环号，把数据库“移民火星”的人
+sample=15 date=2026-07-20T07:04:17.717000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=WAICA正式启航：打破全球AI学术版图，上海迎来关键拼图
+sample=16 date=2026-07-20T06:47:38.839000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=一句话上线 AI Agent 应用：火山 Supabase + IGA Pages 全栈部署实践
+sample=17 date=2026-07-20T03:32:56.860000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=企业 AI：方法论易得，交付力难求
+sample=18 date=2026-07-19T04:34:19.406000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=寻找 AI 原生时代创业者：极客部落 OPC 入驻招募启动！
+sample=19 date=2026-07-19T03:09:02.837000+00:00 type=industry_signal domain=www.infoq.cn accepted=true reason=quality.threshold_met title=边端AI不只缺算力：安谋科技重做CPU、NPU、VPU与AI操作系统
+===== leiphone-ai =====
+preview source=23:雷锋网 AI status=success fetch=success parse=success extracted=2 normalized=2 accepted=2 rejected=0 failed=0
+primary_types={'industry_signal': 2} verification={'media_only': 2} review={'pending': 2} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={} failure_reasons={}
+sample=1 date=2026-07-20T07:33:00+00:00 type=industry_signal domain=www.leiphone.com accepted=true reason=quality.threshold_met title=姚卯青、张正友、徐丹飞等七位大佬同席，这届 WAIC 把具身未来聊透了
+sample=2 date=2026-07-20T04:13:00+00:00 type=industry_signal domain=www.leiphone.com accepted=true reason=quality.threshold_met title=SoulAgent亮相WAIC 2026：智能参会重塑前沿知识传播范式
+===== geekpark-ai =====
+preview source=24:极客公园 status=failed fetch=success parse=failed extracted=0 normalized=0 accepted=0 rejected=0 failed=1
+primary_types={} verification={} review={} valid_title=0.0% valid_date=0.0% valid_link=0.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={} failure_reasons={'source.configuration_invalid': 1}
+error=no collector registered for 'custom'
+===== ithome-ai =====
+preview source=25:IT之家 AI status=success fetch=success parse=success extracted=9 normalized=9 accepted=6 rejected=3 failed=0
+primary_types={'industry_signal': 9} verification={'media_only': 9} review={'pending': 9} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={'source.include_term_missing': 3} failure_reasons={}
+sample=1 date=2026-07-21T16:01:38+00:00 type=industry_signal domain=www.ithome.com accepted=false reason=source.include_term_missing title=腾讯云：将大规模部署国产化算力，布局 NPO 超级节点
+sample=2 date=2026-07-21T15:50:05+00:00 type=industry_signal domain=www.ithome.com accepted=true reason=quality.threshold_met title=百时美施贵宝采购英伟达最新 Vera Rubin 架构计算系统，用 AI 加速药物研发
+sample=3 date=2026-07-21T15:48:38+00:00 type=industry_signal domain=www.ithome.com accepted=true reason=quality.threshold_met title=淘宝天猫对“AI 批量套图”导致商品展示失真进行专项治理，将进行扣分、搜索降权
+sample=4 date=2026-07-21T15:37:36+00:00 type=industry_signal domain=www.ithome.com accepted=true reason=quality.threshold_met title=英伟达推出合成视频检测器 NIM：逐帧揪出 AI 生成视频，准确率可达 92%
+sample=5 date=2026-07-21T15:00:42+00:00 type=industry_signal domain=www.ithome.com accepted=false reason=source.include_term_missing title=月之暗面：用户需求远超预期，正通过模型效能优化、算力补充缓解资源压力
+sample=6 date=2026-07-21T14:56:42+00:00 type=industry_signal domain=www.ithome.com accepted=false reason=source.include_term_missing title=阿里千问发布 Qwen-Image-3.0 图像生成基础模型：落字成画，字字如印
+sample=7 date=2026-07-21T14:46:41+00:00 type=industry_signal domain=www.ithome.com accepted=true reason=quality.threshold_met title=YouTube 明确打击 AI 垃圾内容，三类视频将不能变现
+sample=8 date=2026-07-21T14:40:54+00:00 type=industry_signal domain=www.ithome.com accepted=true reason=quality.threshold_met title=OpenAI：若青少年因使用 ChatGPT 网暴他人而被封号，系统将告知家长
+sample=9 date=2026-07-21T14:20:04+00:00 type=industry_signal domain=www.ithome.com accepted=true reason=quality.threshold_met title=AI 浪潮推动全球半导体需求，韩国 7 月前 20 天出口额同比增 62.9% 创新高
+===== huxiu-ai =====
+preview source=26:虎嗅 AI status=success fetch=success parse=success extracted=12 normalized=12 accepted=2 rejected=10 failed=0
+primary_types={'industry_signal': 12} verification={'media_only': 12} review={'pending': 12} valid_title=100.0% valid_date=100.0% valid_link=100.0% external_link=0.0% duplicates=0 duplicate_ratio=0.0%
+rejection_reasons={'content.recruitment': 1, 'source.include_term_missing': 9} failure_reasons={}
+sample=1 date=2026-07-21T08:15:53+00:00 type=industry_signal domain=www.huxiu.com accepted=false reason=content.recruitment title=高校招聘卡死在35 岁，到底在卡什么？
+sample=2 date=2026-07-21T07:52:39+00:00 type=industry_signal domain=www.huxiu.com accepted=false reason=source.include_term_missing title=追责康美药业造假“首恶”，马兴田夫妇被判赔近14亿
+sample=3 date=2026-07-21T07:50:09+00:00 type=industry_signal domain=www.huxiu.com accepted=false reason=source.include_term_missing title=00后夫妻三年离四成：这代年轻人的婚姻，从一开始就建在沙滩上
+sample=4 date=2026-07-21T07:49:30+00:00 type=industry_signal domain=www.huxiu.com accepted=false reason=source.include_term_missing title=高德CEO郭宁的“永不商业化”算盘，打得咋样了？
+sample=5 date=2026-07-21T07:46:44+00:00 type=industry_signal domain=www.huxiu.com accepted=false reason=source.include_term_missing title=“所有人都在紧绷地扮演松弛”，这舞蹈为什么吵上热搜
+sample=6 date=2026-07-21T07:42:50+00:00 type=industry_signal domain=www.huxiu.com accepted=false reason=source.include_term_missing title=3567亿股票ETF，逆市抄底创纪录
+sample=7 date=2026-07-21T07:23:01+00:00 type=industry_signal domain=www.huxiu.com accepted=false reason=source.include_term_missing title=硬核专业课考出40个满分，教授却怒了：最聪明的一批学生正在“自掘坟墓”
+sample=8 date=2026-07-21T07:21:12+00:00 type=industry_signal domain=www.huxiu.com accepted=false reason=source.include_term_missing title=救下英国钢铁6年后，中国老板却被赶走了
+sample=9 date=2026-07-21T07:09:23+00:00 type=industry_signal domain=www.huxiu.com accepted=true reason=quality.threshold_met title=AI产业链条上最大的“伪命题”：锁定万亿订单就能躺赚？
+sample=10 date=2026-07-21T06:59:46+00:00 type=industry_signal domain=www.huxiu.com accepted=false reason=source.include_term_missing title=启明创投胡旭波对话阶梯医疗赵郑拓：脑机接口，在智能时代“拉人类一把”
+sample=11 date=2026-07-21T06:55:34+00:00 type=industry_signal domain=www.huxiu.com accepted=true reason=quality.threshold_met title=在下一个模型发布之前
+sample=12 date=2026-07-21T06:51:46+00:00 type=industry_signal domain=www.huxiu.com accepted=false reason=source.include_term_missing title=2026上半年中国零售：旧的增长逻辑正在失效
