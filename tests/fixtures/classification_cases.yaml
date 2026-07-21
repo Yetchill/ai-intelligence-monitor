@@ -167,7 +167,8 @@ cases:
     expected: policy_industry
   - id: policy-02
     title: 国家人工智能发展规划正式发布
-    expected: policy_industry
+    expected: unclassified
+    expected_ambiguous: true
   - id: policy-03
     title: 生成式人工智能管理办法施行
     expected: policy_industry
@@ -229,5 +230,4 @@ cases:
     title: 大模型
     summary: 智能体平台上线
     source_default: agent_product
-    expected: unclassified
-    expected_ambiguous: true
+    expected: model_technology

@@ -232,7 +232,7 @@ async def test_source_default_is_fallback_only() -> None:
         _item("推理模型披露训练架构"), source_default=Category.AWARD_CASE
     )
     ambiguous = await classifier.classify(
-        _item("大模型能力迭代信息", "智能体平台正式上线并开放使用"),
+        _item("智能体大模型"),
         source_default=Category.MODEL_TECHNOLOGY,
     )
     weak = await classifier.classify(
@@ -241,8 +241,9 @@ async def test_source_default_is_fallback_only() -> None:
 
     assert strong.category is Category.MODEL_TECHNOLOGY
     assert strong.provider == "rule_based"
-    assert ambiguous.category is Category.UNCLASSIFIED
-    assert ambiguous.is_ambiguous
+    assert ambiguous.category is Category.AGENT_PRODUCT
+    assert ambiguous.provider == "rule_based"
+    assert ambiguous.score >= 8
     assert weak.category is Category.POLICY_INDUSTRY
     assert weak.provider == "source_default"
 

@@ -32,17 +32,36 @@ categories:
       视觉语言模型: 7
       检索增强: 6
       context window: 6
+      context caching: 6
+      正式发布: 8
+      模型正式发布: 8
+      正式上线: 6
+      模型上线: 7
+      模型退役: 6
+      停止服务: 5
+      接口更新: 5
+      版本升级: 5
+      接口升级: 5
+      升级为: 5
     keywords:
-      模型: 4
+      模型: 5
       算法: 4
       推理: 3
       训练: 3
       多模态: 4
-      开源: 3
+      开源: 4
       论文: 3
       benchmark: 3
       llm: 4
       rag: 4
+      发布: 2
+      上线: 3
+      退役: 4
+      升级: 3
+      更新: 2
+      api: 3
+      接口: 2
+      版本: 2
     negative_phrases:
       助力企业: -6
       模型应用案例: -7
@@ -51,6 +70,10 @@ categories:
       模型用于: -8
       拟发布: -10
       场景实现落地: -8
+      政策发布: -8
+      标准发布: -8
+      案例征集: -10
+      白皮书: -8
 
   agent_product:
     priority: 55
@@ -77,6 +100,10 @@ categories:
       智能客服产品: 8
       workflow platform: 7
       product update: 6
+      正式发布: 4
+      功能上线: 5
+      playground: 8
+      工具发布: 5
     keywords:
       智能体: 5
       agent: 5
@@ -86,6 +113,9 @@ categories:
       版本: 2
       助手: 3
       sdk: 3
+      发布: 2
+      功能: 2
+      工具: 2
     negative_phrases:
       智能体案例征集: -10
       智能体优秀案例: -9
@@ -94,6 +124,9 @@ categories:
       获奖: -10
       入选: -8
       联合发布: -8
+      政策发布: -8
+      标准立项: -6
+      技术标准: -6
 
   enterprise_case:
     priority: 50
@@ -130,6 +163,8 @@ categories:
       投产: 3
       用于: 4
       效率: 3
+      部署: 3
+      利润: 2
     negative_phrases:
       案例征集: -10
       优秀案例名单: -10
@@ -259,9 +294,9 @@ categories:
     phrases:
       征求意见: 10
       公开征求意见: 11
-      行业标准: 9
-      国家标准: 9
-      团体标准: 8
+      行业标准: 10
+      国家标准: 10
+      团体标准: 10
       技术标准: 8
       管理办法: 8
       实施办法: 8
@@ -280,6 +315,9 @@ categories:
       artificial intelligence safety standard: 9
       产业发展年度报告: 8
       意见采纳: 8
+      数据安全: 7
+      治理体系: 7
+      安全治理: 7
     keywords:
       政策: 4
       标准: 5
@@ -291,6 +329,8 @@ categories:
       白皮书: 4
       报告: 2
       意见: 3
+      治理: 4
+      安全: 3
     negative_phrases:
       参编单位: -6
       参编单位征集: -12

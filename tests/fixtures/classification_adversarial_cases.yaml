@@ -327,3 +327,91 @@ cases:
     title: 公司案例库完成资料归档
     summary: 本次仅为内部知识整理，不涉及产品发布、项目评选或公开申报
     expected: unclassified
+
+  # regression: model releases with "正式发布" (added round1-classification-quality)
+  - id: regx-model-01
+    title: Kimi-K2.5 — 正式发布
+    expected: model_technology
+  - id: regx-model-02
+    title: GLM-5.2 — 正式发布
+    expected: model_technology
+  - id: regx-model-03
+    title: DeepSeek-V4-Pro — 正式发布
+    expected: model_technology
+  - id: regx-model-04
+    title: 正式发布！文心5.0上线百度千帆
+    expected: model_technology
+  - id: regx-model-05
+    title: 模型正式发布并开源
+    expected: model_technology
+  # regression: model version upgrades
+  - id: regx-model-06
+    title: deepseek-chat 模型升级为 DeepSeek-V3.2
+    expected: model_technology
+  - id: regx-model-07
+    title: 模型迭代升级至v3.0，性能全面提升
+    expected: model_technology
+  # regression: model retirement
+  - id: regx-model-08
+    title: Kimi-K2.5 — 退役
+    expected: model_technology
+  - id: regx-model-09
+    title: MiniMax-M2.5 — 退役
+    expected: model_technology
+  # regression: API updates
+  - id: regx-model-10
+    title: API 接口更新
+    expected: model_technology
+  - id: regx-model-11
+    title: API 上线硬盘缓存技术
+    expected: model_technology
+  # regression: model open-source
+  - id: regx-model-12
+    title: GLM-5.2上线并开源：专注Coding与长程任务
+    expected: model_technology
+  - id: regx-model-13
+    title: GLM-5.1开源：一个独立工作8小时的模型
+    expected: model_technology
+
+  # regression: agent products (added round1-classification-quality)
+  - id: regx-agent-01
+    title: Kimi Playground 正式发布
+    expected: agent_product
+  - id: regx-agent-02
+    title: 智能体新产品正式发布
+    expected: agent_product
+  - id: regx-agent-03
+    title: 上线联网搜索功能
+    expected: agent_product
+
+  # regression: policy_industry (added round1-classification-quality)
+  - id: regx-policy-01
+    title: 专家解读｜构建数据安全治理新格局
+    expected: policy_industry
+  - id: regx-policy-02
+    title: 专家解读｜完善网络数据安全风险评估制度 提升网络数据安全治理能力
+    expected: policy_industry
+  - id: regx-policy-03
+    title: 启鸣达人首发《世界模型驱动的教育AGI白皮书》
+    expected: policy_industry
+  - id: regx-policy-04
+    title: 标准丨关于发布团体标准立项的公告
+    expected: policy_industry
+
+  # regression: enterprise_case (added round1-classification-quality)
+  - id: regx-enterprise-01
+    title: 当AI进入最依赖人的行业：一家四线城市康复机构利润增长40%
+    expected: enterprise_case
+
+  # regression: solicitation (added round1-classification-quality)
+  - id: regx-solicitation-01
+    title: 关于开展2026年度行业智能体应用实践案例征集活动的通知
+    expected: solicitation
+
+  # regression: unclassified / irrelevant (added round1-classification-quality)
+  - id: regx-unknown-01
+    title: 公司发布年度工作总结
+    expected: unclassified
+  - id: regx-unknown-02
+    title: 发布近期活动安排通知
+    expected: unclassified
