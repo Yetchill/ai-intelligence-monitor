@@ -11,20 +11,17 @@ RSSHub 当前仓库以 AGPL-3.0 发布。本项目可以消费网站官方 Feed 
 | minimax-news | 无 | 无 | sitemap 不含新闻；SSR 只有少量链接且缺日期 | HTML site adapter + 详情元数据 | 是 | 暂不需浏览器 |
 | tencent-hunyuan-product-updates | 无 | 无 | 服务端 HTML 有正文和月份目录 | changelog adapter | 是 | 不需浏览器 |
 | tencent-hunyuan-product-announcements | 无 | 无 | 同上 | changelog adapter | 是 | 与产品动态保持独立 |
-| volcengine-ark-product-updates | 无 | 无 | 直连为 JavaScript 壳，未确认公开接口 | candidate | 待定 | 无公开入口后才评估浏览器 |
-| volcengine-ark-model-releases | 无 | 无 | 同上 | candidate | 待定 | 三入口不合并 |
-| volcengine-ark-model-retirements | 无 | 无 | 同上 | candidate | 待定 | 三入口不合并 |
+
 | caict-special-reports | 无 | 无对应 route | 列表 HTTP 412、sitemap 404 | candidate | 待访问恢复 | 浏览器不得绕过访问限制 |
 | caict-aihub-cases | 无 | 无 | 公开 `/internal_api/cases` 实测 200 JSON | public JSON / case adapter | 是 | 不需浏览器 |
 | caict-aiia-agent-working-group | 无 | 无 | Vite 壳，尚未确认公开列表 GET | candidate | 待定 | 暂不引浏览器 |
-| miit-manufacturing-digital-platform | 无 | MIIT 通用 route 不覆盖 | `/sitemap.xml` 实为同一 SPA 壳 | candidate | 待定 | 无公开接口后才评估浏览器 |
-| mot-science-technology | 无 | MOT 通用 route 不覆盖 `xxgk` | HTTPS 仅 6 字节，对应 `www` 路径 404 | candidate | 待站点恢复 | HTTP 只重定向回 HTTPS |
+
 | xinhua-tech | 无 | 无 | 全程 HTTPS 的静态列表入口可用 | HTML site adapter | 是 | 不需浏览器，本轮停止扩展 |
 | cls-ai-subject | 无 | `/cls/subject/:id` | `__NEXT_DATA__` 含文章 ID、标题和 Unix 时间 | embedded public JSON | `cls_topic` | 不复制 RSSHub 的签名实现；已 active |
 | infoq-ai-llm | 无 | `/infoq/topic/:id` | 官方公开 POST API 实测 200 | public JSON | 是 | 不需浏览器 |
 | zhidx-news | 无 | 无 | sitemap 有文章 URL/lastmod；快讯直连只给 Nuxt 壳 | sitemap（文章）/ candidate（快讯） | 是 | 不能依赖代理侧偶发 SSR |
 | qbitai | `/category/资讯/feed` | `/qbitai/category/:category` | 官方 WordPress RSS 实测 200 | RSS | 否 | 不依赖 RSSHub 实例；已 active |
-| jiqizhixin-dailies | `/rss` 已变为申请入口 | 无 | 内容路由均进入数据服务；开通涉及创建用户、登录和验证码 | candidate | 否 | 不创建外部用户，不绕过验证码 |
+
 
 ## 本轮限定实现结果
 
@@ -32,7 +29,6 @@ RSSHub 当前仓库以 AGPL-3.0 发布。本项目可以消费网站官方 Feed 
 - `deepseek-api-updates`：静态 changelog adapter；真实 preview 18 条，三项有效率 100%，重复率 0%。
 - `kimi-platform-changelog`：静态 changelog adapter；真实 preview 8 条，三项有效率 100%，重复率 0%。
 - `cls-ai-subject`：独立解析公开 `__NEXT_DATA__`；真实 preview 20 条，三项有效率 100%，重复率 0%，已通过激活命令。
-- `jiqizhixin-dailies`：没有无需申请/登录的实际 Feed URL，保持 candidate。
 
 媒体来源即使 active 也只表示定时采集。量子位和财联社仍为 `media_discovery`、`always_review`、首页隐藏、正式导出隐藏；条目默认 `media_only`、`pending`，传闻继续标记为 `rumor_or_prediction`。
 

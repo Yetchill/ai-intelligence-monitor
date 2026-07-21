@@ -385,84 +385,6 @@ sources:
     minimum_quality_score: 35
     allow_external_links: false
 
-  - slug: volcengine-ark-product-updates
-    name: 火山方舟产品更新
-    url: https://www.volcengine.com/docs/82379/1159177
-    lifecycle_state: candidate
-    source_role: official_product
-    source_tier: official_company
-    audience: leadership
-    crawl_mode: single_page_changelog
-    review_policy: auto_publish
-    allowed_primary_types: [product_update]
-    homepage_visible: true
-    export_visible: true
-    lookback_days: 180
-    max_items_per_run: 20
-    implementation_status: blocked_by_javascript
-    implementation_reason: 页面正文依赖 JavaScript；尚未确认可用的公开静态数据或接口。
-    verified_at: null
-    activation_evidence: null
-    notes: 不与模型发布或模型下线入口合并。
-    collector_name: single_page_changelog
-    collector_config: {keep_query_params: [entry]}
-    include_terms: [方舟, 产品, 更新]
-    exclude_terms: [教程]
-    minimum_quality_score: 35
-    allow_external_links: false
-
-  - slug: volcengine-ark-model-releases
-    name: 火山方舟模型发布
-    url: https://www.volcengine.com/docs/82379/1159178
-    lifecycle_state: candidate
-    source_role: official_product
-    source_tier: official_company
-    audience: leadership
-    crawl_mode: single_page_changelog
-    review_policy: auto_publish
-    allowed_primary_types: [product_update]
-    homepage_visible: true
-    export_visible: true
-    lookback_days: 180
-    max_items_per_run: 20
-    implementation_status: blocked_by_javascript
-    implementation_reason: 页面正文依赖 JavaScript；尚未确认可用的公开静态数据或接口。
-    verified_at: null
-    activation_evidence: null
-    notes: 独立记录模型发布入口。
-    collector_name: single_page_changelog
-    collector_config: {keep_query_params: [entry]}
-    include_terms: [方舟, 模型, 发布]
-    exclude_terms: [教程]
-    minimum_quality_score: 35
-    allow_external_links: false
-
-  - slug: volcengine-ark-model-retirements
-    name: 火山方舟模型下线
-    url: https://www.volcengine.com/docs/82379/1350667
-    lifecycle_state: candidate
-    source_role: official_product
-    source_tier: official_company
-    audience: leadership
-    crawl_mode: single_page_changelog
-    review_policy: auto_publish
-    allowed_primary_types: [product_update]
-    homepage_visible: true
-    export_visible: true
-    lookback_days: 180
-    max_items_per_run: 20
-    implementation_status: blocked_by_javascript
-    implementation_reason: 页面正文依赖 JavaScript；尚未确认可用的公开静态数据或接口。
-    verified_at: null
-    activation_evidence: null
-    notes: 独立记录模型退役和下线入口。
-    collector_name: single_page_changelog
-    collector_config: {keep_query_params: [entry]}
-    include_terms: [方舟, 模型, 下线, 退役]
-    exclude_terms: [教程]
-    minimum_quality_score: 35
-    allow_external_links: false
-
   - slug: caict-special-reports
     name: 中国信通院专题报告
     url: https://www.caict.ac.cn/kxyj/qwfb/ztbg/
@@ -540,58 +462,6 @@ sources:
     exclude_terms: [会议, 培训]
     minimum_quality_score: 40
     allow_external_links: true
-
-  - slug: miit-manufacturing-digital-platform
-    name: 制造业数字化转型综合信息服务平台
-    url: https://szgx.miit.gov.cn/zzyszh/
-    lifecycle_state: candidate
-    source_role: official_case_hub
-    source_tier: government
-    audience: leadership
-    crawl_mode: case_hub
-    review_policy: review_on_low_confidence
-    allowed_primary_types: [case_analysis, award_result, application_opportunity]
-    homepage_visible: true
-    export_visible: true
-    lookback_days: 730
-    max_items_per_run: 20
-    implementation_status: blocked_by_javascript
-    implementation_reason: 主页面 HTTP 200 但只有 SPA 壳，/sitemap.xml 也回退为同一 HTML；尚未确认公开数据接口，不绕过访问控制、不引入 Playwright。
-    verified_at: null
-    activation_evidence: null
-    notes: 后续研究公开接口。
-    collector_name: case_hub
-    collector_config: {}
-    include_terms: [人工智能, 大模型, 智能体, AI, 案例, 试点]
-    exclude_terms: [培训]
-    minimum_quality_score: 45
-    allow_external_links: false
-
-  - slug: mot-science-technology
-    name: 交通运输部科技司
-    url: https://xxgk.mot.gov.cn/jigou/kjs/
-    lifecycle_state: candidate
-    source_role: official_industry
-    source_tier: government
-    audience: leadership
-    crawl_mode: html_list
-    review_policy: auto_publish
-    allowed_primary_types: [policy_standard, application_opportunity, award_result, report_release, case_analysis]
-    homepage_visible: true
-    export_visible: true
-    lookback_days: 90
-    max_items_per_run: 20
-    implementation_status: research_needed
-    implementation_reason: 真实探测出现 HTTPS 降级到 HTTP，安全 Fetcher 按策略拒绝；需找到安全规范入口并验收 AI 过滤。
-    verified_at: null
-    activation_evidence: null
-    notes: 只接受 AI、大模型、智能体、案例集、试点或相关成果。
-    collector_name: html_list
-    collector_config: {allowed_domains: [xxgk.mot.gov.cn], discovery: {mode: link_filter, max_pages: 1, max_depth: 0, max_items: 20, include_url_patterns: [/jigou/kjs/]}}
-    include_terms: [人工智能, 大模型, 智能体, AI, 案例集, 试点]
-    exclude_terms: [会议, 培训, 调研]
-    minimum_quality_score: 50
-    allow_external_links: false
 
   - slug: xinhua-tech
     name: 新华科技
@@ -749,32 +619,6 @@ sources:
     collector_config: {max_items: 20}
     include_terms: [人工智能, 大模型, 智能体, AI]
     exclude_terms: [股价, 概念股, IPO, 人物八卦]
-    minimum_quality_score: 25
-    allow_external_links: false
-
-  - slug: jiqizhixin-dailies
-    name: 机器之心最新资讯
-    url: https://www.jiqizhixin.com/dailies
-    lifecycle_state: candidate
-    source_role: media_discovery
-    source_tier: authoritative_media
-    audience: all
-    crawl_mode: html_list
-    review_policy: always_review
-    allowed_primary_types: [industry_signal]
-    homepage_visible: false
-    export_visible: false
-    lookback_days: 30
-    max_items_per_run: 20
-    implementation_status: research_needed
-    implementation_reason: 2026-07-20 实测 /dailies、/articles 和 /rss 均进入数据服务引导；匿名页面无 Feed，开通流程涉及创建用户、登录和验证码，不能合规自动激活。
-    verified_at: null
-    activation_evidence: null
-    notes: 官网说明存在免费 RSS，但当前必须申请开通；不调用创建用户或订单接口，不以浏览器绕过登录和验证码。
-    collector_name: html_list
-    collector_config: {allowed_domains: [www.jiqizhixin.com], discovery: {mode: link_filter, max_pages: 1, max_depth: 0, max_items: 20, include_url_patterns: [/articles/, /dailies/]}}
-    include_terms: [人工智能, 大模型, 智能体, AI]
-    exclude_terms: [招聘, 课程]
     minimum_quality_score: 25
     allow_external_links: false
 

@@ -6,9 +6,9 @@
     <div class="page-actions"><a class="button" href="/sources/new">添加来源</a><form action="/updates" method="post" data-update-form><button class="button primary" type="submit" data-processing-text="正在更新…">更新全部 active 来源</button></form></div>
   </section>
   {% if seeded %}<p class="notice success">正式来源初始化完成：新建 {{ seed_created }}，安全提升旧预设 {{ seed_promoted }}，冲突 {{ seed_conflicts }}。重复执行不会覆盖已有修改或重新启用已停用来源。</p>{% endif %}
-  {% if formal_source_count < 28 %}
+  {% if formal_source_count < 22 %}
     <section class="notice">
-      <strong>当前数据库只有 {{ formal_source_count }} / 28 个目录来源。</strong>
+      <strong>当前数据库只有 {{ formal_source_count }} / 22 个目录来源。</strong>
       <p>可在此安全、幂等同步完整目录，也可运行 <code>uv run python -m app.cli sources sync-catalog</code>。candidate 也会写入数据库。</p>
       <form action="/sources/seed-formal" method="post"><button class="button primary" type="submit">同步完整来源目录</button></form>
     </section>

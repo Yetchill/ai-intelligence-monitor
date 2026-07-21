@@ -228,10 +228,10 @@ def test_catalog_sync_imports_every_entry_is_idempotent_and_preserves_paused(
         paused.enabled = False
     third = service.sync()
 
-    assert first.total == len(catalog) == 28
-    assert (first.created, first.active, first.candidate) == (28, 11, 17)
-    assert (second.existing, second.conflicts) == (28, 0)
-    assert len(sources) == 28
+    assert first.total == len(catalog) == 22
+    assert (first.created, first.active, first.candidate) == (22, 11, 11)
+    assert (second.existing, second.conflicts) == (22, 0)
+    assert len(sources) == 22
     assert all(
         entry.implementation_reason
         for entry in catalog
