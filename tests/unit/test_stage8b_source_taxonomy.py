@@ -228,10 +228,10 @@ def test_catalog_sync_imports_every_entry_is_idempotent_and_preserves_paused(
         paused.enabled = False
     third = service.sync()
 
-    assert first.total == len(catalog) == 22
-    assert (first.created, first.active, first.candidate) == (22, 11, 11)
-    assert (second.existing, second.conflicts) == (22, 0)
-    assert len(sources) == 22
+    assert first.total == len(catalog) == 26
+    assert (first.created, first.active, first.candidate) == (26, 11, 15)
+    assert (second.existing, second.conflicts) == (26, 0)
+    assert len(sources) == 26
     assert all(
         entry.implementation_reason
         for entry in catalog
@@ -506,3 +506,78 @@ def test_retired_purge_dry_run_backup_confirm_and_mixed_run_survival(tmp_path: P
         assert purge.plan().impacts == ()
     finally:
         database.dispose()
+
+
+def test_new_domestic_media_sources_exist_in_catalog() -> None:
+    catalog = load_source_catalog()
+    slugs = {e.slug for e in catalog}
+
+    for expected in ("leiphone-ai", "geekpark-ai", "ithome-ai", "huxiu-ai"):
+        assert expected in slugs, f"missing catalog entry: {expected}"
+
+
+def test_domestic_media_sources_have_correct_unified_settings() -> None:
+    catalog = load_source_catalog()
+    domestic = [
+        e
+        for e in catalog
+        if e.slug in {"leiphone-ai", "geekpark-ai", "ithome-ai", "huxiu-ai"}
+    ]
+
+    for entry in domestic:
+        assert entry.source_role.value == "media_discovery", (
+            f"{entry.slug}: source_role should be media_discovery"
+        )
+        assert entry.review_policy.value == "always_review", (
+            f"{entry.slug}: review_policy should be always_review"
+        )
+        assert entry.lifecycle_state.value == "candidate", (
+            f"{entry.slug}: lifecycle should be candidate"
+        )
+        assert entry.max_items_per_run is not None
+        assert entry.max_items_per_run >= 1
+
+
+def test_leiphone_ai_has_category_filter_config() -> None:
+    catalog = load_source_catalog()
+    entry = next(e for e in catalog if e.slug == "leiphone-ai")
+
+    assert entry.collector_name == "rss"
+    config = entry.collector_config
+    assert "include_categories" in config
+    categories: object = config["include_categories"]
+    assert "人工智能" in categories  # pyright: ignore[reportOperatorIssue]
+
+
+def test_geekpark_is_blocked_with_notes() -> None:
+    catalog = load_source_catalog()
+    entry = next(e for e in catalog if e.slug == "geekpark-ai")
+
+    assert entry.implementation_status.value == "blocked_by_javascript"
+    assert entry.collector_name == "custom"
+    assert entry.collector_config == {}
+    assert "WAF" in entry.notes or "WAF" in (entry.implementation_reason or "")
+
+
+def test_huxiu_ai_has_slug_and_notes() -> None:
+    catalog = load_source_catalog()
+    entry = next(e for e in catalog if e.slug == "huxiu-ai")
+
+    assert entry.collector_name == "huxiu"
+    assert entry.lifecycle_state.value == "candidate"
+    assert entry.implementation_reason is not None
+    assert len(entry.implementation_reason) > 10
+
+
+def test_all_domestic_media_include_terms_present() -> None:
+    catalog = load_source_catalog()
+    domestic = [
+        e
+        for e in catalog
+        if e.slug in {"leiphone-ai", "geekpark-ai", "ithome-ai", "huxiu-ai"}
+    ]
+
+    for entry in domestic:
+        assert entry.include_terms, f"{entry.slug}: include_terms should not be empty"
+        terms = entry.include_terms
+        assert "人工智能" in terms or "AI" in terms, f"{entry.slug}: missing AI terms"

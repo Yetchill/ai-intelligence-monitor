@@ -9,6 +9,7 @@ import pytest
 from app.collectors.cls_topic import CLSTopicCollector
 from app.collectors.github_release import GitHubReleaseCollector
 from app.collectors.html_list import HTMLListCollector
+from app.collectors.huxiu import HuxiuCollector
 from app.collectors.infoq import InfoQAICollector
 from app.collectors.minimax_news import MiniMaxNewsCollector
 from app.collectors.public_json import PublicJsonCollector
@@ -609,6 +610,7 @@ def test_registry_constructs_by_collector_name_and_accepts_extensions() -> None:
         "document_hub",
         "github_release",
         "html_list",
+        "huxiu",
         "infoq_ai",
         "minimax_news",
         "public_json",
@@ -999,3 +1001,171 @@ async def test_infoq_collector_enforces_page_limit() -> None:
     )
 
     assert len(items) <= 5
+
+
+@pytest.mark.asyncio
+async def test_rss_categories_filter_keeps_only_configured_categories() -> None:
+    url = "https://www.leiphone.com/feed"
+    fetcher = FixtureFetcher({url: (FIXTURES / "leiphone_feed.xml").read_bytes()})
+
+    items = await RSSCollector(fetcher).collect(
+        CollectContext(
+            source_url=url,
+            config={"max_items": 20, "include_categories": ["人工智能", "人工智能学术"]},
+        )
+    )
+
+    assert len(items) == 2
+    assert items[0].title == "国产大模型正式发布新一代推理能力"
+    assert items[1].title == "AI学术论文获国际顶级会议最佳论文奖"
+    assert all(item.canonical_url.startswith("https://www.leiphone.com/") for item in items)
+    assert all(item.published_at is not None for item in items)
+
+
+@pytest.mark.asyncio
+async def test_rss_categories_excludes_configured_categories() -> None:
+    url = "https://www.leiphone.com/feed"
+    fetcher = FixtureFetcher({url: (FIXTURES / "leiphone_feed.xml").read_bytes()})
+
+    items = await RSSCollector(fetcher).collect(
+        CollectContext(
+            source_url=url,
+            config={"max_items": 20, "exclude_categories": ["机器人", "雷峰早报"]},
+        )
+    )
+
+    assert len(items) == 3
+    titles = {item.title for item in items}
+    assert "机器人公司发布新一代人形机器人" not in titles
+
+
+@pytest.mark.asyncio
+async def test_rss_collector_no_category_filter_when_not_configured() -> None:
+    url = "https://www.leiphone.com/feed"
+    fetcher = FixtureFetcher({url: (FIXTURES / "leiphone_feed.xml").read_bytes()})
+
+    items = await RSSCollector(fetcher).collect(
+        CollectContext(source_url=url, config={"max_items": 20})
+    )
+
+    assert len(items) == 4
+
+
+@pytest.mark.asyncio
+async def test_huxiu_collector_reads_nuxt_data_with_dates_and_stable_links() -> None:
+    url = "https://www.huxiu.com/article/"
+    fetcher = FixtureFetcher({url: (FIXTURES / "huxiu_article.html").read_bytes()})
+
+    items = await HuxiuCollector(fetcher).collect(
+        CollectContext(source_url=url, config={"max_items": 20})
+    )
+
+    assert len(items) == 4
+    assert items[0].title == "国产大模型正式发布新一代推理能力"
+    assert items[0].canonical_url == "https://www.huxiu.com/article/4877051.html"
+    assert items[0].published_at is not None
+    assert items[0].extra["public_payload"] == "__NUXT_DATA__"
+    assert items[0].extra["article_id"] == "4877051"
+    assert items[1].title == "AI 智能体平台开放全新 API"
+    assert items[1].canonical_url == "https://www.huxiu.com/article/4877040.html"
+    assert all(item.published_at is not None for item in items)
+
+
+@pytest.mark.asyncio
+async def test_huxiu_collector_enforces_max_items() -> None:
+    url = "https://www.huxiu.com/article/"
+    fetcher = FixtureFetcher({url: (FIXTURES / "huxiu_article.html").read_bytes()})
+
+    items = await HuxiuCollector(fetcher).collect(
+        CollectContext(source_url=url, config={"max_items": 2})
+    )
+
+    assert len(items) == 2
+
+
+@pytest.mark.asyncio
+async def test_huxiu_collector_handles_missing_nuxt_payload() -> None:
+    url = "https://www.huxiu.com/article/"
+    html = b"<!DOCTYPE html><html><head><title>Empty</title></head><body></body></html>"
+    fetcher = FixtureFetcher({url: html})
+
+    items = await HuxiuCollector(fetcher).collect(
+        CollectContext(source_url=url, config={"max_items": 20})
+    )
+
+    assert items == []
+
+
+@pytest.mark.asyncio
+async def test_huxiu_collector_handles_invalid_json_nuxt_payload() -> None:
+    url = "https://www.huxiu.com/article/"
+    html = b'<script id="__NUXT_DATA__" type="application/json">not json</script>'
+    fetcher = FixtureFetcher({url: html})
+
+    items = await HuxiuCollector(fetcher).collect(
+        CollectContext(source_url=url, config={"max_items": 20})
+    )
+
+    assert items == []
+
+
+@pytest.mark.asyncio
+async def test_ithome_selector_extracts_titles_links_and_dates_with_ai_filter() -> None:
+    url = "https://www.ithome.com/list/ai.html"
+    fetcher = FixtureFetcher({url: (FIXTURES / "ithome_list.html").read_bytes()})
+
+    items = await HTMLListCollector(fetcher).collect(
+        CollectContext(
+            source_url=url,
+            config={
+                "allowed_domains": ["www.ithome.com", "ithome.com"],
+                "filter_selector_items": True,
+                "discovery": {
+                    "mode": "selectors",
+                    "include_text": ["AI", "大模型", "智能体", "模型", "开源"],
+                },
+                "extraction": {
+                    "item_selector": "#list ul.datel li",
+                    "title_selector": "a.t",
+                    "link_selector": "a.t",
+                    "date_selector": "i",
+                },
+            },
+        )
+    )
+
+    assert len(items) >= 2
+    titles = [item.title for item in items]
+    assert "百时美施贵宝采购英伟达最新 AI 计算系统, 加速药物研发" in titles
+    assert "国产大模型平台新增 Agent 编排能力" in titles
+    assert "开源大模型社区发布多项能力基准评测结果" in titles
+    assert "漫威预告复仇者联盟 5 将于年底上映" not in titles
+    assert all(item.published_at is not None for item in items)
+    assert all(
+        item.canonical_url.startswith("https://www.ithome.com/") for item in items
+    )
+    assert items[0].extra["original_time_text"] == "2026-07-21 15:50:05"
+
+
+@pytest.mark.asyncio
+async def test_ithome_selector_respects_max_items() -> None:
+    url = "https://www.ithome.com/list/ai.html"
+    fetcher = FixtureFetcher({url: (FIXTURES / "ithome_list.html").read_bytes()})
+
+    items = await HTMLListCollector(fetcher).collect(
+        CollectContext(
+            source_url=url,
+            config={
+                "allowed_domains": ["www.ithome.com"],
+                "discovery": {"mode": "selectors", "max_items": 2},
+                "extraction": {
+                    "item_selector": "#list ul.datel li",
+                    "title_selector": "a.t",
+                    "link_selector": "a.t",
+                    "date_selector": "i",
+                },
+            },
+        )
+    )
+
+    assert len(items) <= 2

@@ -657,3 +657,124 @@ sources:
     exclude_terms: [融资, 股价, 概念股, IPO, 人物八卦]
     minimum_quality_score: 25
     allow_external_links: false
+
+  - slug: leiphone-ai
+    name: 雷锋网 AI
+    url: https://www.leiphone.com/feed
+    lifecycle_state: candidate
+    source_role: media_discovery
+    source_tier: authoritative_media
+    audience: all
+    crawl_mode: rss
+    review_policy: always_review
+    allowed_primary_types: [industry_signal]
+    homepage_visible: false
+    export_visible: false
+    lookback_days: 30
+    max_items_per_run: 20
+    implementation_status: ready
+    implementation_reason: 直接消费站点官方 RSS Feed，按 category 过滤 AI 相关条目。
+    verified_at: null
+    activation_evidence: null
+    notes: 全站 RSS Feed，通过 include_categories 筛选人工智能/人工智能学术分类；RSS 不含非 AI 详情。
+    collector_name: rss
+    collector_config:
+      max_items: 20
+      include_categories: [人工智能, 人工智能学术]
+    include_terms: [人工智能, 大模型, 智能体, AI]
+    exclude_terms: [股价, 概念股, IPO, 人物八卦]
+    minimum_quality_score: 25
+    allow_external_links: false
+
+  - slug: geekpark-ai
+    name: 极客公园
+    url: https://www.geekpark.net
+    lifecycle_state: candidate
+    source_role: media_discovery
+    source_tier: authoritative_media
+    audience: all
+    crawl_mode: custom
+    review_policy: always_review
+    allowed_primary_types: [industry_signal]
+    homepage_visible: false
+    export_visible: false
+    lookback_days: 30
+    max_items_per_run: 20
+    implementation_status: blocked_by_javascript
+    implementation_reason: 全站强 WAF 阻断；www.geekpark.net 主站 403，/feed /rss /news /ai 等全部 404 或被拦截，m./api. 子域同样被拦，当前无可合规采集通道。
+    verified_at: null
+    activation_evidence: null
+    notes: 2026-07-21 调查确认 WAF 阻断；无可合规采集通道；不新增 Collector；不伪造 fixture；保持 candidate 待未来方案。
+    collector_name: custom
+    collector_config: {}
+    include_terms: [人工智能, 大模型, 智能体, AI]
+    exclude_terms: []
+    minimum_quality_score: 25
+    allow_external_links: false
+
+  - slug: ithome-ai
+    name: IT之家 AI
+    url: https://www.ithome.com/list/ai.html
+    lifecycle_state: candidate
+    source_role: media_discovery
+    source_tier: authoritative_media
+    audience: all
+    crawl_mode: html_list
+    review_policy: always_review
+    allowed_primary_types: [industry_signal]
+    homepage_visible: false
+    export_visible: false
+    lookback_days: 30
+    max_items_per_run: 20
+    implementation_status: ready
+    implementation_reason: SSR HTML 列表页已验证 200；selector 提取标题、日期、详情链接；来源层 include 过滤 AI 内容。
+    verified_at: null
+    activation_evidence: null
+    notes: 列表页为全站滚动新闻，AI 内容通过 include_terms 和 discovery.include_text 在来源层过滤；日期格式 YYYY-MM-DD HH:MM:SS。
+    collector_name: html_list
+    collector_config:
+      allowed_domains: [www.ithome.com, ithome.com]
+      filter_selector_items: true
+      discovery:
+        mode: selectors
+        max_pages: 1
+        max_depth: 0
+        max_items: 20
+        include_text: [人工智能, AI, 大模型, 智能体, Agent, 模型, 算力, 开源]
+        exclude_text: [漫威, 手机, 汽车, 家电, 游戏, Windows]
+        exclude_url_patterns: [/rss/, /tag/, /search/, /user/, /login]
+      extraction:
+        item_selector: "#list ul.datel li"
+        title_selector: a.t
+        link_selector: a.t
+        date_selector: i
+    include_terms: [人工智能, 大模型, 智能体, AI]
+    exclude_terms: [股价, 概念股, IPO, 人物八卦]
+    minimum_quality_score: 25
+    allow_external_links: false
+
+  - slug: huxiu-ai
+    name: 虎嗅 AI
+    url: https://www.huxiu.com/article/
+    lifecycle_state: candidate
+    source_role: media_discovery
+    source_tier: authoritative_media
+    audience: all
+    crawl_mode: custom
+    review_policy: always_review
+    allowed_primary_types: [industry_signal]
+    homepage_visible: false
+    export_visible: false
+    lookback_days: 30
+    max_items_per_run: 20
+    implementation_status: ready
+    implementation_reason: 专用 HuxiuCollector 解析页面内嵌 __NUXT_DATA__ 获取 datalist，提取 aid/title/url/dateline。
+    verified_at: null
+    activation_evidence: null
+    notes: 全站文章列表无 AI 专属频道；来源层 include_terms 过滤 AI/大模型/智能体内容；排除 /channel/ /tag/ /member/ /moment/ /video/ /club/ 等非文章链接；__NUXT_DATA__ 结构升级风险中。
+    collector_name: huxiu
+    collector_config: {max_items: 20}
+    include_terms: [人工智能, 大模型, 智能体, AI, Agent, 模型]
+    exclude_terms: [股价, 概念股, IPO, 人物八卦]
+    minimum_quality_score: 25
+    allow_external_links: false

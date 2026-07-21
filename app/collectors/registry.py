@@ -6,6 +6,7 @@ from app.collectors.cls_topic import CLSTopicCollector
 from app.collectors.github_release import GitHubReleaseCollector
 from app.collectors.html_list import HTMLListCollector
 from app.collectors.hubs import CaseHubCollector, DocumentHubCollector
+from app.collectors.huxiu import HuxiuCollector
 from app.collectors.infoq import InfoQAICollector
 from app.collectors.minimax_news import MiniMaxNewsCollector
 from app.collectors.public_json import PublicJsonCollector
@@ -63,4 +64,5 @@ def default_collector_registry() -> CollectorRegistry:
     registry.register(MiniMaxNewsCollector.name, MiniMaxNewsCollector)
     registry.register(PublicJsonCollector.name, PublicJsonCollector)
     registry.register(InfoQAICollector.name, InfoQAICollector)
+    registry.register(HuxiuCollector.name, HuxiuCollector)
     return registry

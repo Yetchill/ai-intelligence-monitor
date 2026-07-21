@@ -850,18 +850,18 @@ def test_seed_sources_is_idempotent_and_does_not_overwrite_existing(database: Da
     service = SourceSeedService(lambda: RepositoryUnitOfWork(database))
 
     first_result = service.seed()
-    assert (first_result.created, first_result.promoted, first_result.existing) == (22, 0, 0)
+    assert (first_result.created, first_result.promoted, first_result.existing) == (26, 0, 0)
     with RepositoryUnitOfWork(database) as uow:
         nda = uow.sources.get_by_slug("nda-news")
         assert nda is not None
         nda.name = "用户保留名称"
         nda.enabled = False
     second_result = service.seed()
-    assert (second_result.created, second_result.existing, second_result.conflicts) == (0, 21, 1)
+    assert (second_result.created, second_result.existing, second_result.conflicts) == (0, 25, 1)
     with RepositoryUnitOfWork(database) as uow:
         sources = uow.sources.list()
         nda = uow.sources.get_by_slug("nda-news")
-    assert len(sources) == 22
+    assert len(sources) == 26
     assert nda is not None
     assert nda.name == "用户保留名称"
     assert nda.enabled is False
@@ -876,10 +876,10 @@ def test_seed_does_not_duplicate_equivalent_user_url(database: Database) -> None
     service = SourceSeedService(lambda: RepositoryUnitOfWork(database))
 
     result = service.seed()
-    assert (result.created, result.existing, result.conflicts) == (22, 0, 0)
+    assert (result.created, result.existing, result.conflicts) == (26, 0, 0)
     with RepositoryUnitOfWork(database) as uow:
         sources = uow.sources.list()
-    assert len(sources) == 23
+    assert len(sources) == 27
     assert sum(source.name == "用户来源" for source in sources) == 1
     assert next(source for source in sources if source.name == "用户来源").enabled is False
 
@@ -905,12 +905,12 @@ def test_seed_sources_cli_is_idempotent(
     verification = Database(database_url)
     try:
         with RepositoryUnitOfWork(verification) as uow:
-            assert len(uow.sources.list()) == 22
+            assert len(uow.sources.list()) == 26
     finally:
         verification.dispose()
     output = capsys.readouterr().out
-    assert "created=22 updated=0 existing=0" in output
-    assert "created=0 updated=0 existing=22" in output
+    assert "created=26 updated=0 existing=0" in output
+    assert "created=0 updated=0 existing=26" in output
 
 
 def test_sources_page_can_idempotently_initialize_formal_sources(
@@ -920,14 +920,14 @@ def test_sources_page_can_idempotently_initialize_formal_sources(
     first = client.post("/sources/seed-formal")
     second = client.post("/sources/seed-formal")
 
-    assert "当前数据库只有 0 / 22 个目录来源" in before.text
+    assert "当前数据库只有 0 / 26 个目录来源" in before.text
     assert first.status_code == 200
-    assert "新建 22" in first.text
+    assert "新建 26" in first.text
     assert second.status_code == 200
     assert "新建 0" in second.text
     with RepositoryUnitOfWork(database) as uow:
         sources = uow.sources.list()
-    assert len(sources) == 22
+    assert len(sources) == 26
     assert all(source.source_kind is SourceKind.FORMAL for source in sources)
 
 
@@ -947,7 +947,7 @@ def test_seed_does_not_promote_modified_legacy_aiia(database: Database) -> None:
 
     result = SourceSeedService(lambda: RepositoryUnitOfWork(database)).seed()
 
-    assert (result.created, result.promoted, result.conflicts) == (21, 0, 1)
+    assert (result.created, result.promoted, result.conflicts) == (25, 0, 1)
     with RepositoryUnitOfWork(database) as uow:
         stored = uow.sources.get(legacy.id)
     assert stored is not None

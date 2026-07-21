@@ -221,14 +221,14 @@ def test_stage_seven_database_upgrade_and_formal_seed_preserve_history(
         seed = SourceSeedService(lambda: RepositoryUnitOfWork(upgraded))
         first = seed.seed()
         second = seed.seed()
-        assert (first.created, first.promoted, first.conflicts) == (21, 0, 1)
-        assert (second.created, second.promoted, second.existing, second.conflicts) == (0, 0, 21, 1)
+        assert (first.created, first.promoted, first.conflicts) == (25, 0, 1)
+        assert (second.created, second.promoted, second.existing, second.conflicts) == (0, 0, 25, 1)
         with RepositoryUnitOfWork(upgraded) as uow:
             final_sources = uow.sources.list()
             aiia = uow.sources.get_by_start_url("https://www.aiiaorg.cn/")
             qwen = uow.sources.get(3)
-        assert len(final_sources) == 24
-        assert sum(source.source_kind is SourceKind.FORMAL for source in final_sources) == 21
+        assert len(final_sources) == 28
+        assert sum(source.source_kind is SourceKind.FORMAL for source in final_sources) == 25
         assert aiia is not None and aiia.allow_external_links is False
         assert aiia.enabled is False
         assert qwen is not None

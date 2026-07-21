@@ -26,6 +26,9 @@ class RSSCollector:
         if not isinstance(entries_value, Sequence) or isinstance(entries_value, (str, bytes)):
             return []
 
+        include_categories = _strings(context.config.get("include_categories"))
+        exclude_categories = _strings(context.config.get("exclude_categories"))
+
         items: list[CollectedItem] = []
         seen_urls: set[str] = set()
         max_items = max(1, min(_integer(context.config.get("max_items"), 1000), 10_000))
@@ -44,6 +47,14 @@ class RSSCollector:
                 plain_title = _plain_text(title)
                 if not plain_title:
                     continue
+                if include_categories or exclude_categories:
+                    entry_categories = _entry_categories(entry)
+                    if include_categories and not any(
+                        cat in include_categories for cat in entry_categories
+                    ):
+                        continue
+                    if any(cat in exclude_categories for cat in entry_categories):
+                        continue
                 canonical_url = canonicalize_url(link, base_url=response.url)
                 if canonical_url is None or canonical_url in seen_urls:
                     continue
@@ -86,6 +97,29 @@ def _plain_text(value: str | None) -> str | None:
         return None
     text = BeautifulSoup(value, "lxml").get_text(" ", strip=True)
     return " ".join(text.split()) or None
+
+
+def _entry_categories(entry: Mapping[str, object]) -> set[str]:
+    categories: set[str] = set()
+    tags_value = entry.get("tags")
+    if isinstance(tags_value, Sequence) and not isinstance(tags_value, (str, bytes)):
+        for tag in tags_value:  # pyright: ignore[reportUnknownVariableType]
+            if isinstance(tag, Mapping):
+                cat = _string(cast(Mapping[str, object], tag).get("term"))
+                if cat:
+                    categories.add(cat)
+    cat_value = entry.get("category")
+    if isinstance(cat_value, str) and cat_value.strip():
+        categories.add(cat_value.strip())
+    return categories
+
+
+def _strings(value: object) -> frozenset[str]:
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return frozenset(
+            item.strip() for item in value if isinstance(item, str) and item.strip()  # pyright: ignore[reportUnknownVariableType]
+        )
+    return frozenset()
 
 
 def _integer(value: object, default: int) -> int:
