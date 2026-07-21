@@ -1,0 +1,739 @@
+samples:
+- id: 1
+  source: cac-policy-regulations
+  title: 专家解读｜建立健全数据安全风险评估制度 筑牢国家数据安全屏障
+  url: https://www.cac.gov.cn/2026-06/18/c_1783525613011453.htm
+  date: '2026-06-18T00:00:00+00:00'
+  primary_type: unclassified
+  expected: policy_industry
+- id: 2
+  source: cac-policy-regulations
+  title: 专家解读｜高质量开展网络数据安全风险评估 推动网络数据安全治理长效发展
+  url: https://www.cac.gov.cn/2026-06/18/c_1783525612886783.htm
+  date: '2026-06-18T00:00:00+00:00'
+  primary_type: policy_standard
+  expected: policy_industry
+- id: 3
+  source: cac-policy-regulations
+  title: 专家解读｜完善网络数据安全风险评估制度 提升网络数据安全治理能力
+  url: https://www.cac.gov.cn/2026-06/18/c_1783525612489633.htm
+  date: '2026-06-18T00:00:00+00:00'
+  primary_type: policy_standard
+  expected: policy_industry
+- id: 4
+  source: cac-policy-regulations
+  title: 专家解读｜以风险评估为制度牵引 构建数据安全治理新格局
+  url: https://www.cac.gov.cn/2026-06/18/c_1783525612421434.htm
+  date: '2026-06-18T00:00:00+00:00'
+  primary_type: policy_standard
+  expected: policy_industry
+- id: 5
+  source: cac-policy-regulations
+  title: 网络数据安全风险评估办法
+  url: https://www.cac.gov.cn/2026-06/18/c_1783525609815499.htm
+  date: '2026-06-18T00:00:00+00:00'
+  primary_type: unclassified
+  expected: policy_industry
+- id: 6
+  source: cac-policy-regulations
+  title: 以“小快灵”立法规范人工智能拟人化互动服务
+  url: https://www.cac.gov.cn/2026-06/03/c_1782142434783056.htm
+  date: '2026-06-03T00:00:00+00:00'
+  primary_type: unclassified
+  expected: policy_industry
+- id: 7
+  source: cac-policy-regulations
+  title: 专家解读｜强化伦理安全标准 引导人工智能规范发展
+  url: https://www.cac.gov.cn/2026-05/22/c_1781191243097137.htm
+  date: '2026-05-22T00:00:00+00:00'
+  primary_type: policy_standard
+  expected: policy_industry
+- id: 8
+  source: cac-policy-regulations
+  title: 专家解读｜推动人工智能创新发展行稳致远 筑牢伦理安全治理屏障
+  url: https://www.cac.gov.cn/2026-05/22/c_1781191243353200.htm
+  date: '2026-05-22T00:00:00+00:00'
+  primary_type: policy_standard
+  expected: policy_industry
+- id: 9
+  source: cac-policy-regulations
+  title: 一图读懂《智能体规范应用与创新发展实施意见》
+  url: https://www.cac.gov.cn/2026-05/08/c_1779979790489421.htm
+  date: '2026-05-08T00:00:00+00:00'
+  primary_type: policy_standard
+  expected: policy_industry
+- id: 10
+  source: cac-policy-regulations
+  title: 专家解读｜为智能体发展树立规范、留足空间
+  url: https://www.cac.gov.cn/2026-05/08/c_1779979790609763.htm
+  date: '2026-05-08T00:00:00+00:00'
+  primary_type: policy_standard
+  expected: policy_industry
+- id: 11
+  source: cac-policy-regulations
+  title: 专家解读｜统筹高质量发展与高水平安全：从《智能体规范应用与创新发展实施意见》看AI产业新图景
+  url: https://www.cac.gov.cn/2026-05/08/c_1779979790736565.htm
+  date: '2026-05-08T00:00:00+00:00'
+  primary_type: policy_standard
+  expected: policy_industry
+- id: 12
+  source: cac-policy-regulations
+  title: 专家解读｜顺应新一轮科技革命与产业变革趋势，推动智能体高质量发展
+  url: https://www.cac.gov.cn/2026-05/08/c_1779983775421699.htm
+  date: '2026-05-08T00:00:00+00:00'
+  primary_type: unclassified
+  expected: policy_industry
+- id: 13
+  source: isc-notices
+  title: 标准丨关于发布《医疗健康行业智能体应用技术要求：呼吸内科AI医生》等11项团体标准立项的公告
+  url: https://www.isc.org.cn/article/29767785043193856.html
+  date: '2026-07-21T10:05:00+00:00'
+  primary_type: policy_standard
+  expected: policy_industry
+- id: 14
+  source: isc-notices
+  title: 通知丨关于开展2026年度行业智能体应用实践案例征集活动的通知
+  url: https://www.isc.org.cn/article/29679389123145728.html
+  date: '2026-07-13T14:41:00+00:00'
+  primary_type: application_opportunity
+  expected: solicitation
+- id: 15
+  source: isc-notices
+  title: 标准丨关于《数字安全大模型应用能力成熟度评估规范》等2项团体标准公开征求意见的通知
+  url: https://www.isc.org.cn/article/29518947807391744.html
+  date: '2026-06-29T10:44:00+00:00'
+  primary_type: policy_standard
+  expected: policy_industry
+- id: 16
+  source: baidu-cloud-news
+  title: 09 / 07 月 2026 AI游戏用百度智能云：全栈AI基础设施 护航数十亿玩家奔赴热爱 百度智能云已成为超半数主流游戏厂商落地大模型之选，助力100+游戏企业、支撑1000+游戏进行AI创新，确立了“AI游戏第一云”的行业身位。
+    查看详情
+  url: https://cloud.baidu.com/news/news_bb948e35-c9f0-41e9-861b-0f3bceade42c
+  date: null
+  primary_type: unclassified
+  expected: unclassified
+- id: 17
+  source: baidu-cloud-news
+  title: 23 / 01 月 2026 正式发布！文心5.0上线百度千帆 1月22日，百度发布并上线原生全模态大模型文心5.0正式版。 查看详情
+  url: https://cloud.baidu.com/news/news_eacd5e1a-b6ad-4874-b920-15390d26e656
+  date: null
+  primary_type: product_update
+  expected: model_technology
+- id: 18
+  source: baidu-cloud-news
+  title: 07 / 01 月 2026 百度百舸面向百度天池超节点的大模型推理引擎优化，持续降低昆仑芯 XPU 的 token 成本 百度百舸针对百度天池超节点（32
+    张昆仑芯 XPU）优化大模型推理引擎，通过 PD 分离架构、并行策略、算子与通信优化等技术，在满足 SLA 约束下，显著提升推理吞吐量，降低 Token 成本，验证软硬协同优势，支撑大模型规模化落地
+    查看详情
+  url: https://cloud.baidu.com/news/news_3fbe0fd2-02d7-4a8d-ab71-c101039c3d11
+  date: null
+  primary_type: unclassified
+  expected: model_technology
+- id: 19
+  source: baidu-cloud-news
+  title: 29 / 12 月 2025 昆仑芯超节点创新设计：1U4卡高密算力，无缝适配各类机房环境 百度智能云昆仑芯超节点，1U4 卡高密算力 + 混合散热设计，卡间带宽提升
+    8 倍，支持万卡集群部署，适配风冷 / 液冷机房，为大模型训练推理提供高效易运维的 AI 基础设施。 查看详情
+  url: https://cloud.baidu.com/news/news_cdd5d1d3-4510-47a2-a806-55a795a50167
+  date: null
+  primary_type: unclassified
+  expected: model_technology
+- id: 20
+  source: baidu-cloud-news
+  title: 23 / 12 月 2025 国内第一！文心5.0 Preview登榜LMArena 12月23日，LMArena大模型竞技场发布最新排名，文心新模型ERNIE-5.0-Preview-1203以1451分登上LMArena文本榜，排名中国第一。
+    查看详情
+  url: https://cloud.baidu.com/news/news_f571211f-6b51-4cbc-b5ca-57cce8f66337
+  date: null
+  primary_type: product_update
+  expected: model_technology
+- id: 21
+  source: deepseek-api-updates
+  title: DeepSeek-V4：DeepSeek API 已支持 V4-Pro 与 V4-Flash，支持 OpenAI ChatCompletions
+    接口与 Anthropic 接口
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=2da858f53b21390286e8
+  date: '2026-04-24T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 22
+  source: deepseek-api-updates
+  title: DeepSeek-V3.2：deepseek-chat 和 deepseek-reasoner 都已升级为 DeepSeek-V3.2. deepseek-chat
+    对应 DeepSeek-V3.2 的 非思考模式 deepse
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=6063133bd18ba1aebd4d
+  date: '2025-12-01T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 23
+  source: deepseek-api-updates
+  title: DeepSeek-V3.2-Speciale：我们非正式部署了 DeepSeek-V3.2-Speciale 的 API 服务，API 用户可以通过设置
+    base_url="https://api.deepseek.com/v3.2_specia
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=e0fc04ec426cabadd7b5
+  date: '2025-12-01T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 24
+  source: deepseek-api-updates
+  title: DeepSeek-V3.2-Exp：deepseek-chat 和 deepseek-reasoner 都已经升级为 DeepSeek-V3.2-Exp
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=43a144e02dff866b86a0
+  date: '2025-09-29T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 25
+  source: deepseek-api-updates
+  title: DeepSeek-V3.1-Terminus：deepseek-chat 和 deepseek-reasoner 都已经升级为 DeepSeek-V3.1-Terminus
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=ad2c61b81ab9c6aa0975
+  date: '2025-09-22T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 26
+  source: deepseek-api-updates
+  title: DeepSeek-V3.1：deepseek-chat 和 deepseek-reasoner 都已经升级为 DeepSeek-V3.1
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=37acbcf66fbf7e3ef32d
+  date: '2025-08-21T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 27
+  source: deepseek-api-updates
+  title: 'deepseek-reasoner：deepseek-reasoner 模型升级为 DeepSeek-R1-0528： 推理能力增强 基准测试提升显著（Pass@1）
+    AIME 2025: 70.0→ 87.5 (+17.5) GPQA'
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=9ec4cd966512c44985d8
+  date: '2025-05-28T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 28
+  source: deepseek-api-updates
+  title: 'deepseek-chat：deepseek-chat 模型升级为 DeepSeek-V3-0324： 推理能力增强 基准测试提升显著 MMLU-Pro:
+    75.9 → 81.2 (+5.3) GPQA: 59.1 → 68.4'
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=70bcadfaff824eefec34
+  date: '2025-03-24T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 29
+  source: deepseek-api-updates
+  title: deepseek-reasoner：deepseek-reasoner 是我们的新模型 DeepSeek-R1. 可以通过指定 model=deepseek-reasoner
+    调用
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=733832de998e85547553
+  date: '2025-01-20T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 30
+  source: deepseek-api-updates
+  title: deepseek-chat：deepseek-chat 模型升级为 DeepSeek-V3，接口不变，可以通过指定 model=deepseek-chat
+    调用
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=63c5233327882a3825ef
+  date: '2024-12-26T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 31
+  source: deepseek-api-updates
+  title: deepseek-chat：deepseek-chat 模型升级为 DeepSeek-V2.5-1210，模型各项能力提升，相关基准测试： 数学能力：在
+    MATH-500 基准测试中的表现从 74.8% 提升至 82.8% 代码
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=c28f1d718969c606ffbb
+  date: '2024-12-10T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 32
+  source: deepseek-api-updates
+  title: deepseek-coder & deepseek-chat 升级为 DeepSeek V2.5 模型
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=ad8002b2b705615a02f9
+  date: '2024-09-05T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 33
+  source: deepseek-api-updates
+  title: API 上线硬盘缓存技术
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=05541e641884d64bc918
+  date: '2024-08-02T00:00:00+00:00'
+  primary_type: product_update
+  expected: agent_product
+- id: 34
+  source: deepseek-api-updates
+  title: API 接口更新
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=3289ac427ab3bf0303fb
+  date: '2024-07-25T00:00:00+00:00'
+  primary_type: product_update
+  expected: agent_product
+- id: 35
+  source: deepseek-api-updates
+  title: deepseek-coder：deepseek-coder 模型升级为 DeepSeek-Coder-V2-0724
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=87e4185e16c49fc68109
+  date: '2024-07-24T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 36
+  source: deepseek-api-updates
+  title: deepseek-chat：deepseek-chat 模型升级为 DeepSeek-V2-0628，模型推理能力提升，相关基准测试： 代码，HumanEval
+    Pass@1 79.88% -> 84.76% 数学，MATH A
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=4f6cc296837004be0357
+  date: '2024-06-28T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 37
+  source: deepseek-api-updates
+  title: deepseek-coder：deepseek-coder 模型升级为 DeepSeek-Coder-V2-0614，代码能力显著提升，在代码生成、代码理解、代码修复和代码补全上达到了
+    GPT-4-Turbo-0409 的水平，并
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=d1fb34512ecc4e6bca5b
+  date: '2024-06-14T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 38
+  source: deepseek-api-updates
+  title: deepseek-chat：deepseek-chat 模型升级为 DeepSeek-V2-0517，模型在指令跟随方面的性能得到了显著提升，IFEval
+    Benchmark Prompt-Level 准确率从 63.9% 跃升
+  url: https://api-docs.deepseek.com/zh-cn/updates?entry=c3dd846adf138f889dd6
+  date: '2024-05-17T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 39
+  source: zhipu-research
+  title: GLM-5.2上线并开源：专注Coding与长程任务
+  url: https://www.zhipuai.cn/zh/research/161
+  date: '2026-06-16T00:00:00+00:00'
+  primary_type: unclassified
+  expected: model_technology
+- id: 40
+  source: zhipu-research
+  title: 下一代大模型推理网络架构：ZCube如何有效破解网络瓶颈？
+  url: https://www.zhipuai.cn/zh/research/160
+  date: '2026-05-20T00:00:00+00:00'
+  primary_type: unclassified
+  expected: model_technology
+- id: 41
+  source: zhipu-research
+  title: GLM-5.1开源：一个独立工作8小时的模型
+  url: https://www.zhipuai.cn/zh/research/69e5b06bdca8453370f68fc9
+  date: '2026-04-07T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 42
+  source: zhipu-research
+  title: GLM-5V-Turbo发布：多模态Coding基座模型
+  url: https://www.zhipuai.cn/zh/research/69d74f9f855efeeda6ab903c
+  date: '2026-04-01T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 43
+  source: zhipu-research
+  title: GLM-5-Turbo：龙虾增强的基座模型
+  url: https://www.zhipuai.cn/zh/research/69cf9827f21c2c2005c82cab
+  date: '2026-03-15T00:00:00+00:00'
+  primary_type: unclassified
+  expected: model_technology
+- id: 44
+  source: zhipu-research
+  title: GLM-5技术报告
+  url: https://www.zhipuai.cn/zh/research/69ce7e1af21c2c2005c82c71
+  date: '2026-02-21T00:00:00+00:00'
+  primary_type: unclassified
+  expected: model_technology
+- id: 45
+  source: zhipu-research
+  title: GLM-5开源：从代码到工程，Agentic Engineering时代最好的开源模型
+  url: https://www.zhipuai.cn/zh/research/154
+  date: '2026-02-11T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 46
+  source: zhipu-research
+  title: GLM-OCR发布：性能SOTA，搞定复杂文档
+  url: https://www.zhipuai.cn/zh/research/150
+  date: '2026-02-02T00:00:00+00:00'
+  primary_type: unclassified
+  expected: model_technology
+- id: 47
+  source: zhipu-research
+  title: GLM-4.7-Flash开源、免费
+  url: https://www.zhipuai.cn/zh/research/69770e8421f774291c330981
+  date: '2026-01-19T00:00:00+00:00'
+  primary_type: unclassified
+  expected: model_technology
+- id: 48
+  source: zhipu-research
+  title: 智谱联合华为开源国产芯片训练的多模态SOTA模型
+  url: https://www.zhipuai.cn/zh/research/69f2c196dd44f4ad723502f4
+  date: '2026-01-13T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 49
+  source: zhipu-research
+  title: GLM-TTS：基于多奖励融合强化学习，实现工业级语音合成
+  url: https://www.zhipuai.cn/zh/research/6970a50424661d578cb51de4
+  date: '2025-12-10T00:00:00+00:00'
+  primary_type: unclassified
+  expected: model_technology
+- id: 50
+  source: zhipu-research
+  title: GLM-ASR-Nano：面向真实世界的高鲁棒性语音识别
+  url: https://www.zhipuai.cn/zh/research/69816c1c9ec0ba0244e03f4c
+  date: '2025-12-09T00:00:00+00:00'
+  primary_type: unclassified
+  expected: model_technology
+- id: 51
+  source: zhipu-research
+  title: AutoGLM开源：每台手机，都可以成为AI手机
+  url: https://www.zhipuai.cn/zh/research/6970a0e124661d578cb51de1
+  date: '2025-12-08T00:00:00+00:00'
+  primary_type: unclassified
+  expected: agent_product
+- id: 52
+  source: zhipu-research
+  title: GLM-4.6V：支持原生工具调用的开源多模态模型
+  url: https://www.zhipuai.cn/zh/research/144
+  date: '2025-12-07T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 53
+  source: baidu-qianfan-model-updates
+  title: Kimi-K2.5 — 退役
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=45eee86ea60362e82860
+  date: '2026-07-09T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 54
+  source: baidu-qianfan-model-updates
+  title: MiniMax-M2.5 — 退役
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=f04aa30115c1a63dee48
+  date: '2026-07-09T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 55
+  source: baidu-qianfan-model-updates
+  title: GLM-5.2 — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=8ca5768f97550dd7b902
+  date: '2026-06-17T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 56
+  source: baidu-qianfan-model-updates
+  title: DeepSeek-V4-Pro — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=ce5b1509c3e611be9bda
+  date: '2026-04-24T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 57
+  source: baidu-qianfan-model-updates
+  title: DeepSeek-V4-Flash — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=7409cc76fe9526bc245c
+  date: '2026-04-24T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 58
+  source: baidu-qianfan-model-updates
+  title: GLM-5.1 — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=6ccbed9a8817e1d8194f
+  date: '2026-04-08T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 59
+  source: baidu-qianfan-model-updates
+  title: GLM-5 — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=c940598f9b2379008a91
+  date: '2026-02-12T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 60
+  source: baidu-qianfan-model-updates
+  title: Kimi-K2.5 — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=5084d10833bd022b7b88
+  date: '2026-02-12T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 61
+  source: baidu-qianfan-model-updates
+  title: MiniMax-M2.1 — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=38d77fc450ab354972ba
+  date: '2026-02-12T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 62
+  source: baidu-qianfan-model-updates
+  title: Qianfan-OCR-Fast — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=a67daddfa39d80c4ea10
+  date: '2026-02-10T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 63
+  source: baidu-qianfan-model-updates
+  title: GLM-4.7 — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=46ddfe4ecf31af52b384
+  date: '2026-02-10T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 64
+  source: baidu-qianfan-model-updates
+  title: PP-StructureV3 — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=978de5ec42b418704fe2
+  date: '2025-12-12T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 65
+  source: baidu-qianfan-model-updates
+  title: PaddleOCR-VL — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=257600e078dda381599a
+  date: '2025-11-28T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 66
+  source: baidu-qianfan-model-updates
+  title: DeepSeek-OCR — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=8d3a967d1be454a2121e
+  date: '2025-11-21T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 67
+  source: baidu-qianfan-model-updates
+  title: ERNIE 5.0 — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=5c84b170908ec2beb7dc
+  date: '2025-11-13T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 68
+  source: baidu-qianfan-model-updates
+  title: Qwen3-VL — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=c75bab3366d990d86153
+  date: '2025-10-30T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 69
+  source: baidu-qianfan-model-updates
+  title: Qwen3-VL — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=b48b0f89ed7c378bf9fb
+  date: '2025-10-23T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 70
+  source: baidu-qianfan-model-updates
+  title: Qianfan-PublicOpinion-Classification — 退役
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=fdb87f7ab98c56262fea
+  date: '2025-10-21T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 71
+  source: baidu-qianfan-model-updates
+  title: DeepSeek-R1-Distill系列 — 退役
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=cdaf2dde1dca4d54774a
+  date: '2025-10-21T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 72
+  source: baidu-qianfan-model-updates
+  title: Qwen3-VL — 正式发布
+  url: https://cloud.baidu.com/doc/qianfan/s/Kmh4stnjp?entry=32a820022dfa6d6a72d3
+  date: '2025-10-16T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 73
+  source: kimi-platform-changelog
+  title: Kimi K2 Think 模型及其 turbo 版本模型正式发布
+  url: https://platform.kimi.com/blog/posts/changelog?entry=d6f2ac9bb7445f6c80e1
+  date: '2025-11-06T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 74
+  source: kimi-platform-changelog
+  title: kimi-k2-0905-preview 模型上线发布
+  url: https://platform.kimi.com/blog/posts/changelog?entry=d89c4578b3bea186b6f2
+  date: '2025-09-05T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 75
+  source: kimi-platform-changelog
+  title: Kimi Playground 正式发布
+  url: https://platform.kimi.com/blog/posts/changelog?entry=dd64420f481261ad272b
+  date: '2025-07-17T00:00:00+00:00'
+  primary_type: product_update
+  expected: agent_product
+- id: 76
+  source: kimi-platform-changelog
+  title: kimi-latest 模型上线
+  url: https://platform.kimi.com/blog/posts/changelog?entry=2c0eadc2bbbab3bd5698
+  date: '2025-02-17T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 77
+  source: kimi-platform-changelog
+  title: moonshot-v1-vision-preview 模型上线
+  url: https://platform.kimi.com/blog/posts/changelog?entry=867bb46ebb76edada10d
+  date: '2025-01-13T00:00:00+00:00'
+  primary_type: product_update
+  expected: model_technology
+- id: 78
+  source: kimi-platform-changelog
+  title: Context Caching 功能已放开给全量用户
+  url: https://platform.kimi.com/blog/posts/changelog?entry=4495b48010d9c7eab25f
+  date: '2024-11-04T00:00:00+00:00'
+  primary_type: unclassified
+  expected: agent_product
+- id: 79
+  source: kimi-platform-changelog
+  title: 上线联网搜索功能
+  url: https://platform.kimi.com/blog/posts/changelog?entry=d8b07773d988d5b928ae
+  date: '2024-09-30T00:00:00+00:00'
+  primary_type: unclassified
+  expected: agent_product
+- id: 80
+  source: kimi-platform-changelog
+  title: Kimi 企业级 API 发布
+  url: https://platform.kimi.com/blog/posts/changelog?entry=9d6ef0b82c704898044c
+  date: '2024-08-28T00:00:00+00:00'
+  primary_type: product_update
+  expected: agent_product
+- id: 81
+  source: cls-ai-subject
+  title: OpenAI广告收入被过分高估？最新分析：只有创造历史才能达成目标
+  url: https://www.cls.cn/detail/2432493
+  date: '2026-07-21T07:36:36+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 82
+  source: cls-ai-subject
+  title: 瑞银：历史级别抛售后 建议逐步重建人工智能与半导体股票头寸
+  url: https://www.cls.cn/detail/2432471
+  date: '2026-07-21T06:55:30+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 83
+  source: cls-ai-subject
+  title: 月之暗面黄震昕：用户需求远超预期 正通过模型效能优化、算力补充缓解资源压力
+  url: https://www.cls.cn/detail/2432463
+  date: '2026-07-21T06:51:49+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 84
+  source: cls-ai-subject
+  title: 申真谞决胜局战胜围棋AI 逆转赢得人机大战
+  url: https://www.cls.cn/detail/2432442
+  date: '2026-07-21T06:39:19+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 85
+  source: cls-ai-subject
+  title: 月之暗面黄震昕：B端收入中API调用占比达70% 已形成可持续的正向循环
+  url: https://www.cls.cn/detail/2432426
+  date: '2026-07-21T06:33:38+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 86
+  source: cls-ai-subject
+  title: 国务院国资委：培育开放更多标志性场景 牵引带动模型迭代、算力升级
+  url: https://www.cls.cn/detail/2432417
+  date: '2026-07-21T06:24:42+00:00'
+  primary_type: industry_signal
+  expected: policy_industry
+- id: 87
+  source: cls-ai-subject
+  title: 锁定万亿订单就能躺赚？这可能是AI产业链条上最大的“伪命题”！
+  url: https://www.cls.cn/detail/2432387
+  date: '2026-07-21T06:14:45+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 88
+  source: cls-ai-subject
+  title: 马斯克称将超越Kimi 月之暗面：欢迎一起掰一掰手腕
+  url: https://www.cls.cn/detail/2432391
+  date: '2026-07-21T06:07:52+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 89
+  source: cls-ai-subject
+  title: 阿里云函数计算云沙箱全新计费模式上线
+  url: https://www.cls.cn/detail/2432373
+  date: '2026-07-21T05:52:59+00:00'
+  primary_type: industry_signal
+  expected: agent_product
+- id: 90
+  source: cls-ai-subject
+  title: 机构：2026年全球芯片设备销售额有望增长23.2% 到2028年达2295亿美元
+  url: https://www.cls.cn/detail/2432371
+  date: '2026-07-21T05:50:58+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 91
+  source: cls-ai-subject
+  title: AI超级周期持续爆发！韩国7月上中旬半导体出口同比增1.8倍
+  url: https://www.cls.cn/detail/2432329
+  date: '2026-07-21T05:26:23+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 92
+  source: cls-ai-subject
+  title: 摩根大通：下半年美股或涨幅有限 四大风险恐扰乱市场
+  url: https://www.cls.cn/detail/2432259
+  date: '2026-07-21T03:42:10+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 93
+  source: cls-ai-subject
+  title: 抛售已近尾声？瑞银喊话：逢低买入AI与半导体股时机已到
+  url: https://www.cls.cn/detail/2432258
+  date: '2026-07-21T03:39:37+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 94
+  source: cls-ai-subject
+  title: 财联社7月21日电，港股智谱持续走高现涨超23%，消息面上，智谱落地1GW级国产AI算力数据中心，完成收购中科加禾。
+  url: https://www.cls.cn/detail/2432237
+  date: '2026-07-21T03:17:56+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 95
+  source: cls-ai-subject
+  title: 协鑫能科等投资成立元极智算科技公司
+  url: https://www.cls.cn/detail/2432187
+  date: '2026-07-21T02:52:11+00:00'
+  primary_type: industry_signal
+  expected: unclassified
+- id: 96
+  source: qbitai
+  title: 不同模型厂同一家Agentic Infra，AGI时代的地基终于浮出水面
+  url: https://www.qbitai.com/2026/07/455805.html
+  date: '2026-07-20T10:33:23+00:00'
+  primary_type: industry_signal
+  expected: model_technology
+- id: 97
+  source: qbitai
+  title: 当AI进入最依赖“人”的行业：一家四线城市康复机构利润增长40%
+  url: https://www.qbitai.com/2026/07/455791.html
+  date: '2026-07-20T09:54:33+00:00'
+  primary_type: industry_signal
+  expected: enterprise_case
+- id: 98
+  source: qbitai
+  title: 全球首发技术路线+全域联盟双轮破局，AI for ADANES释放先进核能新质生产力
+  url: https://www.qbitai.com/2026/07/455729.html
+  date: '2026-07-20T09:41:49+00:00'
+  primary_type: industry_signal
+  expected: enterprise_case
+- id: 99
+  source: qbitai
+  title: 启鸣达人首发《世界模型驱动的教育AGI白皮书》| WAIC 2026
+  url: https://www.qbitai.com/2026/07/455730.html
+  date: '2026-07-20T09:21:30+00:00'
+  primary_type: industry_signal
+  expected: policy_industry
+- id: 100
+  source: qbitai
+  title: AI语音进入“表演时代”：阿里Qwen-Audio-3.0-TTS登顶全球权威榜单
+  url: https://www.qbitai.com/2026/07/455658.html
+  date: '2026-07-20T09:05:06+00:00'
+  primary_type: industry_signal
+  expected: model_technology
+- id: 101
+  source: qbitai
+  title: WAIC之后，重新理解与爱为舞：一家AI原生企业的学习场景验证
+  url: https://www.qbitai.com/2026/07/455596.html
+  date: '2026-07-20T09:03:23+00:00'
+  primary_type: industry_signal
+  expected: enterprise_case
+- id: 102
+  source: qbitai
+  title: GMI Cloud “无界造物节”在WAIC圆满完赛，“MaaS+创意”赋能 AI 创作新生态！
+  url: https://www.qbitai.com/2026/07/455593.html
+  date: '2026-07-20T08:52:26+00:00'
+  primary_type: industry_signal
+  expected: agent_product
+- id: 103
+  source: 36kr-newsflashes
+  title: 腾讯智慧零售、腾讯地图携手Chinagoods平台打造的“Chinagoods AI导航”上线
+  url: https://36kr.com/newsflashes/3905078253569928
+  date: '2026-07-21T07:31:11.681328+00:00'
+  primary_type: industry_signal
+  expected: agent_product
+total: 103
