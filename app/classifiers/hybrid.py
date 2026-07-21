@@ -1,11 +1,22 @@
 """Hybrid classifier combining rule-based scoring and LLM fallback."""
 
-import logging
+from __future__ import annotations
 
-from app.classifiers.providers import LLMConfigError, LLMProvider, LLMProviderError, LLMResponseError
+import logging
+from typing import TYPE_CHECKING
+
+from app.classifiers.providers import (
+    LLMConfigError,
+    LLMProvider,
+    LLMProviderError,
+    LLMResponseError,
+)
 from app.domain.classification import ClassificationResult
 from app.domain.collection import CollectedItem
 from app.domain.enums import Category
+
+if TYPE_CHECKING:
+    from app.classifiers.rule_based import RuleBasedClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +28,7 @@ class HybridClassifier:
 
     def __init__(
         self,
-        rule_classifier: "RuleBasedClassifier",
+        rule_classifier: RuleBasedClassifier,
         llm_provider: LLMProvider,
         *,
         source_name: str = "",
@@ -25,10 +36,8 @@ class HybridClassifier:
         confidence_threshold: float = 0.7,
     ) -> None:
         from app.classifiers.llm import LLMClassifier
-        from app.classifiers.rule_based import RuleBasedClassifier
-        from app.domain.classification import Classifier
 
-        self._rule: Classifier = rule_classifier
+        self._rule = rule_classifier
         self._llm = LLMClassifier(
             llm_provider,
             source_name=source_name,
@@ -59,12 +68,15 @@ class HybridClassifier:
             return rule_result
 
         if _is_llm_result_usable(llm_result, self._confidence_threshold):
+            llm_conf = llm_result.score / 10
             return ClassificationResult(
                 category=llm_result.category,
                 score=llm_result.score,
                 reason=(
-                    f"Hybrid: 规则输出 {rule_result.category.value} (得分 {rule_result.score:.2f}), "
-                    f"LLM 覆盖为 {llm_result.category.value} (置信度 {llm_result.score / 10:.2f}). "
+                    f"Hybrid: 规则输出 {rule_result.category.value} "
+                    f"(得分 {rule_result.score:.2f}), "
+                    f"LLM 覆盖为 {llm_result.category.value} "
+                    f"(置信度 {llm_conf:.2f}). "
                     f"{llm_result.reason}"
                 ),
                 provider=self.provider,
@@ -74,7 +86,8 @@ class HybridClassifier:
             category=rule_result.category,
             score=rule_result.score,
             reason=(
-                f"Hybrid: LLM 置信度不足, 保留规则结果 {rule_result.category.value}. "
+                f"Hybrid: LLM 置信度不足, 保留规则结果 "
+                f"{rule_result.category.value}. "
                 f"{rule_result.reason}"
             ),
             provider=self.provider,

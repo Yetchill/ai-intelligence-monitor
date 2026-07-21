@@ -18,7 +18,7 @@ _TAXONOMY_DEFINITION = """分类体系（Category taxonomy）：
 - enterprise_case: 企业在具体业务场景中应用 AI 的落地案例、投产消息、降本增效实践
 - award_case: 案例评选结果公布、获奖名单公示、入围榜单、表彰通知
 - solicitation: 案例征集启动、项目申报通知、参评招募、报名开放、截止提醒
-- policy_industry: 政策发布、标准制定、白皮书、行业报告、管理办法、征求意见、监管规定"""
+- policy_industry: 政策发布、标准制定、白皮书、行业报告、管理办法、征求意见、监管规定"""  # noqa: RUF001
 
 
 class LLMProviderError(Exception):
@@ -85,7 +85,7 @@ class OpenAICompatibleProvider:
         source_name: str,
         source_role: str | None,
     ) -> LLMResponse:
-        prompt = _build_prompt(title, summary, source_name, source_role)
+        prompt = build_prompt(title, summary, source_name, source_role)
         client = self._client()
 
         try:
@@ -96,7 +96,10 @@ class OpenAICompatibleProvider:
                     "messages": [
                         {
                             "role": "system",
-                            "content": "你是一个 AI 情报分类助手。只输出严格的 JSON, 不输出任何其他内容。",
+                            "content": (
+                                "你是一个 AI 情报分类助手。"
+                                "只输出严格的 JSON, 不输出任何其他内容。"
+                            ),
                         },
                         {"role": "user", "content": prompt},
                     ],
@@ -118,8 +121,8 @@ class OpenAICompatibleProvider:
             raise LLMProviderError(f"LLM 网络错误: {exc}") from exc
 
         raw = response.json()
-        content = _extract_content(raw)
-        return _parse_response(content, self._confidence_threshold)
+        content = extract_content(raw)
+        return parse_response(content, self._confidence_threshold)
 
     def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -145,13 +148,15 @@ class DeepSeekProvider(OpenAICompatibleProvider):
         )
 
 
-def _build_prompt(
+def build_prompt(
     title: str,
     summary: str | None,
     source_name: str,
     source_role: str | None,
 ) -> str:
-    parts: list[str] = [f"请将以下文章分类到以下类别之一：\n{_TAXONOMY_DEFINITION}\n"]
+    parts: list[str] = [
+        f"请将以下文章分类到以下类别之一：\n{_TAXONOMY_DEFINITION}\n"  # noqa: RUF001
+    ]
     parts.append(f"文章标题: {title}")
     if summary:
         parts.append(f"文章摘要: {summary}")
@@ -167,7 +172,7 @@ def _build_prompt(
     return "\n".join(parts)
 
 
-def _extract_content(response_body: dict[str, Any]) -> str:
+def extract_content(response_body: dict[str, Any]) -> str:
     choices: list[dict[str, Any]] = response_body.get("choices", [])
     if not choices:
         raise LLMResponseError("LLM 返回空 choices")
@@ -180,7 +185,7 @@ def _extract_content(response_body: dict[str, Any]) -> str:
     return content.strip()
 
 
-def _parse_response(content: str, confidence_threshold: float) -> LLMResponse:
+def parse_response(content: str, confidence_threshold: float) -> LLMResponse:
     try:
         data = json.loads(content)
     except json.JSONDecodeError as exc:

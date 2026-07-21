@@ -12,6 +12,8 @@ from app.classifiers.providers import (
     LLMResponseError,
     LLMTimeoutError,
     OpenAICompatibleProvider,
+    build_prompt,
+    parse_response,
 )
 from app.classifiers.rule_based import DEFAULT_RULE_PATH, RuleBasedClassifier
 from app.classifiers.rules import RuleConfigError, load_classification_rules
@@ -33,6 +35,8 @@ __all__ = [
     "OpenAICompatibleProvider",
     "RuleBasedClassifier",
     "RuleConfigError",
+    "build_prompt",
     "create_llm_classifier",
     "load_classification_rules",
+    "parse_response",
 ]

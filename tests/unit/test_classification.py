@@ -17,7 +17,7 @@ from app.classifiers import (
     RuleConfigError,
     load_classification_rules,
 )
-from app.classifiers.providers import DeepSeekProvider, LLMConfigError
+from app.classifiers.providers import DeepSeekProvider
 from app.domain.classification import ClassificationResult
 from app.domain.collection import CollectedItem
 from app.domain.enums import Category

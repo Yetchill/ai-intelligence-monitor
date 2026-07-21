@@ -1,29 +1,32 @@
 """Mock-based tests for LLM and Hybrid classifiers."""
 
 import json
-from pathlib import Path
-from typing import Any, cast, no_type_check
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.classifiers.hybrid import HybridClassifier
 from app.classifiers.llm import LLMClassifier
 from app.classifiers.providers import (
-    DeepSeekProvider,
     LLMConfigError,
     LLMProviderError,
     LLMResponse,
     LLMResponseError,
     LLMTimeoutError,
     OpenAICompatibleProvider,
-    _build_prompt,
-    _parse_response,
+    build_prompt,
+    parse_response,
 )
 from app.classifiers.rule_based import RuleBasedClassifier
-from app.domain.classification import ClassificationResult
 from app.domain.collection import CollectedItem
 from app.domain.enums import Category
+
+
+def _mock_json(mock_response: Any, data: Any) -> None:
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": json.dumps(data)}}]
+    }
 
 
 def _item(title: str, summary: str | None = None) -> CollectedItem:
@@ -38,7 +41,11 @@ def _item(title: str, summary: str | None = None) -> CollectedItem:
 class FakeProvider:
     """Mock provider that returns a predefined response."""
 
-    def __init__(self, response: LLMResponse | None = None, error: type[Exception] | None = None) -> None:
+    def __init__(
+        self,
+        response: LLMResponse | None = None,
+        error: type[Exception] | None = None,
+    ) -> None:
         self.response = response
         self.error = error
         self.calls: list[tuple[str, str | None, str, str | None]] = []
@@ -61,7 +68,9 @@ class FakeProvider:
 # --- LLMClassifier mock tests ---
 
 async def test_llm_classifier_returns_valid_result() -> None:
-    provider = FakeProvider(LLMResponse(Category.AGENT_PRODUCT, 0.92, "智能体平台上线"))
+    provider = FakeProvider(
+        LLMResponse(Category.AGENT_PRODUCT, 0.92, "智能体平台上线")
+    )
     classifier = LLMClassifier(provider)
 
     result = await classifier.classify(_item("智能体产品正式发布"))
@@ -104,7 +113,9 @@ async def test_llm_classifier_fallback_on_network_error() -> None:
 
 
 async def test_llm_classifier_marks_low_confidence_as_ambiguous() -> None:
-    provider = FakeProvider(LLMResponse(Category.POLICY_INDUSTRY, 0.45, "不太确定"))
+    provider = FakeProvider(
+        LLMResponse(Category.POLICY_INDUSTRY, 0.45, "不太确定")
+    )
     classifier = LLMClassifier(provider)
 
     result = await classifier.classify(_item("政策相关文章"))
@@ -113,7 +124,9 @@ async def test_llm_classifier_marks_low_confidence_as_ambiguous() -> None:
 
 
 async def test_llm_classifier_high_confidence_not_ambiguous() -> None:
-    provider = FakeProvider(LLMResponse(Category.MODEL_TECHNOLOGY, 0.95, "明确的模型发布"))
+    provider = FakeProvider(
+        LLMResponse(Category.MODEL_TECHNOLOGY, 0.95, "明确的模型发布")
+    )
     classifier = LLMClassifier(provider)
 
     result = await classifier.classify(_item("大模型发布"))
@@ -123,23 +136,18 @@ async def test_llm_classifier_high_confidence_not_ambiguous() -> None:
 
 # --- OpenAICompatibleProvider mock tests ---
 
+_BASE = "https://test.example.com"
+
+
 async def test_openai_provider_parses_valid_json() -> None:
-    response_data = {
-        "category": "model_technology",
-        "confidence": 0.88,
-        "reason": "大模型开源发布",
-    }
+    response_data = {"category": "model_technology", "confidence": 0.88, "reason": "b"}
 
     mock_client = AsyncMock()
     mock_response = MagicMock()
-    mock_response.json.return_value = {"choices": [{"message": {"content": json.dumps(response_data)}}]}
+    _mock_json(mock_response, response_data)
     mock_client.post.return_value = mock_response
 
-    provider = OpenAICompatibleProvider(
-        base_url="https://test.example.com",
-        api_key="sk-test",
-        model="test-model",
-    )
+    provider = OpenAICompatibleProvider(_BASE, "sk-test", "test-model")
     provider._client = lambda: mock_client  # type: ignore[method-assign]
 
     result = await provider.classify("大模型开源", None, "测试来源", "official_product")
@@ -150,17 +158,13 @@ async def test_openai_provider_parses_valid_json() -> None:
 
 
 async def test_openai_provider_rejects_invalid_category() -> None:
-    response_data = {"category": "non_existent", "confidence": 0.8, "reason": "test"}
+    response_data = {"category": "non_existent", "confidence": 0.8, "reason": "t"}
     mock_client = AsyncMock()
     mock_response = MagicMock()
-    mock_response.json.return_value = {"choices": [{"message": {"content": json.dumps(response_data)}}]}
+    _mock_json(mock_response, response_data)
     mock_client.post.return_value = mock_response
 
-    provider = OpenAICompatibleProvider(
-        base_url="https://test.example.com",
-        api_key="sk-test",
-        model="test-model",
-    )
+    provider = OpenAICompatibleProvider(_BASE, "sk-test", "test-model")
     provider._client = lambda: mock_client  # type: ignore[method-assign]
 
     with pytest.raises(LLMResponseError, match="未知分类"):
@@ -168,13 +172,13 @@ async def test_openai_provider_rejects_invalid_category() -> None:
 
 
 async def test_openai_provider_rejects_confidence_oob() -> None:
-    response_data = {"category": "model_technology", "confidence": 1.5, "reason": "test"}
+    response_data = {"category": "model_technology", "confidence": 1.5, "reason": "t"}
     mock_client = AsyncMock()
     mock_response = MagicMock()
-    mock_response.json.return_value = {"choices": [{"message": {"content": json.dumps(response_data)}}]}
+    _mock_json(mock_response, response_data)
     mock_client.post.return_value = mock_response
 
-    provider = OpenAICompatibleProvider(base_url="https://test.example.com", api_key="sk-test", model="test-model")
+    provider = OpenAICompatibleProvider(_BASE, "sk-test", "test-model")
     provider._client = lambda: mock_client  # type: ignore[method-assign]
 
     with pytest.raises(LLMResponseError, match="越界"):
@@ -184,10 +188,12 @@ async def test_openai_provider_rejects_confidence_oob() -> None:
 async def test_openai_provider_rejects_invalid_json() -> None:
     mock_client = AsyncMock()
     mock_response = MagicMock()
-    mock_response.json.return_value = {"choices": [{"message": {"content": "not json"}}]}
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "not json"}}]
+    }
     mock_client.post.return_value = mock_response
 
-    provider = OpenAICompatibleProvider(base_url="https://test.example.com", api_key="sk-test", model="test-model")
+    provider = OpenAICompatibleProvider(_BASE, "sk-test", "test-model")
     provider._client = lambda: mock_client  # type: ignore[method-assign]
 
     with pytest.raises(LLMResponseError, match="非法 JSON"):
@@ -196,7 +202,7 @@ async def test_openai_provider_rejects_invalid_json() -> None:
 
 async def test_openai_provider_raises_without_api_key() -> None:
     with pytest.raises(LLMConfigError, match="API_KEY"):
-        OpenAICompatibleProvider(base_url="https://test.example.com", api_key="", model="test-model")
+        OpenAICompatibleProvider(_BASE, "", "test-model")
 
 
 # --- HybridClassifier mock tests ---
@@ -209,13 +215,14 @@ async def test_hybrid_skips_llm_when_rule_high_confidence() -> None:
     result = await hybrid.classify(_item("大模型正式发布开源"))
 
     assert result.provider != "hybrid" or "规则" in result.reason
-    # Should not call LLM because rule is confident
     assert len(provider.calls) == 0
 
 
 async def test_hybrid_calls_llm_when_rule_unclassified() -> None:
     rule = RuleBasedClassifier.from_yaml()
-    provider = FakeProvider(LLMResponse(Category.AGENT_PRODUCT, 0.85, "智能体上线"))
+    provider = FakeProvider(
+        LLMResponse(Category.AGENT_PRODUCT, 0.85, "智能体上线")
+    )
     hybrid = HybridClassifier(rule, provider)
 
     result = await hybrid.classify(_item("春季校园招聘正式开始"))
@@ -260,8 +267,8 @@ async def test_hybrid_uses_rule_when_llm_returns_unclassified() -> None:
 
 # --- Prompt and parsing tests ---
 
-def test_build_prompt_includes_all_fields() -> None:
-    prompt = _build_prompt("测试标题", "测试摘要", "测试来源", "official_product")
+def testbuild_prompt_includes_all_fields() -> None:
+    prompt = build_prompt("测试标题", "测试摘要", "测试来源", "official_product")
 
     assert "测试标题" in prompt
     assert "测试摘要" in prompt
@@ -271,17 +278,19 @@ def test_build_prompt_includes_all_fields() -> None:
     assert "confidence" in prompt
 
 
-def test_build_prompt_without_optional_fields() -> None:
-    prompt = _build_prompt("测试标题", None, "来源", None)
+def testbuild_prompt_without_optional_fields() -> None:
+    prompt = build_prompt("测试标题", None, "来源", None)
 
     assert "测试标题" in prompt
     assert "来源" in prompt
     assert "model_technology" in prompt
 
 
-def test_parse_response_valid() -> None:
-    response = _parse_response(
-        json.dumps({"category": "agent_product", "confidence": 0.92, "reason": "智能体上线"}),
+def testparse_response_valid() -> None:
+    response = parse_response(
+        json.dumps(
+            {"category": "agent_product", "confidence": 0.92, "reason": "智能体上线"}
+        ),
         0.7,
     )
 
@@ -290,10 +299,12 @@ def test_parse_response_valid() -> None:
     assert response.reason == "智能体上线"
 
 
-def test_parse_response_truncates_long_reason() -> None:
+def testparse_response_truncates_long_reason() -> None:
     long_reason = "x" * 300
-    response = _parse_response(
-        json.dumps({"category": "model_technology", "confidence": 0.8, "reason": long_reason}),
+    response = parse_response(
+        json.dumps(
+            {"category": "model_technology", "confidence": 0.8, "reason": long_reason}
+        ),
         0.7,
     )
 
