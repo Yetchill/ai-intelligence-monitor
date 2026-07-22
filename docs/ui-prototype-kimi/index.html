@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>资讯 · AI 行业情报（UI 原型）</title>
+    <link rel="stylesheet" href="prototype.css">
+    <script src="prototype.js" defer></script>
+  </head>
+  <body>
+    <!-- ===== 全局顶部导航 ===== -->
+    <header class="site-nav">
+      <div class="site-nav-inner">
+        <a class="brand" href="#" data-page="home">AI 行业情报</a>
+        <nav class="main-nav" aria-label="主导航">
+          <a href="#" data-page="home" class="is-active" aria-current="page">资讯</a>
+          <a href="#" data-page="ai">AI</a>
+          <a href="#" data-page="sources">来源</a>
+          <a href="#" data-page="settings">设置</a>
+          <a href="#" data-page="runs">更新记录</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <!-- ===== 资讯首页 ===== -->
+      <div class="page" id="page-home">
+        <!-- 页面头部：紧凑单行 -->
+        <div class="page-head">
+          <div class="page-head-text">
+            <h1>资讯</h1>
+            <p>查看已采集的 AI 行业动态，按需收藏、分类或使用 AI 工具。</p>
+          </div>
+          <div class="page-head-side">
+            <button class="btn btn-primary" id="btn-update-all" type="button">更新全部启用来源</button>
+            <span class="last-updated">最近更新：2026-07-22 08:30 · 全部成功</span>
+          </div>
+        </div>
+
+        <!-- 概览统计栏：紧凑横条 -->
+        <div class="stats-strip" aria-label="资讯概览">
+          <div class="stat"><span class="stat-num">290</span><span class="stat-label">全部资讯</span></div>
+          <div class="stat"><span class="stat-num stat-unread">47</span><span class="stat-label">未读</span></div>
+          <div class="stat"><span class="stat-num">12</span><span class="stat-label">今日新增</span></div>
+          <div class="stat"><span class="stat-num stat-warn">23</span><span class="stat-label">待分类</span></div>
+        </div>
+
+        <!-- 筛选工具栏 -->
+        <form class="filter-panel" id="filter-form" action="#" method="get">
+          <div class="filter-main">
+            <div class="field field-search">
+              <label for="f-keyword">搜索标题和摘要</label>
+              <input id="f-keyword" name="keyword" type="search" maxlength="200" placeholder="输入关键词">
+            </div>
+            <div class="field">
+              <label for="f-category">分类</label>
+              <select id="f-category" name="category">
+                <option value="">全部分类</option>
+                <option>模型与技术动态</option>
+                <option>智能体与产品更新</option>
+                <option>企业成果与应用案例</option>
+                <option>获奖与优秀案例</option>
+                <option>奖项与成果征集</option>
+                <option>政策、标准与行业动态</option>
+                <option>待分类</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-source">来源</label>
+              <select id="f-source" name="source_id">
+                <option value="">全部来源</option>
+                <option>工业和信息化部</option>
+                <option>中国信通院</option>
+                <option>OpenAI 官方博客</option>
+                <option>通义千问更新日志</option>
+                <option>扣子产品动态</option>
+                <option>百度智能云案例库</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-is-read">阅读状态</label>
+              <select id="f-is-read" name="is_read">
+                <option value="all">全部</option>
+                <option value="no">未读</option>
+                <option value="yes">已读</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-time-range">时间范围</label>
+              <select id="f-time-range" name="time_range">
+                <option value="all">全部时间</option>
+                <option value="today">今天</option>
+                <option value="3d">近 3 天</option>
+                <option value="7d">近 7 天</option>
+                <option value="30d">近 30 天</option>
+              </select>
+            </div>
+            <div class="filter-actions">
+              <button class="btn btn-primary" type="submit">筛选</button>
+              <button class="btn btn-secondary" id="btn-clear-filter" type="button">清除</button>
+              <button class="btn btn-text" id="btn-more-filters" type="button" aria-expanded="false" aria-controls="more-filters">
+                更多筛选 <span class="chevron" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 更多筛选：默认折叠 -->
+          <div class="more-filters" id="more-filters" hidden>
+            <div class="field">
+              <label for="f-favorite">收藏状态</label>
+              <select id="f-favorite" name="favorite">
+                <option value="all">全部</option>
+                <option value="yes">仅收藏</option>
+                <option value="no">未收藏</option>
+              </select>
+            </div>
+            <div class="field field-date-pair">
+              <label>发布时间</label>
+              <div class="date-pair">
+                <input type="date" name="published_from" aria-label="发布时间从" min="2000-01-01">
+                <span class="date-sep">至</span>
+                <input type="date" name="published_to" aria-label="发布时间至" min="2000-01-01">
+              </div>
+            </div>
+            <div class="field field-date-pair">
+              <label>发现时间</label>
+              <div class="date-pair">
+                <input type="date" name="discovered_from" aria-label="发现时间从" min="2000-01-01">
+                <span class="date-sep">至</span>
+                <input type="date" name="discovered_to" aria-label="发现时间至" min="2000-01-01">
+              </div>
+            </div>
+            <div class="field">
+              <label for="f-verification">可信状态</label>
+              <select id="f-verification" name="verification_status">
+                <option value="">全部</option>
+                <option>官方确认</option>
+                <option>官方链接</option>
+                <option>多源确认</option>
+                <option>仅媒体报道</option>
+                <option>传闻或预测</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-review">审核状态</label>
+              <select id="f-review" name="review_status">
+                <option value="">全部</option>
+                <option>无需审核</option>
+                <option>待审核</option>
+                <option>已通过</option>
+                <option>已拒绝</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-unclassified">待分类状态</label>
+              <select id="f-unclassified" name="unclassified">
+                <option value="all">全部</option>
+                <option value="yes">仅待分类</option>
+                <option value="no">排除待分类</option>
+              </select>
+            </div>
+            <div class="field field-narrow">
+              <label for="f-per-page">每页数量</label>
+              <select id="f-per-page" name="per_page">
+                <option value="20">20 条</option>
+                <option value="50">50 条</option>
+                <option value="100">100 条</option>
+              </select>
+            </div>
+          </div>
+        </form>
+
+        <!-- 列表工具栏 -->
+        <div class="list-toolbar">
+          <div class="list-toolbar-left">
+            <span class="total-count">共 <strong>290</strong> 条资讯</span>
+            <label class="select-all">
+              <input type="checkbox" id="select-all">
+              <span>全选</span>
+            </label>
+            <span class="selected-count" id="selected-count" hidden>已选 0 条</span>
+            <div class="batch-actions" id="batch-actions">
+              <button class="btn btn-secondary btn-sm" type="button" data-batch="read" disabled>标为已读</button>
+              <button class="btn btn-secondary btn-sm" type="button" data-batch="unread" disabled>标为未读</button>
+              <button class="btn btn-secondary btn-sm" type="button" data-batch="ai-classify" disabled>AI 分类</button>
+              <button class="btn btn-secondary btn-sm" type="button" data-batch="ai-summarize" disabled>AI 总结</button>
+            </div>
+          </div>
+          <div class="list-toolbar-right">
+            <button class="btn btn-secondary btn-sm" type="button" data-export="excel">导出 Excel</button>
+            <button class="btn btn-secondary btn-sm" type="button" data-export="word">导出 Word</button>
+            <div class="view-switch" role="group" aria-label="列表样式切换">
+              <button type="button" class="is-active" data-view="a">卡片</button>
+              <button type="button" data-view="b">紧凑</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 方案 A：紧凑资讯卡片 -->
+        <section class="item-list" id="list-a" aria-label="资讯列表（卡片方案）"></section>
+
+        <!-- 方案 B：表格与资讯流混合 -->
+        <section class="item-rows" id="list-b" aria-label="资讯列表（紧凑方案）" hidden></section>
+
+        <!-- 分页（静态演示） -->
+        <nav class="pagination" aria-label="分页">
+          <button class="btn btn-secondary btn-sm" type="button" disabled>上一页</button>
+          <span class="page-num is-current">1</span>
+          <button class="page-num" type="button">2</button>
+          <button class="page-num" type="button">3</button>
+          <span class="page-ellipsis">…</span>
+          <button class="page-num" type="button">15</button>
+          <button class="btn btn-secondary btn-sm" type="button">下一页</button>
+        </nav>
+      </div>
+
+      <!-- ===== 占位页面（待设计） ===== -->
+      <div class="page" id="page-ai" hidden>
+        <div class="placeholder">
+          <h1>AI</h1>
+          <p>此页面待设计。本原型仅完成「资讯」首页。</p>
+          <p class="placeholder-hint">将包含：AI 接口配置、连接测试、批量分类与总结任务。</p>
+          <button class="btn btn-secondary" type="button" data-page="home">返回资讯</button>
+        </div>
+      </div>
+      <div class="page" id="page-sources" hidden>
+        <div class="placeholder">
+          <h1>来源</h1>
+          <p>此页面待设计。本原型仅完成「资讯」首页。</p>
+          <p class="placeholder-hint">将包含：来源列表、新增来源、自动发现、启用/停用与更新。</p>
+          <button class="btn btn-secondary" type="button" data-page="home">返回资讯</button>
+        </div>
+      </div>
+      <div class="page" id="page-settings" hidden>
+        <div class="placeholder">
+          <h1>设置</h1>
+          <p>此页面待设计。本原型仅完成「资讯」首页。</p>
+          <p class="placeholder-hint">将包含：定时更新计划、运行状态与基础参数。</p>
+          <button class="btn btn-secondary" type="button" data-page="home">返回资讯</button>
+        </div>
+      </div>
+      <div class="page" id="page-runs" hidden>
+        <div class="placeholder">
+          <h1>更新记录</h1>
+          <p>此页面待设计。本原型仅完成「资讯」首页。</p>
+          <p class="placeholder-hint">将包含：每次更新的状态、新增数量与失败原因。</p>
+          <button class="btn btn-secondary" type="button" data-page="home">返回资讯</button>
+        </div>
+      </div>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>
