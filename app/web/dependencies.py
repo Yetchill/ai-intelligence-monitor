@@ -1,5 +1,7 @@
 """Application dependencies and process-local update exclusion."""
 
+import asyncio
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -8,6 +10,8 @@ from app.collectors.registry import default_collector_registry
 from app.domain.collection import Fetcher
 from app.domain.enums import RunTrigger
 from app.domain.update import SourcePreviewResult, UpdateResult
+from app.services.ai_operation_service import AIOperationService
+from app.services.ai_settings_service import AISettingsService
 from app.services.application_factory import build_export_service, update_pipeline_context
 from app.services.export_service import ExportService
 from app.services.schedule_settings_service import ScheduleSettingsService
@@ -42,13 +46,33 @@ class WebUpdateService:
         self._execution = UpdateExecutionService(
             database, pipeline_context_factory, update_lock or UpdateLock()
         )
+        self._database = database
 
     async def update(self, *, source_id: int | None = None) -> UpdateResult:
-        return await self._execution.update(
+        result = await self._execution.update(
             trigger=RunTrigger.MANUAL_WEB,
             source_id=source_id,
             formal_only=False,
         )
+        asyncio.create_task(self._run_auto_ai_if_enabled())  # noqa: RUF006
+        return result
+
+    async def _run_auto_ai_if_enabled(self) -> None:
+        try:
+            from app.services.ai_operation_service import AIOperationService
+            from app.services.ai_settings_service import AISettingsService
+
+            settings = AISettingsService(self._database)
+            config = settings.get_config()
+            ops = AIOperationService(self._database)
+
+            if config.classifier_mode == "auto":
+                await ops.classify_all_unclassified(trigger="auto")
+
+            if config.summarizer_mode == "auto":
+                await ops.summarize_all_unsummarized(trigger="auto")
+        except Exception:
+            logging.getLogger(__name__).exception("Auto AI failed during update")
 
     async def preview(self, source_id: int) -> SourcePreviewResult:
         return await self._execution.preview(source_id)
@@ -72,6 +96,8 @@ class WebServices:
     source_seed: SourceSeedService
     source_lifecycle: SourceLifecycleService
     token_store: DiscoveryTokenStore
+    ai_settings: AISettingsService
+    ai_ops: AIOperationService
     _owned_source_fetcher: SafeHttpFetcher | None = None
 
     @classmethod
@@ -118,6 +144,8 @@ class WebServices:
                 uow_factory, default_collector_registry().names()
             ),
             token_store=store,
+            ai_settings=AISettingsService(database),
+            ai_ops=AIOperationService(database),
             _owned_source_fetcher=owned_fetcher,
         )
 

@@ -388,3 +388,46 @@ class ItemReviewEvent(Base):
     new_data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
     item: Mapped[IntelligenceItem] = relationship(back_populates="review_events")
+
+
+class AISettings(Base):
+    """Singleton AI model configuration persisted in the local database."""
+
+    __tablename__ = "ai_settings"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_ai_settings_singleton"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    provider: Mapped[str] = mapped_column(String(30), nullable=False, default="deepseek")
+    base_url: Mapped[str] = mapped_column(String(500), nullable=False, default="https://api.deepseek.com")
+    model: Mapped[str] = mapped_column(String(100), nullable=False, default="deepseek-chat")
+    api_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    classifier_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="off")
+    classifier_strategy: Mapped[str] = mapped_column(String(20), nullable=False, default="hybrid")
+    summarizer_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="off")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class AIJob(Base):
+    """An AI classification or summarization run."""
+
+    __tablename__ = "ai_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    trigger: Mapped[str] = mapped_column(String(10), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    total_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    success_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fallback_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

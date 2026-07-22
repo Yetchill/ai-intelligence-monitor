@@ -35,6 +35,8 @@ def test_alembic_initializes_database(tmp_path: Path) -> None:
     try:
         inspector = inspect(database.engine)
         assert set(inspector.get_table_names()) == {
+            "ai_jobs",
+            "ai_settings",
             "alembic_version",
             "crawl_runs",
             "crawl_source_executions",

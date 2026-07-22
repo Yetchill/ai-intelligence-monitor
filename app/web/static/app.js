@@ -1,4 +1,12 @@
-document.addEventListener("submit", (event) => {
+document.addEventListener("DOMContentLoaded", function() {
+  var today = new Date().toISOString().split("T")[0];
+  var dateInputs = document.querySelectorAll("input[type='date']");
+  dateInputs.forEach(function(input) {
+    if (!input.getAttribute("max")) {
+      input.setAttribute("max", today);
+    }
+  });
+});
   const form = event.target;
   if (!(form instanceof HTMLFormElement) || !form.matches("[data-update-form]")) return;
   const button = form.querySelector("button[type='submit']");
@@ -37,4 +45,13 @@ window.batchRead = function(isRead) {
   var readInput = document.querySelector("#batch-read-form input[name='is_read']");
   if (readInput) readInput.value = isRead ? "true" : "false";
   document.getElementById("batch-read-form").submit();
+};
+
+window.batchAIClassify = function() {
+  var checked = document.querySelectorAll(".item-checkbox:checked");
+  if (checked.length === 0) { alert("请先勾选需要操作的资讯。"); return; }
+  if (!confirm("确认对勾选的 " + checked.length + " 条资讯执行 AI 分类？")) return;
+  var ids = Array.from(checked).map(function(cb) { return cb.value; });
+  document.getElementById("batch-ai-item-ids").value = ids.join(",");
+  document.getElementById("batch-ai-classify-form").submit();
 };

@@ -110,5 +110,9 @@ tbody tr:last-child td { border-bottom: 0; }
 .alert { padding: 12px 18px; border-radius: 10px; margin-bottom: 16px; font-size: 14px; }
 .alert.success { background: #e5f5e0; border: 1px solid #5a9e3e; color: #2d6e17; }
 .alert.error { background: #fde8e8; border: 1px solid #c44; color: #922; }
+.ai-form { display: grid; gap: 14px; }
+.ai-form label { display: grid; gap: 4px; }
+.form-row-buttons { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.button.danger { background: #c44; color: #fff; border-color: #a33; }
 @media (max-width: 1050px) { .filter-panel { grid-template-columns: repeat(3, minmax(150px, 1fr)); } .stats-grid { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 680px) { .site-header, .page-heading, .pagination, .export-panel { align-items: flex-start; flex-direction: column; } .site-header { position: static; padding: 14px 4vw; } .filter-panel, .facts-grid, .settings-grid { grid-template-columns: 1fr; } label.wide { grid-column: auto; } .category-form { width: 100%; margin-left: 0; } .stats-grid { grid-template-columns: repeat(2, 1fr); } .empty-state, .result-panel { padding: 26px; } }

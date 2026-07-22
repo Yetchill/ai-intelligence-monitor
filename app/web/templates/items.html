@@ -106,7 +106,6 @@
             <option value="non_formal" {% if filters.source_scope == 'non_formal' %}selected{% endif %}>非正式来源</option>
             <option value="fallback" {% if filters.source_scope == 'fallback' %}selected{% endif %}>备用技术来源</option>
             <option value="disabled" {% if filters.source_scope == 'disabled' %}selected{% endif %}>已停用来源历史</option>
-            <option value="industry_leads" {% if filters.source_scope == 'industry_leads' %}selected{% endif %}>行业线索</option>
           </select>
         </label>
       </div>
@@ -136,12 +135,17 @@
   {% if page.entries %}
     <div class="result-meta">
       共 {{ page.total }} 条资讯
-      <form id="batch-read-form" action="/items/batch-read" method="post">
+      <form id="batch-read-form" action="/items/batch-read" method="post" style="display:inline">
         <input type="hidden" name="return_to" value="{{ return_to }}">
         <input type="hidden" name="item_ids" id="batch-item-ids" value="">
         <input type="hidden" name="is_read" value="true">
         <button class="button small" type="button" onclick="batchRead(true)">标为已读</button>
         <button class="button small" type="button" onclick="batchRead(false)">标为未读</button>
+      </form>
+      <form id="batch-ai-classify-form" action="/items/batch-ai-classify" method="post" style="display:inline">
+        <input type="hidden" name="return_to" value="{{ return_to }}">
+        <input type="hidden" name="item_ids" id="batch-ai-item-ids" value="">
+        <button class="button small" type="button" onclick="batchAIClassify()">AI 分类（勾选）</button>
       </form>
     </div>
     <section class="item-list" aria-label="资讯列表">
@@ -202,6 +206,14 @@
                 {% endfor %}
               </select>
               <button class="button small" type="submit">保存分类</button>
+            </form>
+            <form action="/items/{{ item.id }}/ai-classify" method="post">
+              <input type="hidden" name="return_to" value="{{ return_to }}">
+              <button class="button small" type="submit">AI 分类</button>
+            </form>
+            <form action="/items/{{ item.id }}/ai-summarize" method="post">
+              <input type="hidden" name="return_to" value="{{ return_to }}">
+              <button class="button small" type="submit">AI 总结</button>
             </form>
           </div>
         </article>

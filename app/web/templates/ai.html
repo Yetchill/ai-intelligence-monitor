@@ -4,58 +4,125 @@
   <section class="page-heading">
     <div>
       <h1>AI 工具</h1>
-      <p>配置 AI 模型连接，使用智能分类和总结功能。</p>
+      <p>配置 AI 模型，使用智能分类和总结功能。</p>
     </div>
   </section>
 
+  {% if saved %}<div class="notice success">设置已保存。</div>{% endif %}
+  {% if key_cleared %}<div class="notice success">API Key 已清除。</div>{% endif %}
   {% if test_result %}
-    <div class="alert {{ 'success' if test_ok else 'error' }}">
-      {{ test_result }}
-    </div>
+    <div class="alert {{ 'success' if test_ok else 'error' }}">{{ test_result }}</div>
   {% endif %}
+  {% if classifier_running %}<div class="notice">AI 分类任务已提交，稍后刷新查看结果。</div>{% endif %}
+  {% if summarizer_running %}<div class="notice">AI 总结任务已提交，稍后刷新查看结果。</div>{% endif %}
 
-  <section class="section-card" aria-label="模型连接">
-    <h2>模型连接</h2>
-    <p class="muted">当前服务商：{{ provider }} | 模型：{{ model }}</p>
-    <p class="muted">API Key 状态：{% if api_key_configured %}已配置 ({{ masked_key }}){% else %}未配置{% endif %}</p>
-
-    <form action="/ai/test-connection" method="post" style="margin-bottom:1.5rem">
-      <button class="button primary" type="submit" {% if not api_key_configured %}disabled{% endif %}>测试连接</button>
-      {% if not api_key_configured %}<span class="muted">请先配置 API Key 后再测试连接</span>{% endif %}
+  <section class="section-card">
+    <h2>模型连接配置</h2>
+    <p class="muted">Key 状态：{% if config.api_key_configured %}已配置 ({{ config.masked_key }}){% else %}未配置{% endif %}</p>
+    <form method="post" action="/ai/save" class="ai-form">
+      <label>服务商
+        <select name="provider">
+          <option value="deepseek" {% if config.provider == 'deepseek' %}selected{% endif %}>DeepSeek</option>
+          <option value="openai" {% if config.provider == 'openai' %}selected{% endif %}>OpenAI Compatible</option>
+          <option value="custom" {% if config.provider == 'custom' %}selected{% endif %}>Custom</option>
+        </select>
+      </label>
+      <label>Base URL
+        <input name="base_url" value="{{ config.base_url }}" maxlength="500">
+      </label>
+      <label>模型
+        <input name="model" value="{{ config.model }}" maxlength="100">
+      </label>
+      <label>API Key
+        <input type="password" name="api_key" value="" placeholder="留空保留旧 Key" maxlength="500" autocomplete="off">
+      </label>
+      <label>超时时间（秒）
+        <input type="number" name="timeout_seconds" value="{{ config.timeout_seconds }}" min="5" max="300">
+      </label>
+      <label>最大重试次数
+        <input type="number" name="max_retries" value="{{ config.max_retries }}" min="0" max="5">
+      </label>
+      <div class="form-row-buttons">
+        <button class="button primary" type="submit">保存设置</button>
+        <button class="button" type="submit" formaction="/ai/test-connection">测试连接（不保存）</button>
+        {% if config.api_key_configured %}
+          <button class="button danger" type="submit" formaction="/ai/clear-key" onclick="return confirm('确认清除 API Key？')">清除 Key</button>
+        {% endif %}
+      </div>
     </form>
   </section>
 
-  <section class="section-card" aria-label="AI 分类">
+  <section class="section-card">
     <h2>AI 分类</h2>
-    <p>当前模式：<strong>
-      {% if classifier_mode == 'rule' %}关闭（仅使用规则分类）{% elif classifier_mode == 'llm' %}全部使用 AI 分类{% else %}混合分类{% endif %}
-    </strong></p>
-    <p class="muted">
-      <strong>关闭</strong>：更新时只使用规则分类器，不发送模型请求。<br>
-      <strong>手动</strong>：正常抓取使用规则分类，用户可以手动对资讯执行 AI 分类。<br>
-      <strong>自动参与更新</strong>：资讯通过准入过滤后自动进入 AI 分类流程。
-    </p>
-    <p class="muted">修改分类模式请设置环境变量 <code>AIM_CLASSIFIER_MODE</code> 为 <code>rule</code>、<code>llm</code> 或 <code>hybrid</code>。</p>
+    <form method="post" action="/ai/save" class="ai-form">
+      <label>执行方式
+        <select name="classifier_mode">
+          <option value="off" {% if config.classifier_mode == 'off' %}selected{% endif %}>关闭（仅规则分类）</option>
+          <option value="manual" {% if config.classifier_mode == 'manual' %}selected{% endif %}>手动</option>
+          <option value="auto" {% if config.classifier_mode == 'auto' %}selected{% endif %}>自动参与更新</option>
+        </select>
+      </label>
+      {% if config.classifier_mode == 'auto' %}
+        <label>自动分类策略
+          <select name="classifier_strategy">
+            <option value="hybrid" {% if config.classifier_strategy == 'hybrid' %}selected{% endif %}>混合分类（仅处理未分类/低置信度）</option>
+            <option value="full_ai" {% if config.classifier_strategy == 'full_ai' %}selected{% endif %}>全量 AI 分类（处理全部准入资讯，费用较高）</option>
+          </select>
+        </label>
+      {% endif %}
+      <button class="button primary" type="submit">保存分类设置</button>
+    </form>
+    <form method="post" action="/ai/classify" style="margin-top:1rem">
+      <input type="hidden" name="item_ids" value="">
+      <button class="button" type="submit" {% if not config.api_key_configured %}disabled{% endif %}>处理全部待分类资讯</button>
+      {% if not config.api_key_configured %}<span class="muted">请先配置 API Key</span>{% endif %}
+    </form>
   </section>
 
-  <section class="section-card" aria-label="AI 总结">
+  <section class="section-card">
     <h2>AI 总结</h2>
-    <p class="muted">目前 AI 总结模式与 AI 分类共享设置，使用相同的模型。</p>
-    <p class="muted">通过环境变量 <code>AIM_CLASSIFIER_MODE=hybrid</code> 启用后，混合分类会自动对低置信度或未分类的资讯调用 AI。</p>
-    <p class="muted">AI 总结功能可通过批量操作或命令行触发。原始摘要<b>不会被覆盖</b>，AI 摘要存储为独立字段。</p>
+    <form method="post" action="/ai/save" class="ai-form">
+      <label>执行方式
+        <select name="summarizer_mode">
+          <option value="off" {% if config.summarizer_mode == 'off' %}selected{% endif %}>关闭</option>
+          <option value="manual" {% if config.summarizer_mode == 'manual' %}selected{% endif %}>手动</option>
+          <option value="auto" {% if config.summarizer_mode == 'auto' %}selected{% endif %}>自动参与更新</option>
+        </select>
+      </label>
+      <button class="button primary" type="submit">保存总结设置</button>
+    </form>
+    <form method="post" action="/ai/summarize" style="margin-top:1rem">
+      <input type="hidden" name="item_ids" value="">
+      <button class="button" type="submit" {% if not config.api_key_configured %}disabled{% endif %}>总结全部尚未处理的资讯</button>
+      {% if not config.api_key_configured %}<span class="muted">请先配置 API Key</span>{% endif %}
+    </form>
   </section>
 
-  <section class="section-card" aria-label="配置说明">
-    <h2>环境变量配置</h2>
-    <table class="data-table">
-      <tr><th>变量名</th><th>当前值</th><th>说明</th></tr>
-      <tr><td><code>AIM_CLASSIFIER_MODE</code></td><td>{{ classifier_mode }}</td><td>分类模式：rule / llm / hybrid</td></tr>
-      <tr><td><code>AIM_LLM_BASE_URL</code></td><td>{{ base_url }}</td><td>API 基础地址</td></tr>
-      <tr><td><code>AIM_LLM_MODEL</code></td><td>{{ model }}</td><td>模型名称</td></tr>
-      <tr><td><code>AIM_LLM_API_KEY</code></td><td>{{ masked_key or '未配置' }}</td><td>API 密钥（脱敏显示）</td></tr>
-      <tr><td><code>AIM_LLM_TIMEOUT_SECONDS</code></td><td>{{ timeout }}</td><td>请求超时（秒）</td></tr>
-      <tr><td><code>AIM_LLM_CONFIDENCE_THRESHOLD</code></td><td>{{ confidence_threshold }}</td><td>置信度阈值</td></tr>
-    </table>
-    <p class="muted" style="margin-top:1rem">API Key 保存在本机 .env 文件中，属于本机秘密配置，未加密存储。环境变量优先级高于网页设置。Web 服务默认监听 127.0.0.1，不会暴露到局域网。</p>
+  {% if recent_jobs %}
+    <section class="section-card">
+      <h2>最近 AI 任务记录</h2>
+      <div class="table-wrap">
+        <table class="data-table">
+          <tr><th>ID</th><th>类型</th><th>触发</th><th>状态</th><th>成功/失败/跳过</th><th>模型</th><th>时间</th><th>错误</th></tr>
+          {% for job in recent_jobs %}
+            <tr>
+              <td>{{ job.id }}</td>
+              <td>{% if job.job_type == 'classification' %}分类{% else %}总结{% endif %}</td>
+              <td>{% if job.trigger == 'manual' %}手动{% else %}自动{% endif %}</td>
+              <td><span class="status-badge {{ job.status }}">{{ job.status }}</span></td>
+              <td>{{ job.success_count }}/{{ job.failure_count }}/{{ job.skipped_count }}</td>
+              <td>{{ job.model or '—' }}</td>
+              <td>{{ format_time(job.started_at) }}</td>
+              <td class="error-cell">{{ job.error_summary or '—' }}</td>
+            </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="section-card">
+    <h2>配置说明</h2>
+    <p class="muted">配置优先级：<strong>网页保存设置优先于环境变量</strong>。在网页保存后，新的值将覆盖环境变量中的对应设置。Key 保存在本地数据库 ai_settings 表中，未加密存储。本项目仅监听 127.0.0.1，不会暴露到局域网。</p>
   </section>
 {% endblock %}

@@ -1,5 +1,6 @@
 """Server-rendered HTML pages and POST-only manual operations."""
 
+import asyncio
 import re
 from typing import Annotated
 from urllib.parse import quote, urlencode, urlsplit
@@ -486,41 +487,73 @@ async def activate_source(
 
 @router.get("/ai", response_class=HTMLResponse)
 async def ai_page(request: Request) -> HTMLResponse:
-    from app.config.settings import get_settings
-
-    settings = get_settings()
-    api_key = settings.llm_api_key
-    masked_key = ""
-    if api_key:
-        masked_key = api_key[:3] + "****" + api_key[-4:] if len(api_key) >= 7 else "****"
+    config = request.app.state.services.ai_settings.get_config()
+    recent = request.app.state.services.ai_ops.get_recent_jobs(10)
     return request.app.state.templates.TemplateResponse(
         request,
         "ai.html",
         {
-            "provider": "DeepSeek",
-            "model": settings.llm_model,
-            "base_url": settings.llm_base_url,
-            "api_key_configured": bool(api_key),
-            "masked_key": masked_key,
-            "classifier_mode": settings.classifier_mode,
-            "timeout": settings.llm_timeout_seconds,
-            "confidence_threshold": settings.llm_confidence_threshold,
+            "config": config,
+            "recent_jobs": recent,
+            "saved": request.query_params.get("saved") == "1",
+            "key_cleared": request.query_params.get("key_cleared") == "1",
+            "test_result": request.query_params.get("test_result"),
+            "test_ok": request.query_params.get("test_ok") == "1",
+            "classifier_running": request.query_params.get("classifying") == "1",
+            "summarizer_running": request.query_params.get("summarizing") == "1",
         },
     )
+
+
+@router.post("/ai/save", response_class=HTMLResponse)
+async def save_ai_settings(request: Request) -> RedirectResponse:
+    from app.services.ai_settings_service import AIConfig
+
+    form = await request.form()
+    config = AIConfig(
+        provider=_form_str(form, "provider", "deepseek"),
+        base_url=_form_str(form, "base_url", "https://api.deepseek.com"),
+        model=_form_str(form, "model", "deepseek-chat"),
+        api_key=_form_str(form, "api_key", ""),
+        timeout_seconds=_form_int(form, "timeout_seconds", 30),
+        max_retries=_form_int(form, "max_retries", 1),
+        classifier_mode=_form_str(form, "classifier_mode", "off"),
+        classifier_strategy=_form_str(form, "classifier_strategy", "hybrid"),
+        summarizer_mode=_form_str(form, "summarizer_mode", "off"),
+    )
+    request.app.state.services.ai_settings.save(config)
+    return RedirectResponse("/ai?saved=1", status_code=303)
+
+
+@router.post("/ai/clear-key", response_class=HTMLResponse)
+async def clear_ai_key(request: Request) -> RedirectResponse:
+    request.app.state.services.ai_settings.clear_key()
+    return RedirectResponse("/ai?key_cleared=1", status_code=303)
 
 
 @router.post("/ai/test-connection", response_class=HTMLResponse)
 async def test_ai_connection(request: Request) -> HTMLResponse:
     from app.classifiers.providers import (
-        DeepSeekProvider,
         LLMConfigError,
         LLMProviderError,
         LLMResponseError,
         LLMTimeoutError,
+        OpenAICompatibleProvider,
     )
 
+    form = await request.form()
+    test_key = _form_str(form, "api_key", "")
+    if not test_key:
+        return RedirectResponse(
+            "/ai?test_result=" + quote("请填写 API Key 后再测试"), status_code=303
+        )
+    provider = OpenAICompatibleProvider(
+        base_url=_form_str(form, "base_url", "https://api.deepseek.com"),
+        api_key=test_key,
+        model=_form_str(form, "model", "deepseek-chat"),
+        timeout_seconds=_form_int(form, "timeout_seconds", 30),
+    )
     try:
-        provider = DeepSeekProvider()
         result = await provider.classify(
             "这是一条测试标题，用于验证 AI 服务连接是否正常",  # noqa: RUF001
             None,
@@ -528,7 +561,7 @@ async def test_ai_connection(request: Request) -> HTMLResponse:
             None,
         )
         message = (
-            f"连接成功！模型返回分类: {result.category.value}, "  # noqa: RUF001
+            f"连接成功! 模型返回分类: {result.category.value}, "
             f"置信度: {result.confidence:.2f}"
         )
         ok = True
@@ -544,15 +577,101 @@ async def test_ai_connection(request: Request) -> HTMLResponse:
     except LLMProviderError as exc:
         message = f"连接失败: {sanitize_error(exc, limit=200)}"
         ok = False
-    return request.app.state.templates.TemplateResponse(
-        request,
-        "ai.html",
-        {
-            "test_result": message,
-            "test_ok": ok,
-            "api_key_configured": True,
-        },
+    return RedirectResponse(
+        f"/ai?test_result={quote(message)}&test_ok={'1' if ok else '0'}", status_code=303
     )
+
+
+@router.post("/ai/classify", response_class=HTMLResponse)
+async def run_ai_classify(request: Request) -> RedirectResponse:
+
+    form = await request.form()
+    item_ids_str = _form_str(form, "item_ids", "")
+    if item_ids_str:
+        ids = _parse_ids(item_ids_str)
+    else:
+        ids = []
+
+    # Fire and forget in background
+    if ids:
+        _fire(request.app.state.services.ai_ops.classify_batch(ids, trigger="manual"))
+    else:
+        _fire(request.app.state.services.ai_ops.classify_all_unclassified(trigger="manual"))
+    return RedirectResponse("/ai?classifying=1", status_code=303)
+
+
+@router.post("/ai/summarize", response_class=HTMLResponse)
+async def run_ai_summarize(request: Request) -> RedirectResponse:
+    form = await request.form()
+    item_ids_str = _form_str(form, "item_ids", "")
+    retry = _form_str(form, "retry", "") == "1"
+    if item_ids_str:
+        ids = _parse_ids(item_ids_str)
+        _fire(request.app.state.services.ai_ops.summarize_batch(
+            ids, trigger="manual", retry_failed_only=retry
+        ))
+    else:
+        _fire(request.app.state.services.ai_ops.summarize_all_unsummarized(trigger="manual"))
+    return RedirectResponse("/ai?summarizing=1", status_code=303)
+
+
+@router.post("/items/{item_id}/ai-classify", response_class=HTMLResponse)
+async def ai_classify_single(
+    request: Request,
+    item_id: Annotated[int, Path(ge=1, le=MAX_DATABASE_ID)],
+    return_to: Annotated[str, Form(max_length=2048)] = "/",
+) -> RedirectResponse:
+    _fire(request.app.state.services.ai_ops.classify_single(item_id, trigger="manual"))
+    return RedirectResponse(_safe_return_to(return_to, default="/"), status_code=303)
+
+
+@router.post("/items/batch-ai-classify", response_class=HTMLResponse)
+async def ai_classify_batch(
+    request: Request,
+    item_ids: Annotated[str, Form(max_length=10000)],
+    return_to: Annotated[str, Form(max_length=2048)] = "/",
+) -> RedirectResponse:
+    ids = _parse_ids(item_ids)
+    if not ids:
+        raise WebInputError("未选择任何资讯。")
+    _fire(request.app.state.services.ai_ops.classify_batch(ids, trigger="manual"))
+    return RedirectResponse(_safe_return_to(return_to, default="/"), status_code=303)
+
+
+@router.post("/items/{item_id}/ai-summarize", response_class=HTMLResponse)
+async def ai_summarize_single(
+    request: Request,
+    item_id: Annotated[int, Path(ge=1, le=MAX_DATABASE_ID)],
+    return_to: Annotated[str, Form(max_length=2048)] = "/",
+) -> RedirectResponse:
+    _fire(request.app.state.services.ai_ops.summarize_single(item_id, trigger="manual"))
+    return RedirectResponse(_safe_return_to(return_to, default="/"), status_code=303)
+
+
+@router.post("/items/batch-ai-summarize", response_class=HTMLResponse)
+async def ai_summarize_batch(
+    request: Request,
+    item_ids: Annotated[str, Form(max_length=10000)],
+    return_to: Annotated[str, Form(max_length=2048)] = "/",
+) -> RedirectResponse:
+    ids = _parse_ids(item_ids)
+    if not ids:
+        raise WebInputError("未选择任何资讯。")
+    _fire(request.app.state.services.ai_ops.summarize_batch(ids, trigger="manual"))
+    return RedirectResponse(_safe_return_to(return_to, default="/"), status_code=303)
+
+
+
+def _fire(coro: object) -> None:
+    import logging
+
+    async def _wrap() -> None:
+        try:
+            await coro  # type: ignore[misc]
+        except Exception:
+            logging.getLogger(__name__).exception("AI background task failed")
+
+    asyncio.create_task(_wrap())  # noqa: RUF006
 
 
 def _update_response(request: Request, result: UpdateResult) -> HTMLResponse:
@@ -604,3 +723,27 @@ def _content_disposition(filename: str, ascii_filename: str) -> str:
     ):
         raise WebInputError("导出文件名无效。")
     return f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{quote(filename, safe='')}"
+
+
+def _form_str(form: object, key: str, default: str = "") -> str:
+    from fastapi.datastructures import FormData
+    if not isinstance(form, FormData):
+        return default
+    val = form.get(key)
+    if not isinstance(val, str):
+        return default
+    return val.strip() or default
+
+
+def _form_int(form: object, key: str, default: int) -> int:
+    from fastapi.datastructures import FormData
+    if not isinstance(form, FormData):
+        return default
+    val = form.get(key)
+    if isinstance(val, str) and val.isdigit():
+        return int(val)
+    return default
+
+
+def _parse_ids(raw: str) -> list[int]:
+    return [int(s) for s in raw.split(",") if s.strip().isdigit()]
