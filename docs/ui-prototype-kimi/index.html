@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>资讯 · AI 行业情报（UI 原型）</title>
+    <title>AI 行业情报 · 资讯监测工作台（UI 原型）</title>
     <link rel="stylesheet" href="prototype.css">
     <script src="prototype.js" defer></script>
   </head>
@@ -214,38 +214,357 @@
         </nav>
       </div>
 
-      <!-- ===== 占位页面（待设计） ===== -->
+      <!-- ===== AI 页面 ===== -->
       <div class="page" id="page-ai" hidden>
-        <div class="placeholder">
-          <h1>AI</h1>
-          <p>此页面待设计。本原型仅完成「资讯」首页。</p>
-          <p class="placeholder-hint">将包含：AI 接口配置、连接测试、批量分类与总结任务。</p>
-          <button class="btn btn-secondary" type="button" data-page="home">返回资讯</button>
+        <div class="page-head">
+          <div class="page-head-text">
+            <h1>AI</h1>
+            <p>配置大模型服务，并管理 AI 分类与 AI 总结的执行方式。</p>
+          </div>
+          <div class="page-head-side page-head-status">
+            <span class="status status-ok" id="ai-key-status">Key 已配置</span>
+            <span class="last-updated">当前模型：<b id="ai-current-model">deepseek-chat</b></span>
+          </div>
         </div>
+
+        <div class="ai-layout">
+          <div class="ai-col">
+            <!-- 模型连接 -->
+            <section class="section-card">
+              <div class="section-head">
+                <h2>模型连接</h2>
+                <p>用于 AI 分类与总结的大模型服务。修改后请点击保存生效。</p>
+              </div>
+              <form class="form-grid" id="ai-form">
+                <div class="field">
+                  <label for="ai-provider">服务商</label>
+                  <select id="ai-provider" name="provider">
+                    <option value="deepseek" selected>DeepSeek</option>
+                    <option value="openai">OpenAI 兼容接口</option>
+                    <option value="custom">自定义</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="ai-model">模型名称</label>
+                  <input id="ai-model" name="model" value="deepseek-chat" maxlength="100">
+                </div>
+                <div class="field form-grid-wide">
+                  <label for="ai-base-url">接口地址（Base URL）</label>
+                  <input id="ai-base-url" name="base_url" value="https://api.deepseek.com" maxlength="500">
+                </div>
+                <div class="field form-grid-wide">
+                  <label for="ai-key">API Key</label>
+                  <input id="ai-key" type="password" name="api_key" value="" placeholder="已保存 sk••••••••3f2a，留空表示不修改" maxlength="500" autocomplete="off">
+                </div>
+                <div class="field">
+                  <label for="ai-timeout">超时时间（秒）</label>
+                  <input id="ai-timeout" type="number" name="timeout_seconds" value="30" min="5" max="300">
+                </div>
+                <div class="field">
+                  <label for="ai-retries">失败重试次数</label>
+                  <input id="ai-retries" type="number" name="max_retries" value="1" min="0" max="5">
+                </div>
+              </form>
+              <div class="notice" id="ai-test-result" hidden></div>
+              <div class="form-actions">
+                <button class="btn btn-primary" id="ai-save" type="button">保存设置</button>
+                <button class="btn btn-secondary" id="ai-test" type="button">测试连接</button>
+                <button class="btn btn-text btn-danger-text" id="ai-clear-key" type="button">清除 Key</button>
+              </div>
+            </section>
+
+            <!-- 配置说明 -->
+            <section class="section-card">
+              <div class="section-head">
+                <h2>配置说明</h2>
+              </div>
+              <ul class="note-list">
+                <li>网页保存的设置优先于环境变量；Key 保存在本机数据库中，应用仅监听本机地址，不会暴露到局域网。</li>
+                <li>AI 分类与总结按调用量产生费用，自动模式下每次更新都会消耗额度。</li>
+                <li>AI 处理失败不会影响资讯入库，失败的条目可稍后重试。</li>
+              </ul>
+            </section>
+          </div>
+
+          <div class="ai-col">
+            <!-- AI 分类 -->
+            <section class="section-card">
+              <div class="section-head">
+                <h2>AI 分类</h2>
+                <p>在规则分类之外，用 AI 判断资讯所属分类。</p>
+              </div>
+              <div class="option-list" id="classifier-mode">
+                <label class="option-row">
+                  <input type="radio" name="classifier_mode" value="off">
+                  <span class="option-text"><b>关闭</b><small>仅使用规则分类，不调用 AI</small></span>
+                </label>
+                <label class="option-row is-selected">
+                  <input type="radio" name="classifier_mode" value="manual" checked>
+                  <span class="option-text"><b>手动</b><small>在资讯页勾选执行，或在此处理全部待分类</small></span>
+                </label>
+                <label class="option-row">
+                  <input type="radio" name="classifier_mode" value="auto">
+                  <span class="option-text"><b>自动参与更新</b><small>每次更新后自动处理新入库的资讯</small></span>
+                </label>
+              </div>
+              <div class="field option-extra" id="classifier-strategy" hidden>
+                <label for="ai-strategy">自动分类策略</label>
+                <select id="ai-strategy" name="classifier_strategy">
+                  <option value="hybrid" selected>混合分类（仅处理待分类与低置信度，推荐）</option>
+                  <option value="full_ai">全量 AI 分类（处理全部资讯，费用较高）</option>
+                </select>
+              </div>
+              <div class="section-foot">
+                <span class="foot-stat">当前待分类 <b>23</b> 条</span>
+                <button class="btn btn-secondary btn-sm" id="ai-run-classify" type="button">处理待分类资讯</button>
+                <span class="foot-note">自动模式下按调用量计费，混合策略费用更低。</span>
+              </div>
+            </section>
+
+            <!-- AI 总结 -->
+            <section class="section-card">
+              <div class="section-head">
+                <h2>AI 总结</h2>
+                <p>为资讯生成更精炼的中文摘要，便于快速浏览。</p>
+              </div>
+              <div class="option-list" id="summarizer-mode">
+                <label class="option-row">
+                  <input type="radio" name="summarizer_mode" value="off">
+                  <span class="option-text"><b>关闭</b><small>不使用 AI 总结</small></span>
+                </label>
+                <label class="option-row is-selected">
+                  <input type="radio" name="summarizer_mode" value="manual" checked>
+                  <span class="option-text"><b>手动</b><small>在资讯页勾选执行，或在此处理全部未总结</small></span>
+                </label>
+                <label class="option-row">
+                  <input type="radio" name="summarizer_mode" value="auto">
+                  <span class="option-text"><b>自动参与更新</b><small>每次更新后自动总结新入库的资讯</small></span>
+                </label>
+              </div>
+              <div class="section-foot">
+                <span class="foot-stat">尚未总结 <b>41</b> 条</span>
+                <button class="btn btn-secondary btn-sm" id="ai-run-summarize" type="button">总结未处理资讯</button>
+                <button class="btn btn-text btn-sm" id="ai-retry-summarize" type="button">仅重试失败项</button>
+                <span class="foot-note">AI 摘要单独保存，不会覆盖来源原始摘要。</span>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- 最近 AI 任务 -->
+        <section class="section-card">
+          <div class="section-head">
+            <h2>最近 AI 任务</h2>
+            <p>每次手动或自动执行的记录，失败详情可展开查看。</p>
+          </div>
+          <div id="ai-jobs-table"></div>
+        </section>
       </div>
+
+      <!-- ===== 来源页面 ===== -->
       <div class="page" id="page-sources" hidden>
-        <div class="placeholder">
-          <h1>来源</h1>
-          <p>此页面待设计。本原型仅完成「资讯」首页。</p>
-          <p class="placeholder-hint">将包含：来源列表、新增来源、自动发现、启用/停用与更新。</p>
-          <button class="btn btn-secondary" type="button" data-page="home">返回资讯</button>
+        <div class="page-head">
+          <div class="page-head-text">
+            <h1>来源</h1>
+            <p>查看当前监控的网站及其运行状况，或添加新的资讯来源。</p>
+          </div>
+          <div class="page-head-side page-head-actions">
+            <button class="btn btn-secondary" id="btn-seed-sources" type="button">同步来源目录</button>
+            <button class="btn btn-primary" id="btn-add-source" type="button">添加来源</button>
+          </div>
+        </div>
+
+        <div class="stats-strip" aria-label="来源概览">
+          <div class="stat"><span class="stat-num">10</span><span class="stat-label">来源总数</span></div>
+          <div class="stat"><span class="stat-num stat-unread">7</span><span class="stat-label">已启用</span></div>
+          <div class="stat"><span class="stat-num stat-warn">2</span><span class="stat-label">需要关注</span></div>
+          <div class="stat"><span class="stat-num">1</span><span class="stat-label">候选来源</span></div>
+        </div>
+
+        <div class="tabs-bar">
+          <div class="tabs" role="tablist" aria-label="来源分组">
+            <button class="tab is-active" role="tab" aria-selected="true" data-source-tab="main" type="button">监控中 <span class="tab-count">9</span></button>
+            <button class="tab" role="tab" aria-selected="false" data-source-tab="candidate" type="button">候选 <span class="tab-count">1</span></button>
+          </div>
+        </div>
+
+        <div id="sources-main-pane">
+          <form class="filter-panel" id="sources-filter-form">
+            <div class="filter-main">
+              <div class="field field-search">
+                <label for="sf-keyword">搜索来源</label>
+                <input id="sf-keyword" type="search" placeholder="输入名称或域名">
+              </div>
+              <div class="field">
+                <label for="sf-type">类型</label>
+                <select id="sf-type">
+                  <option value="">全部类型</option>
+                  <option>官方机构</option>
+                  <option>企业官方</option>
+                  <option>媒体</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="sf-status">运行状态</label>
+                <select id="sf-status">
+                  <option value="">全部状态</option>
+                  <option>正常</option>
+                  <option>部分可用</option>
+                  <option>最近失败</option>
+                  <option>已停用</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="sf-result">最近结果</label>
+                <select id="sf-result">
+                  <option value="">全部结果</option>
+                  <option>成功</option>
+                  <option>部分成功</option>
+                  <option>失败</option>
+                </select>
+              </div>
+              <div class="filter-actions">
+                <button class="btn btn-primary" type="submit">筛选</button>
+                <button class="btn btn-secondary" id="sf-clear" type="button">清除</button>
+              </div>
+            </div>
+          </form>
+          <div id="sources-table-wrap"></div>
+        </div>
+
+        <div id="sources-candidate-pane" hidden>
+          <div class="notice">
+            候选来源已完成安全检测，尚未加入监控。建议先「预览」确认抓取内容符合预期，再「启用并加入监控」；启用后该来源将参与每次批量更新，资讯进入首页与导出。
+          </div>
+          <div id="candidates-table-wrap"></div>
         </div>
       </div>
+
+      <!-- ===== 来源详情页面 ===== -->
+      <div class="page" id="page-source-detail" hidden>
+        <div id="source-detail-wrap"></div>
+      </div>
+
+      <!-- ===== 设置页面 ===== -->
       <div class="page" id="page-settings" hidden>
-        <div class="placeholder">
-          <h1>设置</h1>
-          <p>此页面待设计。本原型仅完成「资讯」首页。</p>
-          <p class="placeholder-hint">将包含：定时更新计划、运行状态与基础参数。</p>
-          <button class="btn btn-secondary" type="button" data-page="home">返回资讯</button>
+        <div class="page-head">
+          <div class="page-head-text">
+            <h1>设置</h1>
+            <p>配置定时自动更新。AI 模型与自动化设置请前往「AI」页面。</p>
+          </div>
+        </div>
+
+        <div class="settings-layout">
+          <section class="section-card">
+            <div class="section-head">
+              <h2>定时更新</h2>
+              <p>按计划自动更新全部已启用来源，无需手动操作。</p>
+            </div>
+            <form class="form-stack" id="settings-form">
+              <label class="switch-row">
+                <span class="switch">
+                  <input type="checkbox" id="setting-enabled" checked>
+                  <span class="switch-track" aria-hidden="true"></span>
+                </span>
+                <span class="switch-text"><b>开启定时更新</b><small>关闭后仅能通过手动方式更新来源</small></span>
+              </label>
+              <div class="form-grid" id="schedule-fields">
+                <div class="field">
+                  <label for="setting-time">每天执行时间</label>
+                  <input type="time" id="setting-time" value="08:30" required>
+                </div>
+                <div class="field">
+                  <label for="setting-tz">时区</label>
+                  <input type="text" id="setting-tz" value="Asia/Shanghai" maxlength="100" required>
+                </div>
+                <div class="field form-grid-wide">
+                  <label>执行星期</label>
+                  <div class="weekday-chips" id="weekday-chips">
+                    <label class="weekday-chip"><input type="checkbox" checked value="mon"><span>周一</span></label>
+                    <label class="weekday-chip"><input type="checkbox" checked value="tue"><span>周二</span></label>
+                    <label class="weekday-chip"><input type="checkbox" checked value="wed"><span>周三</span></label>
+                    <label class="weekday-chip"><input type="checkbox" checked value="thu"><span>周四</span></label>
+                    <label class="weekday-chip"><input type="checkbox" checked value="fri"><span>周五</span></label>
+                    <label class="weekday-chip"><input type="checkbox" value="sat"><span>周六</span></label>
+                    <label class="weekday-chip"><input type="checkbox" value="sun"><span>周日</span></label>
+                  </div>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary" id="settings-save" type="button">保存设置</button>
+              </div>
+            </form>
+          </section>
+
+          <div class="settings-side">
+            <section class="section-card">
+              <div class="section-head">
+                <h2>当前状态</h2>
+              </div>
+              <dl class="kv-list">
+                <div class="kv-row"><dt>调度状态</dt><dd><span class="status status-ok" id="scheduler-status">等待下一次运行</span></dd></div>
+                <div class="kv-row"><dt>下一次计划运行</dt><dd id="scheduler-next">2026-07-23 08:30（Asia/Shanghai）</dd></div>
+                <div class="kv-row"><dt>最近一次计划触发</dt><dd>2026-07-22 08:30（Asia/Shanghai）</dd></div>
+                <div class="kv-row"><dt>最近修改</dt><dd>2026-07-20 11:42</dd></div>
+              </dl>
+            </section>
+            <section class="section-card">
+              <div class="section-head">
+                <h2>运行说明</h2>
+              </div>
+              <ul class="note-list">
+                <li>应用需要保持运行，定时更新才会执行；关机或退出期间错过的任务不会补跑。</li>
+                <li>手动更新与定时更新互斥：已有更新运行时，计划触发会安全跳过。</li>
+              </ul>
+            </section>
+          </div>
         </div>
       </div>
+
+      <!-- ===== 更新记录页面 ===== -->
       <div class="page" id="page-runs" hidden>
-        <div class="placeholder">
-          <h1>更新记录</h1>
-          <p>此页面待设计。本原型仅完成「资讯」首页。</p>
-          <p class="placeholder-hint">将包含：每次更新的状态、新增数量与失败原因。</p>
-          <button class="btn btn-secondary" type="button" data-page="home">返回资讯</button>
+        <div class="page-head">
+          <div class="page-head-text">
+            <h1>更新记录</h1>
+            <p>每次更新的执行结果、来源明细与未通过准入的原因汇总。</p>
+          </div>
         </div>
+
+        <div class="stats-strip" aria-label="运行概览">
+          <div class="stat"><span class="stat-num">86</span><span class="stat-label">记录总数</span></div>
+          <div class="stat"><span class="stat-num stat-unread">12</span><span class="stat-label">近 7 天成功</span></div>
+          <div class="stat"><span class="stat-num stat-warn">1</span><span class="stat-label">近 7 天部分失败</span></div>
+          <div class="stat"><span class="stat-num stat-danger">1</span><span class="stat-label">近 7 天失败</span></div>
+        </div>
+
+        <form class="filter-panel" id="runs-filter-form">
+          <div class="filter-main">
+            <div class="field">
+              <label for="rf-status">状态</label>
+              <select id="rf-status">
+                <option value="">全部状态</option>
+                <option>成功</option>
+                <option>部分失败</option>
+                <option>失败</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="rf-trigger">触发方式</label>
+              <select id="rf-trigger">
+                <option value="">全部方式</option>
+                <option>定时</option>
+                <option>网页手动</option>
+                <option>命令行手动</option>
+              </select>
+            </div>
+            <div class="filter-actions">
+              <button class="btn btn-primary" type="submit">筛选</button>
+              <button class="btn btn-secondary" id="rf-clear" type="button">清除</button>
+            </div>
+          </div>
+        </form>
+
+        <div id="runs-table-wrap"></div>
       </div>
     </main>
 

@@ -164,11 +164,173 @@
 - 分页：`page`、`per_page`；所有筛选参数见上。`return_to` 必须回传当前完整 query string，
   保证操作后重定向回到原筛选页。
 
-## 9. 本原型做了/没做什么
+## 9. 第一阶段范围（资讯页，已完成并获批准）
 
-做了：顶部导航、资讯首页完整布局、方案 A/B 双列表与切换、更多筛选折叠、单选/全选与批量按钮
-启停、已读/未读、收藏、修改分类展开/保存/取消、更多信息展开、摘要展开收起、占位页切换、
-1920/1440/1024/768 响应式、纯本地无外部依赖。
+第一阶段完成：顶部导航、资讯首页完整布局、方案 A/B 双列表与切换、更多筛选折叠、单选/全选与批量按钮
+启停、已读/未读、收藏、修改分类展开/保存/取消、更多信息展开、摘要展开收起、1920/1440/1024/768 响应式、
+纯本地无外部依赖。
 
-没做（有意）：不修改 `app/` 任何文件；不发起任何真实请求；AI、来源、设置、更新记录页仅占位；
-登录/权限、审核流操作（`POST /items/{id}/review`）未在本轮范围内。
+---
+
+# 第二阶段：AI / 来源 / 来源详情 / 设置 / 更新记录（本阶段新增）
+
+> 以下页面沿用第一阶段已批准的设计系统，未改动资讯页的任何布局、配色与交互。
+> 新增样式全部以可复用组件形式追加在 `prototype.css`「全局可复用组件」一节。
+
+## 10. AI 页面设计说明
+
+定位：**业务人员的 AI 工具页**，不是开发者控制台。所有文案面向非技术用户（"接口地址"标注
+Base URL 但不展开协议细节；错误提示说明"资讯不受影响"而不是抛 HTTP 堆栈）。
+
+- **布局**：≥1024px 双栏（左：模型连接 + 配置说明；右：AI 分类 + AI 总结），下方全宽"最近 AI 任务"。
+  <1024px 收为单栏。表单用 `.form-grid` 两列网格，接口地址与 API Key 占满整行（`.form-grid-wide`）。
+- **页头状态**：右侧直接显示 `Key 已配置 / 未配置` 状态徽标 + 当前模型名，一进页面即可判断 AI 是否可用。
+- **按钮层级**：保存设置=主要；测试连接=次要；清除 Key=危险文字按钮（`.btn-danger-text`），
+  放在操作行最右侧，不与保存同级突出，点击需二次确认（生产中沿用现有 `confirm()` 即可）。
+- **模式选择**：关闭/手动/自动参与更新用紧凑单选行（`.option-row`）：圆点 + 名称 + 一行说明，
+  选中行浅主色底。选"自动参与更新"时才展开"自动分类策略"下拉，避免无关字段常驻。
+- **费用与覆盖说明**：以 12px 灰字放在各区底部（`.foot-note`）："按调用量计费，混合策略费用更低"
+  "AI 摘要单独保存，不会覆盖来源原始摘要"。
+- **最近任务**：紧凑 `.data-table`，11 列；失败/部分失败行整行可点击展开错误详情（`.tr-expand`），
+  长错误收在 `.error-box` 内，绝不铺在表格里。`跳过/回退/模型` 三列为 `.col-optional`，<1200px 隐藏。
+- **真实功能对照**（全部保留）：`POST /ai/save`（含 provider/base_url/model/api_key/timeout_seconds/
+  max_retries/classifier_mode/classifier_strategy/summarizer_mode）、`POST /ai/test-connection`、
+  `POST /ai/clear-key`、`POST /ai/classify`（空 item_ids=全部待分类）、`POST /ai/summarize`（retry=1=仅重试失败项）、
+  `ai_ops.get_recent_jobs(10)` 任务表。
+- **原型演示、需绑后端**：测试连接loading与结果条（真实为表单提交后 query 回显 `test_result/test_ok`）、
+  清除 Key 后的界面降级（禁用执行按钮、Key 徽标变灰）、待分类/未总结数量（需后端提供 count，
+  现模板没有，可用固定文案或后续补充）。
+
+## 11. 来源与来源详情设计说明
+
+定位：让普通用户回答三个问题——**监控了哪些网站、是否正常、出问题怎么办**。
+
+### 来源列表
+
+- **页头**：标题 + 同步来源目录（次要，对应 `POST /sources/seed-formal`）+ 添加来源（主要，`GET /sources/new`）。
+  统计条：总数 / 已启用 / 需要关注 / 候选。
+- **页签**：`监控中 N` / `候选 N`（`.tabs`）。候选区先放一段 `.notice`，用业务语言说明
+  "先预览确认内容符合预期，再启用并加入监控；启用后参与每次批量更新"——不出现 preview/activate 等词。
+- **表格列**：来源（名称 + 域名）、类型（官方机构/企业官方/媒体 + 采集方式）、运行状态、启用（开关）、
+  最近更新、最近结果、本次获取、操作（详情 / 更新）。状态只保留五个自然中文值：
+  正常 / 部分可用 / 最近失败 / 已停用 / 候选，由后端 `lifecycle_state + implementation_status + last_error`
+  组合映射，不直接输出枚举。
+- **错误不铺开**：有错误的行在状态列下显示"查看错误"，点击展开整行 `.error-box`。
+- **启用开关**（`.switch`）：行内直接切换，停用后状态列变"已停用"、更新按钮禁用；生产中对应
+  `POST /sources/{id}/enabled`（hidden `enabled`、`return_to`）。
+- **候选表**：来源、类型、检测结果、最近预览、预览数量、操作（预览 / 启用并加入监控）。
+  预览=`POST /sources/{id}/preview`；启用=`POST /sources/{id}/activate`（hidden `confirm=true`），
+  点击弹确认说明启用后的影响。
+
+### 来源详情
+
+- 页头：返回链接 + 名称 + 状态徽标 + URL；右侧操作：停用/启用（次要）、更新此来源（主要，
+  `POST /sources/{id}/updates`）。
+- **事实网格**（`.facts-grid`）：来源类型、采集方式、来源角色、审核策略、最近检查、最近结果——
+  只展示普通用户需要知道的，slug、crawl_mode 原始值、配置 JSON 不上页面（与生产模板一致）。
+- **近 30 天统计条**：抓取 / 通过准入 / 未通过准入 / 新增 / 更新 / 失败（复用 `.stats-strip`）。
+- **最近错误**：仅存在时显示 `.notice.is-error` 一条，不给堆栈。
+- **基本信息表单**：名称、默认分类、来源说明、"参与批量更新"开关 + 保存修改（`POST /sources/{id}/edit`，
+  字段 name/default_category/description/enabled 与现模板一致）。
+- **最近运行**：`.mini-table` 三次记录（时间/触发/结果/抓取/新增）+ 重新检测来源
+  （`POST /sources/{id}/rediscover`，说明"生成独立预览，确认前不覆盖配置"）。
+- **最近抓取的资讯**：紧凑行列表 + "查看该来源全部资讯 →"（生产中 `GET /?source_id={id}`，
+  需后端在详情页提供最近 N 条查询，属新增小查询，不影响现有接口）。
+
+## 12. 设置页面设计说明
+
+原则：**只做小而完整的真实页面**。生产系统当前仅支持定时更新设置
+（`POST /settings`：enabled/schedule_time/days/timezone），因此页面只有三组内容，
+不虚构分页、导出等不存在的偏好：
+
+1. **定时更新表单**：开关（`.switch`，关闭时其余字段禁用）、每天执行时间（time）、时区（IANA 文本）、
+   执行星期（`.weekday-chip` 多选胶囊，比 7 个复选框更紧凑且不易错位）、保存设置（主要按钮）。
+2. **当前状态**（`.kv-list`）：调度状态徽标、下一次计划运行、最近一次计划触发、最近修改。
+3. **运行说明**（`.note-list`）：应用需保持运行、错过的任务不补跑、手动与定时互斥——沿用生产原文案。
+   页面说明中引导 AI 相关设置前往「AI」页面，避免两个页面职责混淆。
+
+## 13. 更新记录设计说明
+
+定位：业务运行结果页——**每次更新发生了什么、哪一步少了、为什么**。
+
+- **统计条**：记录总数 / 近 7 天成功 / 部分失败 / 失败。
+- **筛选**：状态 + 触发方式（原型为前端演示过滤；生产可加 query 参数，当前路由仅支持分页）。
+- **表格 13 列**：状态（徽标 + #编号）、触发方式、开始/完成（两行一列）、耗时、来源（成功/总数）、
+  抓取、通过准入、拒绝、分类、新增、更新、重复、失败。数字列 `.num` 等宽便于横向扫读；
+  `耗时/分类/更新/重复` 为 `.col-optional`，<1200px 隐藏（数据仍在行展开中可见）。
+- **状态色克制**：成功绿 / 部分失败琥珀 / 失败红，仅徽标小面积使用。
+- **行展开详情**（点击整行）：三栏 `.expand-grid`——各来源结果 `.mini-table`（来源/结果/抓取/准入/新增/备注）、
+  未通过准入原因与处理失败原因 `.reason-list`（原因中文标签 + 数量，对应 `rejection_reason_counts` /
+  `failure_reason_counts` 与 `PROCESS_REASON_LABELS`）、运行信息（耗时、触发、AI 调用、错误摘要 `.error-box`）。
+- **真实功能对照**：`GET /runs` 分页列表全部字段；各来源结果对应 domain 中按来源的运行统计
+  （需后端在模板上下文中补充该查询，现有模型已存储）；AI 调用情况来自 `ai_jobs`（trigger=auto），
+  如当次无自动 AI 任务则不显示该区块。
+
+## 14. 全局组件清单（第二阶段新增，全部可复用）
+
+| 组件 | class | 用途 |
+| --- | --- | --- |
+| 区块卡片 | `.section-card` + `.section-head` | 各页内容分组，标题 + 一句说明 |
+| 表单网格 | `.form-grid` / `.form-grid-wide` / `.form-stack` / `.form-actions` | 两列表单，宽字段整行 |
+| 危险文字按钮 | `.btn-danger-text` | 清除 Key 等低频危险操作 |
+| 提示条 | `.notice`（`.is-success` / `.is-error`） | 状态回显与说明 |
+| 备注列表 | `.note-list` | 配置说明、运行说明 |
+| 状态徽标 | `.status`（`-ok/-warn/-error/-muted/-info`） | 全站统一状态，克制用色 |
+| 单选选项行 | `.option-list` / `.option-row` / `.option-extra` | AI 模式选择（替代巨型卡片） |
+| 页签 | `.tabs` / `.tab` / `.tab-count` | 来源监控中/候选 |
+| 数据表格 | `.table-wrap` + `.data-table`（`.table-cards` 响应式变体） | 来源/任务/运行记录 |
+| 行内操作 | `.row-ops` / `.op`（`.op-danger`） | 表格内文字操作，横向排列 |
+| 可展开行 | `.tr-expandable` / `.tr-expand` / `.expand-caret` | 运行记录、AI 任务、来源错误 |
+| 展开内容 | `.expand-grid` / `.expand-block` / `.mini-table` / `.reason-list` / `.error-box` | 行详情 |
+| 键值列表 | `.kv-list` / `.kv-row` | 当前状态、运行信息 |
+| 事实网格 | `.facts-grid` / `.fact` | 来源详情摘要 |
+| 开关 | `.switch` / `.switch-row` | 启用来源、定时更新 |
+| 星期胶囊 | `.weekday-chips` / `.weekday-chip` | 设置页执行星期 |
+| 返回链接 | `.back-link` | 详情页返回 |
+| 空状态 | `.empty-state` | 筛选无结果、无候选 |
+| 可选列 | `.col-optional` | <1200px 隐藏的次要表格列 |
+
+## 15. 第二阶段响应式规则
+
+- **≥1200px**：全部列显示；AI/设置/详情双栏布局。
+- **≤1200px**：`.col-optional` 列隐藏（耗时/分类/更新/重复/跳过/回退/模型），数据收进行展开详情。
+- **≤1024px**：双栏布局收单栏；`.table-cards` 表格转卡片式（每行一张卡，单元格带 `data-label` 标签，
+  展开行保持可开合并整行显示；卡片化选择器仅匹配 `> tbody > tr > td` 直接子代，
+  避免穿透展开区内的 `.mini-table`）。
+- **≤768px**：`.form-grid` 单列；页头操作按钮换行不竖排；事实网格两列；星期胶囊紧凑。
+- 已验证：五个页面在 1920/1440/1024/768 下 `scrollWidth ≤ innerWidth`，无横向溢出
+  （含运行记录行展开状态）。修复过的两类问题：隐藏 checkbox 需有定位上下文父级（`.weekday-chip`），
+  卡片化表格需直接子代选择器 + 显式保持 `.tr-expand` 隐藏。
+
+## 16. 第二阶段生产接入契约（不可更改的既有约定）
+
+**AI**：`POST /ai/save` 表单字段 `provider/base_url/model/api_key/timeout_seconds/max_retries/
+classifier_mode/classifier_strategy/summarizer_mode`；`POST /ai/test-connection`（同表单字段，
+结果经 `?test_result=&test_ok=` 回显）；`POST /ai/clear-key`；`POST /ai/classify`（`item_ids` 空=全部）；
+`POST /ai/summarize`（`retry=1` 仅重试失败项）。Key 输入框保持 `type=password` 与"留空保留旧 Key"语义。
+
+**来源**：`GET /sources?filter=&per_page=&page=`；`POST /sources/seed-formal`；`POST /sources/{id}/enabled`
+（`enabled=true/false`、`return_to`）；`POST /sources/{id}/updates`；`POST /sources/{id}/preview`；
+`POST /sources/{id}/activate`（`confirm=true`）；`GET /sources/{id}`；`POST /sources/{id}/edit`
+（`name/default_category/description/enabled`）；`POST /sources/{id}/rediscover`。
+
+**设置**：`POST /settings`（`enabled/schedule_time/days/timezone`，`days` 为多值）。
+
+**更新记录**：`GET /runs?page=&per_page=`。
+
+**原型中仅作演示、生产中需绑定真实后端的交互**：
+AI 测试连接 loading 与结果条、清除 Key 后的降级、待分类/未总结数量、来源筛选（生产现为
+`filter` 单参数，多条件筛选需扩展查询）、来源启用开关（生产为表单 POST 整页刷新，原型为就地切换）、
+候选启用确认弹窗（生产已有 confirm，可保留）、详情页"最近抓取的资讯"与"近 30 天统计"
+（需后端补充两个小查询）、运行记录状态/触发方式筛选（需后端补 query 参数）、
+所有 toast 提示（生产为提交后重定向 + `?saved=1` 等回显）。
+
+## 17. 本阶段做了/没做什么
+
+做了：AI、来源（监控中/候选页签）、来源详情、设置、更新记录五个页面的完整静态原型；
+全局组件整理；14 张真实截图（全部目检）；五页面 × 四宽度横向溢出自动化检查；交互断言
+（AI 模式联动、来源筛选/启用/候选启用、运行记录筛选/展开、详情加载）。
+
+没做（有意）：未修改 `app/`、`tests/`、`data/`、配置与迁移；未接入任何生产模板；
+未运行真实抓取与 AI 调用；添加来源与自动发现页面（`/sources/new`、`/sources/discover`）
+不在本轮范围，原型中以提示说明；资讯页保持已批准状态未改动。
