@@ -12,10 +12,10 @@
       <a class="brand" href="/">AI 行业情报</a>
       <nav aria-label="主导航">
         <a href="/" {% if request.url.path == '/' %}aria-current="page"{% endif %}>资讯</a>
-        <a href="/?source_scope=industry_leads" {% if request.query_params.get('source_scope') == 'industry_leads' %}aria-current="page"{% endif %}>行业线索</a>
+        <a href="/ai" {% if request.url.path.startswith('/ai') %}aria-current="page"{% endif %}>AI</a>
         <a href="/sources" {% if request.url.path.startswith('/sources') %}aria-current="page"{% endif %}>来源</a>
-        <a href="/runs" {% if request.url.path == '/runs' %}aria-current="page"{% endif %}>更新记录</a>
         <a href="/settings" {% if request.url.path == '/settings' %}aria-current="page"{% endif %}>设置</a>
+        <a href="/runs" {% if request.url.path == '/runs' %}aria-current="page"{% endif %}>更新记录</a>
       </nav>
     </header>
     <main class="page-shell">

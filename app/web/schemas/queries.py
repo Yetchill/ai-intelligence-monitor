@@ -50,9 +50,10 @@ class ItemQueryParams(PageParams):
     discovered_from: date | None = None
     discovered_to: date | None = None
     unclassified: Literal["all", "yes", "no"] = "all"
+    is_read: Literal["all", "yes", "no"] = "all"
     source_scope: Literal[
         "leadership", "all", "non_formal", "disabled", "fallback", "industry_leads"
-    ] = "leadership"
+    ] = "all"
 
     @field_validator("source_scope", mode="before")
     @classmethod
@@ -101,6 +102,7 @@ class ItemQueryParams(PageParams):
             discovered_from=item_filter.discovered_from,
             discovered_to=item_filter.discovered_to,
             unclassified=item_filter.unclassified,
+            is_read=item_filter.is_read,
             source_scope=item_filter.source_scope,
             page=self.page,
             per_page=self.per_page,
@@ -123,6 +125,7 @@ class ItemQueryParams(PageParams):
             discovered_from=_start(self.discovered_from),
             discovered_to=_exclusive_end(self.discovered_to),
             unclassified=_tri_state(self.unclassified),
+            is_read=_tri_state(self.is_read),
             source_scope=scope,
         )
 
@@ -141,6 +144,7 @@ class ItemQueryParams(PageParams):
             "discovered_from",
             "discovered_to",
             "unclassified",
+            "is_read",
             "source_scope",
         ):
             value = getattr(self, key)

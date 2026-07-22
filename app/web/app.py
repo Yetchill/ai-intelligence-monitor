@@ -24,8 +24,11 @@ from app.domain.enums import (
     CrawlStatus,
     DiscoveryStatus,
     PrimaryType,
+    ReviewStatus,
     RunTrigger,
+    SourceKind,
     SourceType,
+    VerificationStatus,
     Weekday,
 )
 from app.domain.exports import ExportError, ExportGenerationError
@@ -64,6 +67,31 @@ CATEGORY_LABELS = {
     Category.SOLICITATION: "奖项与成果征集",
     Category.POLICY_INDUSTRY: "政策、标准与行业动态",
     Category.UNCLASSIFIED: "待分类",
+}
+VERIFICATION_LABELS = {
+    VerificationStatus.OFFICIAL_CONFIRMED: "官方确认",
+    VerificationStatus.OFFICIAL_LINKED: "官方链接",
+    VerificationStatus.MULTI_SOURCE_CONFIRMED: "多源确认",
+    VerificationStatus.MEDIA_ONLY: "仅媒体报道",
+    VerificationStatus.RUMOR_OR_PREDICTION: "传闻或预测",
+}
+REVIEW_LABELS = {
+    ReviewStatus.NOT_REQUIRED: "无需审核",
+    ReviewStatus.PENDING: "待审核",
+    ReviewStatus.APPROVED: "已通过",
+    ReviewStatus.REJECTED: "已拒绝",
+}
+CLASSIFIER_PROVIDER_LABELS = {
+    "rule_based": "规则分类",
+    "llm": "AI 分类",
+    "hybrid": "混合分类",
+    "manual": "人工分类",
+    "source_default": "来源默认",
+}
+SOURCE_KIND_LABELS = {
+    SourceKind.FORMAL: "正式",
+    SourceKind.TEST: "测试",
+    SourceKind.FALLBACK: "备用",
 }
 STATUS_LABELS = {
     CrawlStatus.RUNNING: "运行中",
@@ -206,6 +234,10 @@ def _templates() -> Jinja2Templates:
     globals_mapping["weekday_label"] = _weekday_label
     globals_mapping["scheduler_status_label"] = _scheduler_status_label
     globals_mapping["process_reason_label"] = _process_reason_label
+    globals_mapping["verification_label"] = _verification_label
+    globals_mapping["review_label"] = _review_label
+    globals_mapping["provider_label"] = _provider_label
+    globals_mapping["source_kind_label"] = _source_kind_label
     return Jinja2Templates(env=environment)
 
 
@@ -267,6 +299,33 @@ def _weekday_label(value: Weekday | str) -> str:
 def _scheduler_status_label(value: SchedulerStatus | str) -> str:
     try:
         return SCHEDULER_STATUS_LABELS.get(SchedulerStatus(value), "未知")
+    except ValueError:
+        return "未知"
+
+
+def _verification_label(value: VerificationStatus | str) -> str:
+    try:
+        return VERIFICATION_LABELS.get(VerificationStatus(value), "未知")
+    except ValueError:
+        return "未知"
+
+
+def _review_label(value: ReviewStatus | str) -> str:
+    try:
+        return REVIEW_LABELS.get(ReviewStatus(value), "未知")
+    except ValueError:
+        return "未知"
+
+
+def _provider_label(value: str | None) -> str:
+    if not value:
+        return "未知"
+    return CLASSIFIER_PROVIDER_LABELS.get(value, value)
+
+
+def _source_kind_label(value: SourceKind | str) -> str:
+    try:
+        return SOURCE_KIND_LABELS.get(SourceKind(value), "未知")
     except ValueError:
         return "未知"
 

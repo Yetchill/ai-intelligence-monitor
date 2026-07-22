@@ -26,6 +26,11 @@ router = APIRouter()
 _ASCII_DOWNLOAD_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
+@router.get("/leadership", response_class=HTMLResponse)
+async def leadership_redirect(request: Request) -> RedirectResponse:
+    return RedirectResponse("/", status_code=301)
+
+
 @router.get("/", response_class=HTMLResponse)
 async def items_page(request: Request) -> HTMLResponse:
     params = ItemQueryParams.parse(dict(request.query_params))
@@ -343,6 +348,35 @@ async def set_favorite(
     return RedirectResponse(_safe_return_to(return_to, default="/"), status_code=303)
 
 
+@router.post("/items/{item_id}/read", response_class=HTMLResponse)
+async def set_read(
+    request: Request,
+    item_id: Annotated[int, Path(ge=1, le=MAX_DATABASE_ID)],
+    is_read: Annotated[str, Form(max_length=5)],
+    return_to: Annotated[str, Form(max_length=2048)] = "/",
+) -> RedirectResponse:
+    if is_read not in {"true", "false"}:
+        raise WebInputError("阅读状态无效。")
+    request.app.state.services.data.set_read_status(item_id, is_read == "true")
+    return RedirectResponse(_safe_return_to(return_to, default="/"), status_code=303)
+
+
+@router.post("/items/batch-read", response_class=HTMLResponse)
+async def batch_set_read(
+    request: Request,
+    item_ids: Annotated[str, Form(max_length=10000)],
+    is_read: Annotated[str, Form(max_length=5)],
+    return_to: Annotated[str, Form(max_length=2048)] = "/",
+) -> RedirectResponse:
+    if is_read not in {"true", "false"}:
+        raise WebInputError("阅读状态无效。")
+    ids = [int(sid) for sid in item_ids.split(",") if sid.strip().isdigit()]
+    if not ids:
+        raise WebInputError("未选择任何资讯。")
+    request.app.state.services.data.batch_set_read_status(ids, is_read == "true")
+    return RedirectResponse(_safe_return_to(return_to, default="/"), status_code=303)
+
+
 @router.post("/items/{item_id}/category", response_class=HTMLResponse)
 async def set_category(
     request: Request,
@@ -447,6 +481,77 @@ async def activate_source(
         request,
         "source-preview.html",
         {"result": result, "activated": True},
+    )
+
+
+@router.get("/ai", response_class=HTMLResponse)
+async def ai_page(request: Request) -> HTMLResponse:
+    from app.config.settings import get_settings
+
+    settings = get_settings()
+    api_key = settings.llm_api_key
+    masked_key = ""
+    if api_key:
+        masked_key = api_key[:3] + "****" + api_key[-4:] if len(api_key) >= 7 else "****"
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "ai.html",
+        {
+            "provider": "DeepSeek",
+            "model": settings.llm_model,
+            "base_url": settings.llm_base_url,
+            "api_key_configured": bool(api_key),
+            "masked_key": masked_key,
+            "classifier_mode": settings.classifier_mode,
+            "timeout": settings.llm_timeout_seconds,
+            "confidence_threshold": settings.llm_confidence_threshold,
+        },
+    )
+
+
+@router.post("/ai/test-connection", response_class=HTMLResponse)
+async def test_ai_connection(request: Request) -> HTMLResponse:
+    from app.classifiers.providers import (
+        DeepSeekProvider,
+        LLMConfigError,
+        LLMProviderError,
+        LLMResponseError,
+        LLMTimeoutError,
+    )
+
+    try:
+        provider = DeepSeekProvider()
+        result = await provider.classify(
+            "这是一条测试标题，用于验证 AI 服务连接是否正常",  # noqa: RUF001
+            None,
+            "测试来源",
+            None,
+        )
+        message = (
+            f"连接成功！模型返回分类: {result.category.value}, "  # noqa: RUF001
+            f"置信度: {result.confidence:.2f}"
+        )
+        ok = True
+    except LLMConfigError as exc:
+        message = f"配置错误: {sanitize_error(exc, limit=200)}"
+        ok = False
+    except LLMTimeoutError as exc:
+        message = f"连接超时: {sanitize_error(exc, limit=200)}"
+        ok = False
+    except LLMResponseError as exc:
+        message = f"响应无效: {sanitize_error(exc, limit=200)}"
+        ok = False
+    except LLMProviderError as exc:
+        message = f"连接失败: {sanitize_error(exc, limit=200)}"
+        ok = False
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "ai.html",
+        {
+            "test_result": message,
+            "test_ok": ok,
+            "api_key_configured": True,
+        },
     )
 
 

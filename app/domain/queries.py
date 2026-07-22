@@ -50,6 +50,7 @@ class ItemFilter:
     discovered_from: datetime | None = None
     discovered_to: datetime | None = None
     unclassified: bool | None = None
+    is_read: bool | None = None
     source_scope: SourceScope = SourceScope.LEADERSHIP
 
 
@@ -83,6 +84,12 @@ class ItemListEntry:
     case_completeness: CaseCompleteness = CaseCompleteness.NOT_CASE
     discovery_url: str | None = None
     official_url: str | None = None
+    is_read: bool = False
+    ai_summary: str | None = None
+    ai_summary_model: str | None = None
+    classification_score: float | None = None
+    classification_reason: str | None = None
+    automatic_category_provider: str | None = None
 
     @property
     def effective_category(self) -> Category:

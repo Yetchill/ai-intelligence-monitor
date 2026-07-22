@@ -2,8 +2,8 @@
 {% block title %}来源 · AI 行业情报{% endblock %}
 {% block content %}
   <section class="page-heading">
-    <div><p class="eyebrow">来源目录与生命周期</p><h1>来源</h1><p>全部目录来源都在数据库中可见；active 表示可抓取，正式发布仍由审核与可信状态决定。</p></div>
-    <div class="page-actions"><a class="button" href="/sources/new">添加来源</a><form action="/updates" method="post" data-update-form><button class="button primary" type="submit" data-processing-text="正在更新…">更新全部 active 来源</button></form></div>
+    <div><h1>来源</h1><p>管理已配置的资讯来源，查看状态与执行更新。</p></div>
+    <div class="page-actions"><a class="button" href="/sources/new">添加来源</a><form action="/updates" method="post" data-update-form><button class="button primary" type="submit" data-processing-text="正在更新…">更新全部启用来源</button></form></div>
   </section>
   {% if seeded %}<p class="notice success">正式来源初始化完成：新建 {{ seed_created }}，安全提升旧预设 {{ seed_promoted }}，冲突 {{ seed_conflicts }}。重复执行不会覆盖已有修改或重新启用已停用来源。</p>{% endif %}
   {% if formal_source_count < 26 %}
@@ -15,7 +15,7 @@
   {% endif %}
   <form class="filter-panel" method="get" action="/sources">
     <label>目录筛选<select name="filter">
-      {% for value, label in (("all","全部"),("active","active"),("candidate","candidate"),("paused","paused"),("official","官方来源"),("media","媒体发现"),("blocked","JavaScript 阻断"),("needs_custom","需要专用 Collector")) %}
+      {% for value, label in (("all","全部"),("active","已启用"),("candidate","待验证"),("paused","已暂停"),("official","官方来源"),("media","媒体发现"),("blocked","JavaScript 阻断"),("needs_custom","需要专用采集器")) %}
         <option value="{{ value }}" {% if catalog_filter == value %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select></label>

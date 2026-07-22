@@ -75,6 +75,12 @@ class WebDataService:
                     official_url=(
                         item.official_url if is_http_url(item.official_url or "") else None
                     ),
+                    is_read=item.is_read,
+                    ai_summary=item.ai_summary,
+                    ai_summary_model=item.ai_summary_model,
+                    classification_score=item.classification_score,
+                    classification_reason=item.classification_reason,
+                    automatic_category_provider=item.automatic_category_provider,
                 )
                 for item, source_name, source_kind, _source_role in rows
             )
@@ -176,6 +182,23 @@ class WebDataService:
             if item is None:
                 raise EntityNotFoundError(f"资讯 {item_id} 不存在")
             item.is_favorite = favorite
+
+    def set_read_status(self, item_id: int, is_read: bool) -> None:
+        with self._uow_factory() as uow:
+            item = uow.items.get(item_id)
+            if item is None:
+                raise EntityNotFoundError(f"资讯 {item_id} 不存在")
+            item.is_read = is_read
+
+    def batch_set_read_status(self, item_ids: list[int], is_read: bool) -> int:
+        count = 0
+        with self._uow_factory() as uow:
+            for item_id in item_ids:
+                item = uow.items.get(item_id)
+                if item is not None:
+                    item.is_read = is_read
+                    count += 1
+        return count
 
     def set_manual_category(self, item_id: int, value: str | None) -> None:
         result = self._manual_classifier.classify(value)

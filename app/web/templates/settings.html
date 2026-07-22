@@ -2,12 +2,13 @@
 {% block title %}设置 · AI 行业情报{% endblock %}
 {% block content %}
 <section class="page-heading">
-  <div><p class="eyebrow">Runtime</p><h1>运行设置</h1><p>配置本地应用运行期间的轻量定时更新。</p></div>
+  <div><h1>设置</h1><p>配置本地应用的定时更新和运行参数。</p></div>
 </section>
 {% if saved %}<p class="notice success">设置已保存并立即生效。</p>{% endif %}
 {% if timezone_error %}<p class="notice error">当前时区不可用，请填写有效的 IANA 时区并保存。</p>{% endif %}
 <section class="settings-grid">
   <form class="form-panel" method="post" action="/settings">
+    <h2>定时更新</h2>
     <label class="check-label"><input type="checkbox" name="enabled" value="true" {% if view.settings.enabled %}checked{% endif %}> 开启定时更新</label>
     <label>每天执行时间
       <input type="time" name="schedule_time" value="{{ '%02d:%02d'|format(view.settings.hour, view.settings.minute) }}" required>

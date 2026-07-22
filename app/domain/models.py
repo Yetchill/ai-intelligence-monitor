@@ -232,7 +232,10 @@ class IntelligenceItem(Base):
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     is_favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     admission_accepted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_summary_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     extra: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     source: Mapped[Source] = relationship(back_populates="items")
